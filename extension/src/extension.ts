@@ -78,6 +78,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const updateStatusBar = (): void => {
     statusBarItem.command = "jupyterMcp.showStatus";
     statusBarItem.text = runtimeState ? "$(plug) Jupyter MCP" : "$(debug-disconnect) Jupyter MCP";
+    statusBarItem.color = runtimeState ? new vscode.ThemeColor("charts.blue") : undefined;
     statusBarItem.tooltip = renderTooltip();
     statusBarItem.show();
   };
