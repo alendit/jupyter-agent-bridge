@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import * as vscode from "vscode";
 import {
   DeleteCellRequest,
@@ -149,37 +148,34 @@ export class NotebookBridgeService {
   }
 
   private resolveOpenNotebookUri(request: OpenNotebookRequest): vscode.Uri {
-    if (request.notebook_uri) {
-      return vscode.Uri.parse(request.notebook_uri);
-    }
-
-    if (!request.path) {
+    let uri: vscode.Uri;
+    try {
+      uri = vscode.Uri.parse(request.notebook_uri);
+    } catch {
       fail({
         code: "InvalidRequest",
-        message: "Either notebook_uri or path is required.",
+        message: "open_notebook requires an absolute notebook_uri.",
         recoverable: true,
       });
     }
 
-    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
-    const matches = workspaceFolders
-      .map((folder) => vscode.Uri.joinPath(folder.uri, request.path!))
-      .filter((uri) => uri.scheme === "file");
-
-    if (matches.length === 0) {
-      return vscode.Uri.file(path.resolve(request.path));
-    }
-
-    if (matches.length > 1) {
+    if (!uri.scheme) {
       fail({
-        code: "AmbiguousSession",
-        message: `Relative path is ambiguous across workspace folders: ${request.path}`,
-        detail: matches.map((uri) => uri.toString()),
+        code: "InvalidRequest",
+        message: "open_notebook requires an absolute notebook_uri.",
         recoverable: true,
       });
     }
 
-    return matches[0];
+    if (uri.scheme === "file" && !pathIsAbsolute(uri.fsPath)) {
+      fail({
+        code: "InvalidRequest",
+        message: "open_notebook requires an absolute file URI.",
+        recoverable: true,
+      });
+    }
+
+    return uri;
   }
 
   private async requireDocument(notebookUri: string): Promise<vscode.NotebookDocument> {
@@ -232,4 +228,8 @@ export class NotebookBridgeService {
       });
     }
   }
+}
+
+function pathIsAbsolute(filePath: string): boolean {
+  return filePath.startsWith("/");
 }

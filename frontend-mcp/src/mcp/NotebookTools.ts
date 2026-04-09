@@ -30,10 +30,9 @@ export class NotebookTools {
       "open_notebook",
       {
         title: "Open Notebook",
-        description: "Open a notebook in the live VS Code session.",
+        description: "Open a notebook in the live VS Code session by absolute notebook URI.",
         inputSchema: {
-          notebook_uri: z.string().optional(),
-          path: z.string().optional(),
+          notebook_uri: z.string().describe("Absolute notebook URI, for example file:///.../demo.ipynb"),
           view_column: z.enum(["active", "beside"]).optional(),
         },
       },

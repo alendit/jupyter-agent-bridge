@@ -651,7 +651,7 @@ Return:
 
 ### `open_notebook`
 Input:
-- URI or workspace-relative path
+- absolute notebook URI
 
 Behavior:
 - open in VS Code
@@ -1306,8 +1306,7 @@ The extension must implement these behaviors exactly:
 
 Specific MVP rules:
 
-- `open_notebook` accepts either an absolute file URI or a path relative to the first matching workspace folder
-- if a relative path is ambiguous across workspace folders, fail with `AmbiguousSession`
+- `open_notebook` accepts an absolute notebook URI only
 - `execute_cells` supports code cells only; markdown cells in the request cause `InvalidRequest`
 - `wait_for_completion=false` is not part of the MVP; reject it with `InvalidRequest`
 - `interrupt_execution`, `restart_kernel`, and `select_kernel` are explicitly deferred even if placeholders exist in the protocol
@@ -1427,8 +1426,7 @@ export interface NotebookSnapshot {
 }
 
 export interface OpenNotebookRequest {
-  notebook_uri?: string;
-  path?: string;
+  notebook_uri: string;
   view_column?: "active" | "beside";
 }
 

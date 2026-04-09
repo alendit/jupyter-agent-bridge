@@ -66,8 +66,7 @@ export interface NotebookSnapshot {
 }
 
 export interface OpenNotebookRequest {
-  notebook_uri?: string;
-  path?: string;
+  notebook_uri: string;
   view_column?: "active" | "beside";
 }
 
@@ -169,4 +168,3 @@ export type OpenNotebookResult = NotebookSnapshot;
 export type ReadNotebookResult = NotebookSnapshot;
 export type MutationResult = NotebookSnapshot;
 export type SummarizeNotebookStateResult = NotebookStateSummary;
-
