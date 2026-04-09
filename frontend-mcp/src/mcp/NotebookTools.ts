@@ -2,6 +2,7 @@ import {
   DeleteCellRequest,
   ExecuteCellsRequest,
   InsertCellRequest,
+  NormalizedOutput,
   OpenNotebookRequest,
   ReadCellOutputsRequest,
   ReadNotebookRequest,
@@ -9,6 +10,7 @@ import {
   MoveCellRequest,
 } from "../../../packages/protocol/src";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { CallToolResult, ImageContent } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
 
@@ -183,14 +185,56 @@ export class NotebookTools {
     );
   }
 
-  private toToolResult(result: unknown): { content: Array<{ type: "text"; text: string }> } {
+  private toToolResult(result: unknown): CallToolResult {
+    const images: ImageContent[] = [];
+    const textResult = this.serializeForTextContent(result, images);
+
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(result, null, 2),
+          text: JSON.stringify(textResult, null, 2),
         },
+        ...images,
       ],
     };
+  }
+
+  private serializeForTextContent(value: unknown, images: ImageContent[]): unknown {
+    if (this.isNormalizedImageOutput(value)) {
+      const imageIndex = images.length + 1;
+      images.push({
+        type: "image",
+        data: value.base64,
+        mimeType: value.mime,
+      });
+
+      return {
+        ...value,
+        base64: `[omitted: see MCP image content ${imageIndex}]`,
+        mcp_image_index: imageIndex,
+      };
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((entry) => this.serializeForTextContent(entry, images));
+    }
+
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [key, this.serializeForTextContent(entry, images)]),
+      );
+    }
+
+    return value;
+  }
+
+  private isNormalizedImageOutput(value: unknown): value is NormalizedOutput & { kind: "image"; mime: string; base64: string } {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+
+    const candidate = value as Partial<NormalizedOutput>;
+    return candidate.kind === "image" && typeof candidate.mime === "string" && typeof candidate.base64 === "string";
   }
 }
