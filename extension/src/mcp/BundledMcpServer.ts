@@ -36,7 +36,7 @@ export function buildBundledMcpServerConfig(
 
   return {
     name: SERVER_NAME,
-    command: process.execPath,
+    command: "node",
     args: [entrypoint],
     env: {
       JUPYTER_MCP_SESSION_ID: sessionId,
@@ -59,4 +59,3 @@ export function renderMcpDefinitionSnippet(config: BundledMcpServerConfig): stri
     2,
   );
 }
-
