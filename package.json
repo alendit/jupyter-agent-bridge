@@ -1,0 +1,57 @@
+{
+  "name": "jupyter-mcp",
+  "displayName": "Jupyter MCP",
+  "description": "Bridge the live VS Code Jupyter notebook model to MCP tools.",
+  "publisher": "local",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./extension/dist/extension/src/extension.js",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onNotebook:jupyter-notebook",
+    "onCommand:jupyterMcp.startBridge",
+    "onCommand:jupyterMcp.stopBridge",
+    "onCommand:jupyterMcp.showStatus",
+    "onCommand:jupyterMcp.copyMcpDefinition"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "jupyterMcp.startBridge",
+        "title": "Jupyter MCP: Start Bridge"
+      },
+      {
+        "command": "jupyterMcp.stopBridge",
+        "title": "Jupyter MCP: Stop Bridge"
+      },
+      {
+        "command": "jupyterMcp.showStatus",
+        "title": "Jupyter MCP: Show Status"
+      },
+      {
+        "command": "jupyterMcp.copyMcpDefinition",
+        "title": "Jupyter MCP: Copy MCP Definition"
+      }
+    ]
+  },
+  "workspaces": [
+    "packages/protocol",
+    "extension",
+    "frontend-mcp"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:smoke": "node tests/integration/launch-smoke.cjs",
+    "dev:host": "npm run build && code --extensionDevelopmentPath=. --new-window tests/fixtures/smoke-workspace/demo.ipynb"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

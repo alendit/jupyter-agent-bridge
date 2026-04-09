@@ -1,0 +1,22 @@
+{
+  "name": "@jupyter-mcp/frontend-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/frontend-mcp/src/main.js",
+  "bin": {
+    "jupyter-mcp-server": "./dist/frontend-mcp/src/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@jupyter-mcp/protocol": "file:../packages/protocol",
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

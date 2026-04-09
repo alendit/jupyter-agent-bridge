@@ -1,0 +1,260 @@
+import { randomUUID } from "node:crypto";
+import * as vscode from "vscode";
+import { BRIDGE_METHODS, BridgeSessionInfo } from "../../packages/protocol/src";
+import { BearerTokenAuth } from "./bridge/Auth";
+import { BridgeHttpServer } from "./bridge/BridgeHttpServer";
+import { JsonRpcRouter } from "./bridge/JsonRpcRouter";
+import { RendezvousStore } from "./bridge/RendezvousStore";
+import { NotebookCommandAdapter } from "./commands/NotebookCommandAdapter";
+import { CursorMcpRegistrar } from "./cursor/CursorMcpRegistrar";
+import { buildBundledMcpServerConfig, renderMcpDefinitionSnippet } from "./mcp/BundledMcpServer";
+import { KernelInspectionService } from "./notebook/KernelInspectionService";
+import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
+import { NotebookExecutionService } from "./notebook/NotebookExecutionService";
+import { NotebookMutationService } from "./notebook/NotebookMutationService";
+import { NotebookReadService } from "./notebook/NotebookReadService";
+import { NotebookRegistry } from "./notebook/NotebookRegistry";
+import { OutputNormalizationService } from "./notebook/OutputNormalizationService";
+
+const EXTENSION_VERSION = "0.1.0";
+
+interface RuntimeState {
+  bridgeUrl: string;
+  authToken: string;
+  sessionId: string;
+  httpServer: BridgeHttpServer;
+  rendezvousStore: RendezvousStore;
+  cursorRegistrar: CursorMcpRegistrar;
+}
+
+let runtimeState: RuntimeState | undefined;
+
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const outputChannel = vscode.window.createOutputChannel("Jupyter MCP", { log: true });
+  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  const registry = new NotebookRegistry();
+  const outputNormalizationService = new OutputNormalizationService();
+  const kernelInspectionService = new KernelInspectionService();
+  const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
+  const mutationService = new NotebookMutationService();
+  const commandAdapter = new NotebookCommandAdapter();
+  const executionService = new NotebookExecutionService(registry, readService, commandAdapter);
+  const notebookBridgeService = new NotebookBridgeService(
+    registry,
+    readService,
+    mutationService,
+    executionService,
+  );
+
+  const log = (message: string): void => {
+    outputChannel.appendLine(message);
+  };
+
+  const renderTooltip = (): vscode.MarkdownString => {
+    const tooltip = new vscode.MarkdownString(undefined, true);
+    tooltip.isTrusted = true;
+
+    if (!runtimeState) {
+      tooltip.appendMarkdown("**Jupyter MCP Bridge**\n\n");
+      tooltip.appendMarkdown("- Status: stopped\n");
+      tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
+      tooltip.appendMarkdown(
+        "[Start Bridge](command:jupyterMcp.startBridge) | [Copy MCP Definition](command:jupyterMcp.copyMcpDefinition)",
+      );
+      return tooltip;
+    }
+
+    tooltip.appendMarkdown("**Jupyter MCP Bridge**\n\n");
+    tooltip.appendMarkdown("- Status: running\n");
+    tooltip.appendMarkdown(`- Session ID: \`${runtimeState.sessionId}\`\n`);
+    tooltip.appendMarkdown(`- Bridge URL: \`${runtimeState.bridgeUrl}\`\n`);
+    tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
+    tooltip.appendMarkdown(
+      "[Copy MCP Definition](command:jupyterMcp.copyMcpDefinition) | [Stop Bridge](command:jupyterMcp.stopBridge) | [Show Status](command:jupyterMcp.showStatus)",
+    );
+    return tooltip;
+  };
+
+  const updateStatusBar = (): void => {
+    statusBarItem.command = "jupyterMcp.showStatus";
+    statusBarItem.text = runtimeState ? "$(plug) Jupyter MCP" : "$(debug-disconnect) Jupyter MCP";
+    statusBarItem.tooltip = renderTooltip();
+    statusBarItem.show();
+  };
+
+  const getStatusSummary = (): string => {
+    if (!runtimeState) {
+      return "Jupyter MCP bridge is stopped.";
+    }
+
+    return `Jupyter MCP bridge is running.
+Session ID: ${runtimeState.sessionId}
+Bridge URL: ${runtimeState.bridgeUrl}
+JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
+  };
+
+  const startRuntime = async (): Promise<RuntimeState> => {
+    if (runtimeState) {
+      return runtimeState;
+    }
+
+    const sessionId = randomUUID();
+    const authToken = randomUUID();
+    let bridgeUrl = "";
+
+    const getSessionInfo = (): BridgeSessionInfo => ({
+      session_id: sessionId,
+      workspace_id: vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? null,
+      workspace_folders: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.toString()),
+      bridge_url: bridgeUrl,
+      extension_version: EXTENSION_VERSION,
+      capabilities: {
+        execute_cells: true,
+        interrupt_execution: false,
+        restart_kernel: false,
+      },
+    });
+
+    const router = new JsonRpcRouter(notebookBridgeService, getSessionInfo);
+    const auth = new BearerTokenAuth(authToken);
+    const httpServer = new BridgeHttpServer(auth, router);
+    bridgeUrl = await httpServer.start();
+
+    const rendezvousStore = new RendezvousStore(sessionId, authToken, getSessionInfo);
+    await rendezvousStore.start();
+
+    const cursorRegistrar = new CursorMcpRegistrar(context.extensionPath, sessionId);
+    cursorRegistrar.registerIfAvailable();
+
+    runtimeState = {
+      bridgeUrl,
+      authToken,
+      sessionId,
+      httpServer,
+      rendezvousStore,
+      cursorRegistrar,
+    };
+
+    log(`Bridge started at ${bridgeUrl} for session ${sessionId}.`);
+    updateStatusBar();
+    return runtimeState;
+  };
+
+  const stopRuntime = async (): Promise<void> => {
+    if (!runtimeState) {
+      log("Stop requested while the bridge was already stopped.");
+      return;
+    }
+
+    const current = runtimeState;
+    runtimeState = undefined;
+    current.rendezvousStore.dispose();
+    current.cursorRegistrar.dispose();
+    await current.httpServer.stop();
+    log(`Bridge stopped for session ${current.sessionId}.`);
+    updateStatusBar();
+  };
+
+  const copyMcpDefinition = async (): Promise<void> => {
+    const current = runtimeState ?? (await startRuntime());
+    const config = buildBundledMcpServerConfig(context.extensionPath, current.sessionId);
+    if (!config) {
+      log("Failed to copy MCP definition because the bundled MCP server entrypoint was not found.");
+      updateStatusBar();
+      await vscode.window.showErrorMessage(
+        "Jupyter MCP could not find the bundled MCP server entrypoint. Build the workspace first.",
+      );
+      return;
+    }
+
+    const snippet = renderMcpDefinitionSnippet(config);
+    await vscode.env.clipboard.writeText(snippet);
+    log(`Copied a session-pinned MCP definition for session ${current.sessionId}.`);
+    updateStatusBar();
+    await vscode.window.showInformationMessage(
+      "Copied a session-pinned MCP definition to the clipboard.",
+    );
+  };
+
+  const startBridgeCommand = vscode.commands.registerCommand("jupyterMcp.startBridge", async () => {
+    const current = runtimeState ?? (await startRuntime());
+    const action = await vscode.window.showInformationMessage(
+      `Jupyter MCP bridge is running at ${current.bridgeUrl}. Session method: ${BRIDGE_METHODS.getSessionInfo}`,
+      "Copy MCP Definition",
+      "Show Status",
+      "Show Output",
+    );
+
+    if (action === "Copy MCP Definition") {
+      await copyMcpDefinition();
+      return;
+    }
+
+    if (action === "Show Status") {
+      await vscode.window.showInformationMessage(getStatusSummary());
+      return;
+    }
+
+    if (action === "Show Output") {
+      outputChannel.show(true);
+    }
+  });
+
+  const stopBridgeCommand = vscode.commands.registerCommand("jupyterMcp.stopBridge", async () => {
+    const wasRunning = runtimeState !== undefined;
+    await stopRuntime();
+    await vscode.window.showInformationMessage(
+      wasRunning ? "Jupyter MCP bridge stopped." : "Jupyter MCP bridge is already stopped.",
+    );
+  });
+
+  const showStatusCommand = vscode.commands.registerCommand("jupyterMcp.showStatus", async () => {
+    const message = getStatusSummary();
+    log(`Status requested. ${message.replace(/\n/g, " | ")}`);
+    updateStatusBar();
+    const action = await vscode.window.showInformationMessage(
+      message,
+      runtimeState ? "Copy MCP Definition" : "Start Bridge",
+      "Show Output",
+    );
+    if (action === "Copy MCP Definition") {
+      await copyMcpDefinition();
+      return;
+    }
+    if (action === "Start Bridge") {
+      await startRuntime();
+      return;
+    }
+    if (action === "Show Output") {
+      outputChannel.show(true);
+    }
+  });
+
+  const copyMcpDefinitionCommand = vscode.commands.registerCommand(
+    "jupyterMcp.copyMcpDefinition",
+    copyMcpDefinition,
+  );
+
+  await startRuntime();
+  updateStatusBar();
+
+  context.subscriptions.push(
+    outputChannel,
+    statusBarItem,
+    registry,
+    startBridgeCommand,
+    stopBridgeCommand,
+    showStatusCommand,
+    copyMcpDefinitionCommand,
+  );
+}
+
+export async function deactivate(): Promise<void> {
+  if (runtimeState) {
+    const current = runtimeState;
+    runtimeState = undefined;
+    current.rendezvousStore.dispose();
+    current.cursorRegistrar.dispose();
+    await current.httpServer.stop();
+  }
+}

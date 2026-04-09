@@ -1,0 +1,187 @@
+import * as vscode from "vscode";
+import {
+  CellExecutionSummary,
+  CellSnapshot,
+  GetKernelInfoResult,
+  KernelInfo,
+  ListOpenNotebooksResult,
+  NotebookSnapshot,
+  NotebookStateSummary,
+  NotebookSummary,
+  NormalizedOutput,
+  ReadCellOutputsResult,
+  ReadNotebookRequest,
+  ReadNotebookResult,
+  SummarizeNotebookStateResult,
+} from "../../../packages/protocol/src";
+import { fail } from "../../../packages/protocol/src";
+import { getStoredCellId, notebookCellKindToProtocol, cloneMetadata } from "./cells";
+import { NotebookRegistry } from "./NotebookRegistry";
+import { OutputNormalizationService } from "./OutputNormalizationService";
+import { KernelInspectionService } from "./KernelInspectionService";
+
+export class NotebookReadService {
+  public constructor(
+    private readonly registry: NotebookRegistry,
+    private readonly outputNormalizationService: OutputNormalizationService,
+    private readonly kernelInspectionService: KernelInspectionService,
+  ) {}
+
+  public listOpenNotebooks(documents: readonly vscode.NotebookDocument[]): ListOpenNotebooksResult {
+    return documents.map((document) => this.toNotebookSummary(document));
+  }
+
+  public readNotebook(document: vscode.NotebookDocument, request: ReadNotebookRequest): ReadNotebookResult {
+    let cells = document.getCells();
+
+    if (request.cell_ids && request.cell_ids.length > 0) {
+      const wanted = new Set(request.cell_ids);
+      cells = cells.filter((cell) => {
+        const cellId = getStoredCellId(cell);
+        return cellId !== null && wanted.has(cellId);
+      });
+    } else if (request.range) {
+      cells = cells.slice(request.range.start, request.range.end);
+    }
+
+    return {
+      notebook: this.toNotebookSummary(document),
+      cells: cells.map((cell) => this.toCellSnapshot(cell, request.include_outputs ?? false)),
+    };
+  }
+
+  public readCellOutputs(document: vscode.NotebookDocument, cell: vscode.NotebookCell): ReadCellOutputsResult {
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      cell_id: getStoredCellId(cell) ?? "",
+      outputs: this.outputNormalizationService.normalizeOutputs(cell.outputs),
+    };
+  }
+
+  public getKernelInfo(document: vscode.NotebookDocument): GetKernelInfoResult {
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      kernel: this.kernelInspectionService.getKernelInfo(document),
+    };
+  }
+
+  public summarizeNotebookState(document: vscode.NotebookDocument): SummarizeNotebookStateResult {
+    const errorCells: string[] = [];
+    const imageCells: string[] = [];
+
+    for (const cell of document.getCells()) {
+      const cellId = getStoredCellId(cell);
+      if (!cellId) {
+        continue;
+      }
+
+      const outputs = this.outputNormalizationService.normalizeOutputs(cell.outputs);
+      if (outputs.some((output) => output.kind === "error")) {
+        errorCells.push(cellId);
+      }
+      if (outputs.some((output) => output.kind === "image")) {
+        imageCells.push(cellId);
+      }
+    }
+
+    const activeIndex = this.registry.getActiveCellIndex(document);
+    const activeCellId =
+      activeIndex === undefined ? undefined : getStoredCellId(document.cellAt(activeIndex)) ?? undefined;
+
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      dirty: document.isDirty,
+      kernel: this.kernelInspectionService.getKernelInfo(document),
+      last_executed_cell_ids: this.registry.getLastExecuted(document.uri.toString()).slice(0, 20),
+      cells_with_errors: errorCells.slice(0, 20),
+      cells_with_images: imageCells.slice(0, 20),
+      active_cell_id: activeCellId,
+    };
+  }
+
+  public requireCell(document: vscode.NotebookDocument, cellId: string): vscode.NotebookCell {
+    const cell = document.getCells().find((candidate) => getStoredCellId(candidate) === cellId);
+    if (!cell) {
+      fail({
+        code: "CellNotFound",
+        message: `Cell not found: ${cellId}`,
+        recoverable: false,
+      });
+    }
+
+    return cell as vscode.NotebookCell;
+  }
+
+  public toNotebookSnapshot(document: vscode.NotebookDocument, includeOutputs = true): NotebookSnapshot {
+    return {
+      notebook: this.toNotebookSummary(document),
+      cells: document.getCells().map((cell) => this.toCellSnapshot(cell, includeOutputs)),
+    };
+  }
+
+  public toNotebookSummary(document: vscode.NotebookDocument): NotebookSummary {
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_type: document.notebookType,
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      dirty: document.isDirty,
+      active_editor: this.registry.isActiveEditor(document),
+      visible_editor_count: this.registry.getVisibleEditorCount(document),
+      kernel: this.kernelInspectionService.getKernelInfo(document),
+    };
+  }
+
+  public toCellSnapshot(cell: vscode.NotebookCell, includeOutputs: boolean): CellSnapshot {
+    const cellId = getStoredCellId(cell);
+    if (!cellId) {
+      fail({
+        code: "CellNotFound",
+        message: `Cell is missing a stable id at index ${cell.index}`,
+      });
+    }
+
+    const snapshot: CellSnapshot = {
+      cell_id: cellId,
+      index: cell.index,
+      kind: notebookCellKindToProtocol(cell.kind),
+      language: cell.kind === vscode.NotebookCellKind.Code ? cell.document.languageId : null,
+      source: cell.document.getText(),
+      metadata: cloneMetadata(cell.metadata),
+      execution: this.toExecutionSummary(cell),
+    };
+
+    if (includeOutputs) {
+      snapshot.outputs = this.outputNormalizationService.normalizeOutputs(cell.outputs);
+    }
+
+    return snapshot;
+  }
+
+  public toExecutionSummary(cell: vscode.NotebookCell): CellExecutionSummary | null {
+    const summary = cell.executionSummary;
+    if (!summary) {
+      return null;
+    }
+
+    const success = (summary as { success?: boolean }).success;
+    const timing = (summary as { timing?: { startTime?: number; endTime?: number } }).timing;
+
+    return {
+      status: success === false ? "failed" : "succeeded",
+      execution_order: summary.executionOrder ?? null,
+      started_at: timing?.startTime ? new Date(timing.startTime).toISOString() : null,
+      ended_at: timing?.endTime ? new Date(timing.endTime).toISOString() : null,
+    };
+  }
+
+  public normalizeCellOutputs(cell: vscode.NotebookCell): NormalizedOutput[] {
+    return this.outputNormalizationService.normalizeOutputs(cell.outputs);
+  }
+
+  public getKernelInfoValue(document: vscode.NotebookDocument): KernelInfo {
+    return this.kernelInspectionService.getKernelInfo(document);
+  }
+}

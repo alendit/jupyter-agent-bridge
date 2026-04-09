@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Extension Dev Host: Jupyter MCP Smoke",
+      "type": "extensionHost",
+      "request": "launch",
+      "runtimeExecutable": "${execPath}",
+      "args": [
+        "--new-window",
+        "${workspaceFolder}/tests/fixtures/smoke-workspace/demo.ipynb"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/extension/dist/**/*.js",
+        "${workspaceFolder}/frontend-mcp/dist/**/*.js",
+        "${workspaceFolder}/packages/protocol/dist/**/*.js"
+      ],
+      "preLaunchTask": "build"
+    }
+  ]
+}
+
