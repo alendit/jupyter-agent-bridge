@@ -6,7 +6,7 @@ export class CursorMcpRegistrar implements vscode.Disposable {
 
   public constructor(
     private readonly extensionPath: string,
-    private readonly sessionId: string,
+    private readonly getPortFilePath: () => string | null,
   ) {}
 
   public registerIfAvailable(): void {
@@ -30,7 +30,12 @@ export class CursorMcpRegistrar implements vscode.Disposable {
       return;
     }
 
-    const config = buildBundledMcpServerConfig(this.extensionPath, this.sessionId);
+    const portFilePath = this.getPortFilePath();
+    if (!portFilePath) {
+      return;
+    }
+
+    const config = buildBundledMcpServerConfig(this.extensionPath, portFilePath);
     if (!config) {
       return;
     }

@@ -12,6 +12,7 @@ export class BridgeDiscovery {
   public constructor(
     private readonly cwd = process.cwd(),
     private readonly sessionsDirectory = getDefaultSessionsDirectory(),
+    private readonly portFilePath = process.argv[2] || process.env.JUPYTER_MCP_PORT_FILE || null,
   ) {}
 
   public async selectSession(): Promise<RendezvousRecord> {
@@ -22,6 +23,24 @@ export class BridgeDiscovery {
         message: "No active VS Code notebook bridge sessions were found.",
         recoverable: true,
       });
+    }
+
+    const explicitPort = await this.readPortFromFile();
+    if (explicitPort !== null) {
+      const match = sessions.find((session) => sessionPort(session) === explicitPort);
+      if (!match) {
+        throw new BridgeErrorException({
+          code: "BridgeUnavailable",
+          message: `No active notebook bridge matched port ${explicitPort} from the port file.`,
+          detail: {
+            port_file: this.portFilePath,
+            port: explicitPort,
+          },
+          recoverable: true,
+        });
+      }
+
+      return match;
     }
 
     const explicitSessionId = process.env.JUPYTER_MCP_SESSION_ID;
@@ -93,5 +112,27 @@ export class BridgeDiscovery {
     return records
       .filter((record): record is RendezvousRecord => record !== null)
       .sort((left, right) => Date.parse(right.last_seen_at) - Date.parse(left.last_seen_at));
+  }
+
+  private async readPortFromFile(): Promise<number | null> {
+    if (!this.portFilePath) {
+      return null;
+    }
+
+    try {
+      const raw = await fs.readFile(this.portFilePath, "utf8");
+      const port = Number.parseInt(raw.trim(), 10);
+      return Number.isFinite(port) ? port : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function sessionPort(session: RendezvousRecord): number | null {
+  try {
+    return new URL(session.bridge_url).port ? Number.parseInt(new URL(session.bridge_url).port, 10) : null;
+  } catch {
+    return null;
   }
 }

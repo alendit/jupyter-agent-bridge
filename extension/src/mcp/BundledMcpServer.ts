@@ -27,7 +27,7 @@ export function resolveBundledMcpEntrypoint(extensionPath: string): string | nul
 
 export function buildBundledMcpServerConfig(
   extensionPath: string,
-  sessionId: string,
+  portFilePath: string,
 ): BundledMcpServerConfig | null {
   const entrypoint = resolveBundledMcpEntrypoint(extensionPath);
   if (!entrypoint) {
@@ -37,10 +37,8 @@ export function buildBundledMcpServerConfig(
   return {
     name: SERVER_NAME,
     command: "node",
-    args: [entrypoint],
-    env: {
-      JUPYTER_MCP_SESSION_ID: sessionId,
-    },
+    args: [entrypoint, portFilePath],
+    env: {},
   };
 }
 

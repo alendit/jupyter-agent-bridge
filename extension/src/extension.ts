@@ -4,6 +4,7 @@ import { BRIDGE_METHODS, BridgeSessionInfo } from "../../packages/protocol/src";
 import { BearerTokenAuth } from "./bridge/Auth";
 import { BridgeHttpServer } from "./bridge/BridgeHttpServer";
 import { JsonRpcRouter } from "./bridge/JsonRpcRouter";
+import { ProjectPortFileStore } from "./bridge/ProjectPortFileStore";
 import { RendezvousStore } from "./bridge/RendezvousStore";
 import { NotebookCommandAdapter } from "./commands/NotebookCommandAdapter";
 import { CursorMcpRegistrar } from "./cursor/CursorMcpRegistrar";
@@ -22,7 +23,9 @@ interface RuntimeState {
   bridgeUrl: string;
   authToken: string;
   sessionId: string;
+  portFilePaths: string[];
   httpServer: BridgeHttpServer;
+  projectPortFileStore: ProjectPortFileStore;
   rendezvousStore: RendezvousStore;
   cursorRegistrar: CursorMcpRegistrar;
 }
@@ -68,6 +71,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tooltip.appendMarkdown("- Status: running\n");
     tooltip.appendMarkdown(`- Session ID: \`${runtimeState.sessionId}\`\n`);
     tooltip.appendMarkdown(`- Bridge URL: \`${runtimeState.bridgeUrl}\`\n`);
+    if (runtimeState.portFilePaths.length > 0) {
+      tooltip.appendMarkdown(`- Port file: \`${runtimeState.portFilePaths[0]}\`\n`);
+    }
     tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
     tooltip.appendMarkdown(
       "[Copy MCP Definition](command:jupyterMcp.copyMcpDefinition) | [Stop Bridge](command:jupyterMcp.stopBridge) | [Show Status](command:jupyterMcp.showStatus)",
@@ -91,6 +97,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return `Jupyter MCP bridge is running.
 Session ID: ${runtimeState.sessionId}
 Bridge URL: ${runtimeState.bridgeUrl}
+Port file: ${runtimeState.portFilePaths[0] ?? "not available"}
 JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
   };
 
@@ -120,23 +127,35 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     const auth = new BearerTokenAuth(authToken);
     const httpServer = new BridgeHttpServer(auth, router);
     bridgeUrl = await httpServer.start();
+    const bridgePort = Number.parseInt(new URL(bridgeUrl).port, 10);
 
     const rendezvousStore = new RendezvousStore(sessionId, authToken, getSessionInfo);
     await rendezvousStore.start();
 
-    const cursorRegistrar = new CursorMcpRegistrar(context.extensionPath, sessionId);
+    const projectPortFileStore = new ProjectPortFileStore();
+    const portFilePaths = await projectPortFileStore.write(bridgePort);
+    const cursorRegistrar = new CursorMcpRegistrar(
+      context.extensionPath,
+      () => projectPortFileStore.getPreferredPortFilePath(),
+    );
     cursorRegistrar.registerIfAvailable();
 
     runtimeState = {
       bridgeUrl,
       authToken,
       sessionId,
+      portFilePaths,
       httpServer,
+      projectPortFileStore,
       rendezvousStore,
       cursorRegistrar,
     };
 
-    log(`Bridge started at ${bridgeUrl} for session ${sessionId}.`);
+    log(
+      `Bridge started at ${bridgeUrl} for session ${sessionId}. Port files: ${
+        portFilePaths.length > 0 ? portFilePaths.join(", ") : "none"
+      }.`,
+    );
     updateStatusBar();
     return runtimeState;
   };
@@ -149,6 +168,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
 
     const current = runtimeState;
     runtimeState = undefined;
+    current.projectPortFileStore.dispose();
     current.rendezvousStore.dispose();
     current.cursorRegistrar.dispose();
     await current.httpServer.stop();
@@ -158,7 +178,16 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
 
   const copyMcpDefinition = async (): Promise<void> => {
     const current = runtimeState ?? (await startRuntime());
-    const config = buildBundledMcpServerConfig(context.extensionPath, current.sessionId);
+    const portFilePath = current.projectPortFileStore.getPreferredPortFilePath();
+    if (!portFilePath) {
+      log("Failed to copy MCP definition because no workspace folder is available for a project port file.");
+      await vscode.window.showErrorMessage(
+        "Jupyter MCP needs an open workspace folder to generate a project-local MCP definition.",
+      );
+      return;
+    }
+
+    const config = buildBundledMcpServerConfig(context.extensionPath, portFilePath);
     if (!config) {
       log("Failed to copy MCP definition because the bundled MCP server entrypoint was not found.");
       updateStatusBar();
@@ -170,7 +199,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
 
     const snippet = renderMcpDefinitionSnippet(config);
     await vscode.env.clipboard.writeText(snippet);
-    log(`Copied a session-pinned MCP definition for session ${current.sessionId}.`);
+    log(`Copied a port-file MCP definition for session ${current.sessionId} using ${portFilePath}.`);
     updateStatusBar();
     await vscode.window.showInformationMessage(
       "Copied a session-pinned MCP definition to the clipboard.",
@@ -254,6 +283,7 @@ export async function deactivate(): Promise<void> {
   if (runtimeState) {
     const current = runtimeState;
     runtimeState = undefined;
+    current.projectPortFileStore.dispose();
     current.rendezvousStore.dispose();
     current.cursorRegistrar.dispose();
     await current.httpServer.stop();
