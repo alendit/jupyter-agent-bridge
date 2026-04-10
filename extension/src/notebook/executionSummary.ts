@@ -53,3 +53,16 @@ export function toCellExecutionSummary(summary: ExecutionSummaryLike | undefined
 
   return null;
 }
+
+export function executionSummarySignature(summary: ExecutionSummaryLike | undefined): string {
+  const normalized = toCellExecutionSummary(summary);
+  if (!normalized) {
+    return "null";
+  }
+
+  return JSON.stringify(normalized);
+}
+
+export function isExecutionSummaryRunning(summary: ExecutionSummaryLike | undefined): boolean {
+  return toCellExecutionSummary(summary)?.status === "running";
+}

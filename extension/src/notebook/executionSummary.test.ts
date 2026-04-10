@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { toCellExecutionSummary } from "./executionSummary";
+import { executionSummarySignature, isExecutionSummaryRunning, toCellExecutionSummary } from "./executionSummary";
 
 test("toCellExecutionSummary ignores empty shell execution summaries", () => {
   assert.equal(
@@ -60,5 +60,22 @@ test("toCellExecutionSummary marks succeeded executions when terminal evidence e
       started_at: null,
       ended_at: null,
     },
+  );
+});
+
+test("executionSummarySignature ignores empty shell summaries", () => {
+  assert.equal(executionSummarySignature(undefined), "null");
+  assert.equal(executionSummarySignature({ executionOrder: null }), "null");
+});
+
+test("isExecutionSummaryRunning only treats started executions as running", () => {
+  assert.equal(isExecutionSummaryRunning({ executionOrder: null }), false);
+  assert.equal(
+    isExecutionSummaryRunning({
+      timing: {
+        startTime: 1_710_000_000_000,
+      },
+    } as never),
+    true,
   );
 });

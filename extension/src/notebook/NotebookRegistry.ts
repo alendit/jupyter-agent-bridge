@@ -9,6 +9,7 @@ import {
   markKernelExecutionStarted,
   reconcileKernelRuntimeState,
 } from "./kernelRuntime";
+import { isExecutionSummaryRunning } from "./executionSummary";
 
 interface NotebookState {
   document: vscode.NotebookDocument;
@@ -221,11 +222,7 @@ export class NotebookRegistry implements vscode.Disposable {
 function executionSummaryIsRunning(
   summary: vscode.NotebookCellExecutionSummary | undefined,
 ): boolean {
-  if (!summary) {
-    return false;
-  }
-
-  return summary.timing?.endTime === undefined && summary.success === undefined;
+  return isExecutionSummaryRunning(summary);
 }
 
 function kernelRuntimeEquals(

@@ -3,6 +3,7 @@ import { ExecuteCellResult, ExecuteCellsRequest, ExecuteCellsResult } from "../.
 import { fail } from "../../../packages/protocol/src";
 import { getStoredCellId } from "./cells";
 import { deriveExecutionProgressState } from "./executionCompletionPolicy";
+import { executionSummarySignature } from "./executionSummary";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookCommandAdapter } from "../commands/NotebookCommandAdapter";
@@ -196,10 +197,8 @@ export class NotebookExecutionService {
   }
 
   private executionSignature(cell: vscode.NotebookCell): string {
-    const summary = cell.executionSummary;
     return JSON.stringify({
-      executionOrder: summary?.executionOrder ?? null,
-      success: (summary as { success?: boolean } | undefined)?.success ?? null,
+      execution: executionSummarySignature(cell.executionSummary),
       outputs: cell.outputs.map((output) => ({
         items: output.items.map((item) => ({
           mime: item.mime,
