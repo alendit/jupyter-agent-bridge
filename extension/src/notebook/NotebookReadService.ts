@@ -26,6 +26,7 @@ import { KernelInspectionService } from "./KernelInspectionService";
 import { buildNotebookOutline } from "./outline";
 import { buildNotebookCellPreviews } from "./previews";
 import { toCellExecutionSummary } from "./executionSummary";
+import { selectNotebookCells } from "./cellSelection";
 
 export class NotebookReadService {
   public constructor(
@@ -39,7 +40,10 @@ export class NotebookReadService {
   }
 
   public readNotebook(document: vscode.NotebookDocument, request: ReadNotebookRequest): ReadNotebookResult {
-    const cells = this.selectCells(document, request.range, request.cell_ids);
+    const cells = selectNotebookCells(document, {
+      range: request.range,
+      cell_ids: request.cell_ids,
+    });
     const lineSpans = this.computeNotebookLineSpans(document);
 
     return {
@@ -56,7 +60,10 @@ export class NotebookReadService {
   }
 
   public listNotebookCells(document: vscode.NotebookDocument, request: ListNotebookCellsRequest): ListNotebookCellsResult {
-    const selectedCells = this.selectCells(document, request.range, request.cell_ids);
+    const selectedCells = selectNotebookCells(document, {
+      range: request.range,
+      cell_ids: request.cell_ids,
+    });
     const outline = this.getNotebookOutline(document).headings;
     const lineSpans = this.computeNotebookLineSpans(document);
 
@@ -132,26 +139,6 @@ export class NotebookReadService {
         }),
       ),
     };
-  }
-
-  private selectCells(
-    document: vscode.NotebookDocument,
-    range?: { start: number; end: number },
-    cellIds?: readonly string[],
-  ): vscode.NotebookCell[] {
-    let cells = document.getCells();
-
-    if (cellIds && cellIds.length > 0) {
-      const wanted = new Set(cellIds);
-      cells = cells.filter((cell) => {
-        const cellId = getStoredCellId(cell);
-        return cellId !== null && wanted.has(cellId);
-      });
-    } else if (range) {
-      cells = cells.slice(range.start, range.end);
-    }
-
-    return cells;
   }
 
   public getKernelInfo(document: vscode.NotebookDocument): GetKernelInfoResult {

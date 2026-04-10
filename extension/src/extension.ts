@@ -13,12 +13,16 @@ import { HostKernelObservationService } from "./notebook/HostKernelObservationSe
 import { KernelInspectionService } from "./notebook/KernelInspectionService";
 import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
 import { CellPatchService } from "./notebook/CellPatchService";
+import { NotebookDocumentService } from "./notebook/NotebookDocumentService";
+import { NotebookEditApplicationService } from "./notebook/NotebookEditApplicationService";
 import { NotebookExecutionService } from "./notebook/NotebookExecutionService";
 import { NotebookKernelCommandService } from "./notebook/NotebookKernelCommandService";
 import { NotebookLanguageService } from "./notebook/NotebookLanguageService";
 import { NotebookMutationService } from "./notebook/NotebookMutationService";
+import { NotebookQueryApplicationService } from "./notebook/NotebookQueryApplicationService";
 import { NotebookReadService } from "./notebook/NotebookReadService";
 import { NotebookRegistry } from "./notebook/NotebookRegistry";
+import { NotebookRuntimeApplicationService } from "./notebook/NotebookRuntimeApplicationService";
 import { NotebookSearchService } from "./notebook/NotebookSearchService";
 import { NotebookVariableService } from "./notebook/NotebookVariableService";
 import { OutputNormalizationService } from "./notebook/OutputNormalizationService";
@@ -50,6 +54,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const kernelInspectionService = new KernelInspectionService(registry, hostKernelObservationService);
   const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
   const mutationService = new NotebookMutationService();
+  const documentService = new NotebookDocumentService(registry, mutationService);
   const searchService = new NotebookSearchService(registry, readService);
   const variableService = new NotebookVariableService(registry);
   const cellPatchService = new CellPatchService();
@@ -63,18 +68,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log,
   );
   const languageService = new NotebookLanguageService(registry, readService, mutationService);
-  const notebookBridgeService = new NotebookBridgeService(
+  const queryApplicationService = new NotebookQueryApplicationService(
     registry,
+    documentService,
+    readService,
+    searchService,
+    languageService,
+    variableService,
+    hostKernelObservationService,
+    commandAdapter,
+  );
+  const editApplicationService = new NotebookEditApplicationService(
+    registry,
+    documentService,
     readService,
     mutationService,
-    executionService,
-    commandAdapter,
-    kernelCommandService,
-    searchService,
     cellPatchService,
     languageService,
-    hostKernelObservationService,
-    variableService,
+  );
+  const runtimeApplicationService = new NotebookRuntimeApplicationService(
+    registry,
+    documentService,
+    mutationService,
+    executionService,
+    kernelCommandService,
+  );
+  const notebookBridgeService = new NotebookBridgeService(
+    queryApplicationService,
+    editApplicationService,
+    runtimeApplicationService,
   );
 
   const renderTooltip = (): vscode.MarkdownString => {
