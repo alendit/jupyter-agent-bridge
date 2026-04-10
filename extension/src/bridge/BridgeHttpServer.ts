@@ -16,6 +16,7 @@ export class BridgeHttpServer {
   public constructor(
     private readonly auth: BearerTokenAuth,
     private readonly router: JsonRpcRouter,
+    private readonly log?: (message: string) => void,
   ) {
     this.server = http.createServer(async (request, response) => {
       await this.handleRequest(request, response);
@@ -79,6 +80,7 @@ export class BridgeHttpServer {
     try {
       payload = JSON.parse(rawBody) as JsonRpcRequest;
     } catch {
+      this.log?.(`RPC parse_error method=unknown remote=${request.socket.remoteAddress ?? "unknown"}`);
       response.writeHead(400, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
@@ -94,6 +96,7 @@ export class BridgeHttpServer {
     }
 
     if (!payload || payload.jsonrpc !== "2.0" || typeof payload.method !== "string") {
+      this.log?.(`RPC invalid_request method=${String(payload?.method ?? "unknown")} id=${String(payload?.id ?? "null")}`);
       response.writeHead(400, { "content-type": "application/json" });
       response.end(
         JSON.stringify({
@@ -112,6 +115,7 @@ export class BridgeHttpServer {
       try {
         this.auth.assertAuthorized(request.headers.authorization);
       } catch {
+        this.log?.(`RPC unauthorized method=${payload.method} id=${String(payload.id ?? "null")}`);
         response.writeHead(401, { "content-type": "application/json" });
         response.end(
           JSON.stringify({
@@ -131,7 +135,23 @@ export class BridgeHttpServer {
       }
     }
 
+    const startedAt = Date.now();
+    this.log?.(
+      `RPC request method=${payload.method} id=${String(payload.id ?? "null")}${summarizeParams(payload.params)}`,
+    );
     const rpcResponse = await this.router.route(payload);
+    const elapsedMs = Date.now() - startedAt;
+    if ("error" in rpcResponse) {
+      const errorCode =
+        typeof rpcResponse.error.data === "object" && rpcResponse.error.data && "code" in rpcResponse.error.data
+          ? String((rpcResponse.error.data as { code?: unknown }).code ?? rpcResponse.error.message)
+          : rpcResponse.error.message;
+      this.log?.(
+        `RPC error method=${payload.method} id=${String(payload.id ?? "null")} elapsed_ms=${elapsedMs} code=${errorCode}`,
+      );
+    } else {
+      this.log?.(`RPC response method=${payload.method} id=${String(payload.id ?? "null")} elapsed_ms=${elapsedMs}`);
+    }
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify(rpcResponse));
   }
@@ -144,4 +164,54 @@ async function readRequestBody(request: http.IncomingMessage): Promise<string> {
   }
 
   return Buffer.concat(chunks).toString("utf8");
+}
+
+function summarizeParams(params: unknown): string {
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    return "";
+  }
+
+  const record = params as Record<string, unknown>;
+  const parts: string[] = [];
+  const notebookUri = shortString(record.notebook_uri);
+  if (notebookUri) {
+    parts.push(` notebook_uri=${notebookUri}`);
+  }
+  const cellId = shortString(record.cell_id);
+  if (cellId) {
+    parts.push(` cell_id=${cellId}`);
+  }
+  if (Array.isArray(record.cell_ids)) {
+    parts.push(` cell_ids=${record.cell_ids.length}`);
+  }
+  const query = shortString(record.query, 80);
+  if (query) {
+    parts.push(` query=${query}`);
+  }
+  if (typeof record.max_results === "number") {
+    parts.push(` max_results=${record.max_results}`);
+  }
+  if (typeof record.offset === "number") {
+    parts.push(` offset=${record.offset}`);
+  }
+  if (record.range && typeof record.range === "object" && !Array.isArray(record.range)) {
+    const range = record.range as { start?: unknown; end?: unknown };
+    if (typeof range.start === "number" && typeof range.end === "number") {
+      parts.push(` range=${range.start}:${range.end}`);
+    }
+  }
+
+  return parts.join("");
+}
+
+function shortString(value: unknown, maxLength = 120): string | null {
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+
+  if (value.length <= maxLength) {
+    return JSON.stringify(value);
+  }
+
+  return JSON.stringify(`${value.slice(0, maxLength - 1)}…`);
 }

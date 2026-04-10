@@ -144,7 +144,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
 
     const router = new JsonRpcRouter(notebookBridgeService, getSessionInfo);
     const auth = new BearerTokenAuth(authToken);
-    const httpServer = new BridgeHttpServer(auth, router);
+    const httpServer = new BridgeHttpServer(auth, router, log);
     bridgeUrl = await httpServer.start();
     const bridgePort = Number.parseInt(new URL(bridgeUrl).port, 10);
 

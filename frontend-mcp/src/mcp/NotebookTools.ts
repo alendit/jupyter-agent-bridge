@@ -531,7 +531,10 @@ const NOTEBOOK_RULES = [
 ];
 
 export class NotebookTools {
-  public constructor(private readonly getClient: () => Promise<NotebookBridgeClient>) {}
+  public constructor(
+    private readonly getClient: () => Promise<NotebookBridgeClient>,
+    private readonly log?: (message: string) => void,
+  ) {}
 
   public register(server: McpServer): void {
     const register = (toolName: ToolName, inputSchema: z.ZodTypeAny, handler: (input: unknown) => Promise<unknown>): void => {
@@ -542,7 +545,7 @@ export class NotebookTools {
           description: this.buildToolDescription(toolName),
           inputSchema,
         },
-        async (input) => this.runTool(() => handler(input)),
+        async (input) => this.runTool(toolName, input, () => handler(input)),
       );
     };
 
@@ -1366,12 +1369,63 @@ export class NotebookTools {
     throw new Error(`Invalid arguments for tool ${toolName}: ${message}`);
   }
 
-  private async runTool<T>(operation: () => Promise<T>): Promise<CallToolResult> {
+  private async runTool<T>(toolName: ToolName, input: unknown, operation: () => Promise<T>): Promise<CallToolResult> {
+    const startedAt = Date.now();
+    this.log?.(`tool request name=${toolName}${this.summarizeToolInput(input)}`);
     try {
-      return this.toToolResult(await operation());
+      const result = await operation();
+      this.log?.(`tool response name=${toolName} elapsed_ms=${Date.now() - startedAt}`);
+      return this.toToolResult(result);
     } catch (error) {
+      const bridgeError = asBridgeError(error);
+      this.log?.(
+        `tool error name=${toolName} elapsed_ms=${Date.now() - startedAt} code=${bridgeError.code} message=${JSON.stringify(bridgeError.message)}`,
+      );
       return this.toErrorToolResult(error);
     }
+  }
+
+  private summarizeToolInput(input: unknown): string {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return "";
+    }
+
+    const record = input as Record<string, unknown>;
+    const parts: string[] = [];
+    const notebookUri = this.shortString(record.notebook_uri);
+    if (notebookUri) {
+      parts.push(` notebook_uri=${notebookUri}`);
+    }
+    const query = this.shortString(record.query, 80);
+    if (query) {
+      parts.push(` query=${query}`);
+    }
+    if (typeof record.max_results === "number") {
+      parts.push(` max_results=${record.max_results}`);
+    }
+    if (typeof record.offset === "number") {
+      parts.push(` offset=${record.offset}`);
+    }
+    if (Array.isArray(record.cell_ids)) {
+      parts.push(` cell_ids=${record.cell_ids.length}`);
+    }
+    if (typeof record.cell_id === "string") {
+      parts.push(` cell_id=${this.shortString(record.cell_id)}`);
+    }
+
+    return parts.join("");
+  }
+
+  private shortString(value: unknown, maxLength = 120): string | null {
+    if (typeof value !== "string" || value.length === 0) {
+      return null;
+    }
+
+    if (value.length <= maxLength) {
+      return JSON.stringify(value);
+    }
+
+    return JSON.stringify(`${value.slice(0, maxLength - 1)}…`);
   }
 
   private toToolResult(result: unknown): CallToolResult {
