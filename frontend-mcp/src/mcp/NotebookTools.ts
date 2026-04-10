@@ -539,6 +539,7 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
 
 const NOTEBOOK_RULES = [
   "Keep context small: use notebook tools before shell or ad-hoc Python.",
+  "Use strict JSON types. Do not quote booleans or numbers.",
   "Kernel state changes only when code cells execute.",
   "Editing source changes notebook text, not runtime state.",
   "For structured notebooks: get_notebook_outline first.",
@@ -699,12 +700,13 @@ export class NotebookTools {
       toolName === "describe_tool"
         ? ""
         : "Preferred notebook interface.\n\n";
-    return `${preferred}${help.summary}\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
+    return `${preferred}${help.summary}\n\nStrict JSON types only. Do not quote booleans or numbers.\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
   }
 
   private describeTool(toolName?: ToolName): unknown {
     if (!toolName) {
       return {
+        type_rules: ["Use strict JSON types. Do not quote booleans or numbers."],
         notebook_rules: NOTEBOOK_RULES,
         tools: TOOL_NAMES.map((name) => ({
           name,
@@ -720,6 +722,7 @@ export class NotebookTools {
       name: toolName,
       title: TOOL_HELP[toolName].title,
       summary: TOOL_HELP[toolName].summary,
+      type_rules: ["Use strict JSON types. Do not quote booleans or numbers."],
       schema: TOOL_HELP[toolName].schema,
       examples: TOOL_HELP[toolName].examples,
       notebook_rules: NOTEBOOK_RULES,
@@ -1305,14 +1308,7 @@ export class NotebookTools {
     }
 
     if (typeof value === "string") {
-      const normalized = value.trim().toLowerCase();
-      if (normalized === "true") {
-        return true;
-      }
-      if (normalized === "false") {
-        return false;
-      }
-      throw new Error(`${label} must be a boolean. Use true or false, not ${JSON.stringify(value)}.`);
+      throw new Error(`${label} must be a boolean. Use true or false without quotes.`);
     }
 
     throw new Error(`${label} must be a boolean.`);
@@ -1323,30 +1319,24 @@ export class NotebookTools {
       return value;
     }
 
-    if (typeof value === "string" && /^-?\d+$/u.test(value.trim())) {
-      return Number.parseInt(value.trim(), 10);
-    }
-
     if (typeof value === "string") {
-      throw new Error(`${label} must be an integer. Use a number like 2, not ${JSON.stringify(value)}.`);
+      throw new Error(`${label} must be an integer. Use a number like 2 without quotes.`);
     }
 
     throw new Error(`${label} must be an integer.`);
   }
 
   private requiredNonNegativeInteger(value: unknown, label: string): number {
-    const parsed = this.requiredInteger(value, label);
-    if (parsed >= 0) {
-      return parsed;
+    if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+      return value;
     }
 
     throw new Error(`${label} must be a non-negative integer.`);
   }
 
   private requiredPositiveInteger(value: unknown, label: string): number {
-    const parsed = this.requiredInteger(value, label);
-    if (parsed > 0) {
-      return parsed;
+    if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+      return value;
     }
 
     throw new Error(`${label} must be a positive integer.`);

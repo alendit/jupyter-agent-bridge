@@ -210,28 +210,24 @@ test("parseExecuteCellsRequest accepts stop_on_error", () => {
   assert.equal(request.stop_on_error, false);
 });
 
-test("parseExecuteCellsRequest coerces quoted wait_for_completion booleans", () => {
+test("parseExecuteCellsRequest rejects quoted wait_for_completion booleans with a type hint", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
   });
 
-  const request = (
-    tools as unknown as {
-      parseExecuteCellsRequest: (value: unknown) => {
-        notebook_uri: string;
-        cell_ids: string[];
-        wait_for_completion?: true;
-      };
-    }
-  ).parseExecuteCellsRequest({
-    notebook_uri: "file:///workspace/demo.ipynb",
-    cell_ids: ["cell-1"],
-    wait_for_completion: "true",
-  });
-
-  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
-  assert.deepEqual(request.cell_ids, ["cell-1"]);
-  assert.equal(request.wait_for_completion, true);
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseExecuteCellsRequest: (value: unknown) => unknown;
+        }
+      ).parseExecuteCellsRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        cell_ids: ["cell-1"],
+        wait_for_completion: "true",
+      }),
+    /Use true or false without quotes\./,
+  );
 });
 
 test("parseSelectKernelRequest requires kernel_id and extension_id together", () => {
@@ -439,25 +435,23 @@ test("parseListNotebookCellsRequest accepts targeted preview queries", () => {
   assert.deepEqual(request.cell_ids, ["cell-10", "cell-11"]);
 });
 
-test("parseListNotebookCellsRequest coerces quoted integer range values", () => {
+test("parseListNotebookCellsRequest rejects quoted integer range values with a type hint", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
   });
 
-  const request = (
-    tools as unknown as {
-      parseListNotebookCellsRequest: (value: unknown) => {
-        notebook_uri: string;
-        range?: { start: number; end: number };
-      };
-    }
-  ).parseListNotebookCellsRequest({
-    notebook_uri: "file:///workspace/demo.ipynb",
-    range: { start: 0, end: "2" },
-  });
-
-  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
-  assert.deepEqual(request.range, { start: 0, end: 2 });
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseListNotebookCellsRequest: (value: unknown) => unknown;
+        }
+      ).parseListNotebookCellsRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        range: { start: 0, end: "2" },
+      }),
+    /Use a number like 2 without quotes\./,
+  );
 });
 
 test("parseExecuteCellsRequest reports a helpful boolean hint for invalid strings", () => {
@@ -476,8 +470,20 @@ test("parseExecuteCellsRequest reports a helpful boolean hint for invalid string
         cell_ids: ["cell-1"],
         wait_for_completion: "yes",
       }),
-    /Use true or false, not "yes"\./,
+    /Use true or false without quotes\./,
   );
+});
+
+test("describeTool advertises strict JSON type rules", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const description = (tools as unknown as { describeTool: (toolName?: string) => Record<string, unknown> }).describeTool(
+    "execute_cells",
+  );
+
+  assert.deepEqual(description.type_rules, ["Use strict JSON types. Do not quote booleans or numbers."]);
 });
 
 test("describeTool includes notebook rules and the preview tool", () => {
