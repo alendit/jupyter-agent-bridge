@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import { NotebookTools } from "./NotebookTools";
 
 test("toToolResult emits native MCP image content and omits base64 from text payloads", async () => {
@@ -308,6 +311,7 @@ test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", ()
         notebook_uri: string;
         include_outputs?: boolean;
         include_rich_output_text?: boolean;
+        output_file_path?: string;
         range?: { start: number; end: number };
         cell_ids?: string[];
       };
@@ -316,6 +320,7 @@ test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", ()
     notebook_uri: "file:///workspace/demo.ipynb",
     include_outputs: true,
     include_rich_output_text: true,
+    output_file_path: "tmp/notebook.json",
     range: { start: 0, end: 3 },
     cell_ids: ["cell-1", "cell-2"],
   });
@@ -323,6 +328,7 @@ test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", ()
   assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
   assert.equal(request.include_outputs, true);
   assert.equal(request.include_rich_output_text, true);
+  assert.equal(request.output_file_path, "tmp/notebook.json");
   assert.deepEqual(request.range, { start: 0, end: 3 });
   assert.deepEqual(request.cell_ids, ["cell-1", "cell-2"]);
 });
@@ -338,17 +344,51 @@ test("parseReadCellOutputsRequest accepts include_rich_output_text", () => {
         notebook_uri: string;
         cell_id: string;
         include_rich_output_text?: boolean;
+        output_file_path?: string;
       };
     }
   ).parseReadCellOutputsRequest({
     notebook_uri: "file:///workspace/demo.ipynb",
     cell_id: "cell-1",
     include_rich_output_text: true,
+    output_file_path: "tmp/cell-output.json",
   });
 
   assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
   assert.equal(request.cell_id, "cell-1");
   assert.equal(request.include_rich_output_text, true);
+  assert.equal(request.output_file_path, "tmp/cell-output.json");
+});
+
+test("routeResultToFileIfRequested writes a compact receipt instead of returning the payload", async () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "jupyter-mcp-outputs-"));
+  const targetPath = path.join(tempDir, "cell-output.json");
+  const payload = {
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-1",
+    outputs: [{ kind: "json", mime: "application/json", json: { a: 1 } }],
+  };
+
+  const receipt = await (
+    tools as unknown as {
+      routeResultToFileIfRequested: (
+        toolName: "read_notebook" | "read_cell_outputs",
+        result: unknown,
+        outputFilePath?: string,
+      ) => Promise<{ written_to_file: boolean; output_file_path: string; bytes_written: number }>;
+    }
+  ).routeResultToFileIfRequested("read_cell_outputs", payload, targetPath);
+
+  assert.equal(receipt.written_to_file, true);
+  assert.equal(receipt.output_file_path, targetPath);
+  assert.ok(receipt.bytes_written > 0);
+
+  const stored = JSON.parse(await fs.readFile(targetPath, "utf8")) as typeof payload;
+  assert.deepEqual(stored, payload);
 });
 
 test("parseListNotebookCellsRequest accepts targeted preview queries", () => {

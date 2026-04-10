@@ -23,6 +23,8 @@ import {
   SelectKernelRequest,
   WaitForKernelReadyRequest,
 } from "../../../packages/protocol/src";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult, ImageContent } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -69,6 +71,14 @@ interface ToolHelp {
   examples: string[];
 }
 
+interface ReadNotebookToolRequest extends ReadNotebookRequest {
+  output_file_path?: string;
+}
+
+interface ReadCellOutputsToolRequest extends ReadCellOutputsRequest {
+  output_file_path?: string;
+}
+
 const toolNameSchema = z.enum(TOOL_NAMES).optional();
 const permissiveObjectSchema = z.object({}).catchall(z.unknown());
 const notebookUriSchema = z.string().describe("Absolute notebook URI, for example file:///workspace/demo.ipynb").optional();
@@ -91,6 +101,7 @@ const readNotebookInputSchema = z
     notebook_uri: notebookUriSchema,
     include_outputs: optionalBooleanSchema,
     include_rich_output_text: optionalBooleanSchema,
+    output_file_path: optionalStringSchema,
     range: z
       .object({
         start: optionalNumberSchema,
@@ -297,6 +308,7 @@ const readCellOutputsInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_id: optionalStringSchema,
     include_rich_output_text: optionalBooleanSchema,
+    output_file_path: optionalStringSchema,
   })
   .passthrough();
 
@@ -396,9 +408,9 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   read_notebook: {
     title: "Read Notebook",
     summary:
-      "Read live notebook cells. Outputs are excluded by default and cells include source_sha256. Rich rendered HTML/JS/widget output text is also omitted by default when outputs are included; set include_rich_output_text=true only if you need the raw payload.",
+      "Read live notebook cells. Outputs are excluded by default and cells include source_sha256. Rich rendered HTML/JS/widget output text is also omitted by default when outputs are included; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"include_rich_output_text"?:boolean,"range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
+      '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/notebook.json","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":18}}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
@@ -486,11 +498,13 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   read_cell_outputs: {
     title: "Read Cell Outputs",
     summary:
-      "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload.",
-    schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","include_rich_output_text"?:boolean}',
+      "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/cell-output.json"}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1"}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","include_rich_output_text":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","output_file_path":"/tmp/cell-output.json"}',
     ],
   },
   get_kernel_info: {
@@ -534,6 +548,7 @@ const NOTEBOOK_RULES = [
   "Use read_cell_outputs for one cell instead of full outputs.",
   "Rich rendered HTML/JS/widget outputs are omitted by default.",
   "Only request include_rich_output_text when raw rendered payload is necessary.",
+  "Use output_file_path to route heavy results to disk instead of context.",
   "Page variables with query, offset, and max_results.",
   "Use search_notebook for text, find_symbols for semantic names.",
   "Use get_diagnostics for editor errors. Runtime errors are in outputs.",
@@ -604,9 +619,11 @@ export class NotebookTools {
       (await this.getClient()).goToDefinition(this.parseGoToDefinitionRequest(input)),
     );
 
-    register("read_notebook", readNotebookInputSchema, async (input) =>
-      (await this.getClient()).readNotebook(this.parseReadNotebookRequest(input)),
-    );
+    register("read_notebook", readNotebookInputSchema, async (input) => {
+      const request = this.parseReadNotebookRequest(input);
+      const result = await (await this.getClient()).readNotebook(request);
+      return this.routeResultToFileIfRequested("read_notebook", result, request.output_file_path);
+    });
 
     register("insert_cell", insertCellInputSchema, async (input) =>
       (await this.getClient()).insertCell(this.normalizeInsertCellRequest(input)),
@@ -648,9 +665,11 @@ export class NotebookTools {
       (await this.getClient()).waitForKernelReady(this.parseWaitForKernelReadyRequest(input)),
     );
 
-    register("read_cell_outputs", readCellOutputsInputSchema, async (input) =>
-      (await this.getClient()).readCellOutputs(this.parseReadCellOutputsRequest(input)),
-    );
+    register("read_cell_outputs", readCellOutputsInputSchema, async (input) => {
+      const request = this.parseReadCellOutputsRequest(input);
+      const result = await (await this.getClient()).readCellOutputs(request);
+      return this.routeResultToFileIfRequested("read_cell_outputs", result, request.output_file_path);
+    });
 
     register("get_kernel_info", singleNotebookInputSchema, async (input) =>
       (await this.getClient()).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
@@ -741,10 +760,17 @@ export class NotebookTools {
     };
   }
 
-  private parseReadNotebookRequest(input: unknown): ReadNotebookRequest {
+  private parseReadNotebookRequest(input: unknown): ReadNotebookToolRequest {
     const toolName = "read_notebook";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "include_outputs", "include_rich_output_text", "range", "cell_ids"]);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "include_outputs",
+      "include_rich_output_text",
+      "output_file_path",
+      "range",
+      "cell_ids",
+    ]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -756,6 +782,10 @@ export class NotebookTools {
         params.include_rich_output_text === undefined
           ? undefined
           : this.requiredBoolean(params.include_rich_output_text, `${toolName}.include_rich_output_text`),
+      output_file_path:
+        params.output_file_path === undefined
+          ? undefined
+          : this.requiredString(params.output_file_path, `${toolName}.output_file_path`),
       range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
       cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
     };
@@ -1077,10 +1107,10 @@ export class NotebookTools {
     };
   }
 
-  private parseReadCellOutputsRequest(input: unknown): ReadCellOutputsRequest {
+  private parseReadCellOutputsRequest(input: unknown): ReadCellOutputsToolRequest {
     const toolName = "read_cell_outputs";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "include_rich_output_text"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "include_rich_output_text", "output_file_path"]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -1089,6 +1119,10 @@ export class NotebookTools {
         params.include_rich_output_text === undefined
           ? undefined
           : this.requiredBoolean(params.include_rich_output_text, `${toolName}.include_rich_output_text`),
+      output_file_path:
+        params.output_file_path === undefined
+          ? undefined
+          : this.requiredString(params.output_file_path, `${toolName}.output_file_path`),
     };
   }
 
@@ -1120,6 +1154,29 @@ export class NotebookTools {
     return {
       start: this.requiredInteger(range.start, `${toolName}.range.start`),
       end: this.requiredInteger(range.end, `${toolName}.range.end`),
+    };
+  }
+
+  private async routeResultToFileIfRequested(
+    toolName: "read_notebook" | "read_cell_outputs",
+    result: unknown,
+    outputFilePath?: string,
+  ): Promise<unknown> {
+    if (!outputFilePath) {
+      return result;
+    }
+
+    const resolvedPath = path.resolve(outputFilePath);
+    const serialized = `${JSON.stringify(result, null, 2)}\n`;
+    await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
+    await fs.writeFile(resolvedPath, serialized, "utf8");
+
+    return {
+      written_to_file: true,
+      tool: toolName,
+      output_file_path: resolvedPath,
+      bytes_written: Buffer.byteLength(serialized),
+      summary: "Result written to file and omitted from MCP text content.",
     };
   }
 
