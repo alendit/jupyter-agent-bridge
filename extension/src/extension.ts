@@ -41,7 +41,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   const registry = new NotebookRegistry();
   const outputNormalizationService = new OutputNormalizationService();
-  const kernelInspectionService = new KernelInspectionService();
+  const kernelInspectionService = new KernelInspectionService(registry);
   const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
   const mutationService = new NotebookMutationService();
   const searchService = new NotebookSearchService(registry, readService);
@@ -132,6 +132,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
         execute_cells: true,
         interrupt_execution: true,
         restart_kernel: true,
+        wait_for_kernel_ready: true,
         select_kernel: true,
         select_jupyter_interpreter: true,
       },

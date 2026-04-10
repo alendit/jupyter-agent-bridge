@@ -217,6 +217,30 @@ test("parseSelectKernelRequest requires kernel_id and extension_id together", ()
   );
 });
 
+test("parseWaitForKernelReadyRequest accepts timeout and target generation", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseWaitForKernelReadyRequest: (value: unknown) => {
+        notebook_uri: string;
+        timeout_ms?: number;
+        target_generation?: number;
+      };
+    }
+  ).parseWaitForKernelReadyRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    timeout_ms: 45000,
+    target_generation: 2,
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(request.timeout_ms, 45000);
+  assert.equal(request.target_generation, 2);
+});
+
 test("toErrorToolResult returns structured invalid request details", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
@@ -297,6 +321,7 @@ test("describeTool includes notebook rules and the preview tool", () => {
 
   assert.ok(Array.isArray(description.notebook_rules));
   assert.match(JSON.stringify(description.tools), /list_notebook_cells/);
+  assert.match(JSON.stringify(description.tools), /wait_for_kernel_ready/);
 });
 
 test("parseSearchNotebookRequest accepts targeted search options", () => {

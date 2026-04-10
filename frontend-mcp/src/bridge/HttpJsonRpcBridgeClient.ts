@@ -38,6 +38,8 @@ import {
   SearchNotebookResult,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForKernelReadyRequest,
+  WaitForKernelReadyResult,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -148,6 +150,10 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public restartKernel(request: RestartKernelRequest): Promise<KernelCommandResult> {
     return this.call(BRIDGE_METHODS.restartKernel, request);
+  }
+
+  public waitForKernelReady(request: WaitForKernelReadyRequest): Promise<WaitForKernelReadyResult> {
+    return this.call(BRIDGE_METHODS.waitForKernelReady, request);
   }
 
   public readCellOutputs(request: ReadCellOutputsRequest): Promise<ReadCellOutputsResult> {

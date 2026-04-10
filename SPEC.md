@@ -694,7 +694,6 @@ Input:
 
 Return:
 - concise machine-readable state:
-  - last executed cells
   - cells with errors
   - cells with images
   - dirty state
@@ -783,7 +782,17 @@ Input:
 Return:
 - status
 
-MVP may implement `execute_cells` first and leave interrupt/restart for later if execution control surface is not yet reliable.
+### `wait_for_kernel_ready`
+Input:
+- notebook URI
+- optional `timeout_ms`
+- optional `target_generation`
+
+Return:
+- current kernel summary
+- whether the notebook kernel is ready for execution
+- whether the wait timed out
+- the target kernel generation being awaited
 
 ---
 
@@ -799,6 +808,10 @@ Return best-effort:
 - language
 - status
 - executable state
+- kernel generation
+- last-seen timestamp
+- pending kernel action if any
+- whether user interaction is still required
 
 ### `select_kernel`
 Input:
@@ -920,6 +933,7 @@ Required MVP methods:
 - `notebook.delete_cell`
 - `notebook.move_cell`
 - `notebook.execute_cells`
+- `notebook.wait_for_kernel_ready`
 - `notebook.read_cell_outputs`
 - `notebook.get_kernel_info`
 - `notebook.summarize_state`
@@ -944,6 +958,7 @@ Suggested MCP tools:
 - `delete_cell`
 - `move_cell`
 - `execute_cells`
+- `wait_for_kernel_ready`
 - `read_cell_outputs`
 - `get_kernel_info`
 - `summarize_notebook_state`
@@ -1318,6 +1333,7 @@ Specific MVP rules:
 - `execute_cells` supports code cells only; markdown cells in the request cause `InvalidRequest`
 - `wait_for_completion=false` is not part of the MVP; reject it with `InvalidRequest`
 - `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` are supported through VS Code and Jupyter command surfaces, and some of them may require user interaction
+- `wait_for_kernel_ready` is supported and must be notebook-scoped, because different open notebooks may be attached to different kernels or different generations of the same kernel selection
 - if `vscode.cursor.mcp.registerServer` is available, use it to register the bundled MCP server instead of requiring manual Cursor MCP config
 - the Cursor registration must use stdio transport and launch the bundled `frontend-mcp` entrypoint, not a second embedded notebook implementation
 
@@ -1329,7 +1345,6 @@ Required fields:
 
 - `dirty`
 - `kernel`
-- `last_executed_cell_ids`
 - `cells_with_errors`
 - `cells_with_images`
 - `active_cell_id` if an active editor is available
@@ -1382,7 +1397,19 @@ export interface KernelInfo {
   kernel_id: string | null;
   language: string | null;
   execution_supported: boolean;
-  state: "unknown" | "idle" | "busy";
+  state:
+    | "unknown"
+    | "idle"
+    | "busy"
+    | "starting"
+    | "restarting"
+    | "interrupting"
+    | "selecting"
+    | "disconnected";
+  generation: number;
+  last_seen_at: string | null;
+  pending_action: "restart" | "interrupt" | "select_kernel" | "select_interpreter" | null;
+  requires_user_interaction: boolean;
 }
 
 export interface NotebookSummary {
@@ -1491,7 +1518,14 @@ export interface ExecuteCellsRequest {
   cell_ids: string[];
   expected_notebook_version?: number;
   timeout_ms?: number;
+  stop_on_error?: boolean;
   wait_for_completion?: true;
+}
+
+export interface WaitForKernelReadyRequest {
+  notebook_uri: string;
+  timeout_ms?: number;
+  target_generation?: number;
 }
 
 export interface NotebookStateSummary {
@@ -1499,7 +1533,6 @@ export interface NotebookStateSummary {
   notebook_version: number;
   dirty: boolean;
   kernel: KernelInfo | null;
-  last_executed_cell_ids: string[];
   cells_with_errors: string[];
   cells_with_images: string[];
   active_cell_id?: string;
@@ -1523,6 +1556,7 @@ The JSON-RPC method names for the first implementation are fixed:
 - `notebook.delete_cell`
 - `notebook.move_cell`
 - `notebook.execute_cells`
+- `notebook.wait_for_kernel_ready`
 - `notebook.read_cell_outputs`
 - `notebook.get_kernel_info`
 - `notebook.summarize_state`

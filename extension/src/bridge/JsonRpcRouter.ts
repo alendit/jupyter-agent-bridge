@@ -76,6 +76,8 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.interruptExecution(object(params) as never);
       case BRIDGE_METHODS.restartKernel:
         return this.notebookBridgeService.restartKernel(object(params) as never);
+      case BRIDGE_METHODS.waitForKernelReady:
+        return this.notebookBridgeService.waitForKernelReady(object(params) as never);
       case BRIDGE_METHODS.readCellOutputs:
         return this.notebookBridgeService.readCellOutputs(object(params) as never);
       case BRIDGE_METHODS.getKernelInfo:

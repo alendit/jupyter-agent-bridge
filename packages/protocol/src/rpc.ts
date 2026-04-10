@@ -18,6 +18,7 @@ export const BRIDGE_METHODS = {
   executeCells: "notebook.execute_cells",
   interruptExecution: "notebook.interrupt_execution",
   restartKernel: "notebook.restart_kernel",
+  waitForKernelReady: "notebook.wait_for_kernel_ready",
   readCellOutputs: "notebook.read_cell_outputs",
   getKernelInfo: "notebook.get_kernel_info",
   selectKernel: "notebook.select_kernel",
@@ -29,6 +30,7 @@ export interface SessionCapabilities {
   execute_cells: boolean;
   interrupt_execution: boolean;
   restart_kernel: boolean;
+  wait_for_kernel_ready: boolean;
   select_kernel: boolean;
   select_jupyter_interpreter: boolean;
 }

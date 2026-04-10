@@ -20,6 +20,7 @@ import {
   SearchNotebookRequest,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForKernelReadyRequest,
 } from "../../../packages/protocol/src";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult, ImageContent } from "@modelcontextprotocol/sdk/types.js";
@@ -46,6 +47,7 @@ const TOOL_NAMES = [
   "execute_cells",
   "interrupt_execution",
   "restart_kernel",
+  "wait_for_kernel_ready",
   "read_cell_outputs",
   "get_kernel_info",
   "select_kernel",
@@ -270,6 +272,14 @@ const selectKernelInputSchema = z
   })
   .passthrough();
 
+const waitForKernelReadyInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    timeout_ms: optionalNumberSchema,
+    target_generation: optionalNonNegativeIntSchema,
+  })
+  .passthrough();
+
 const readCellOutputsInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
@@ -439,6 +449,16 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
+  wait_for_kernel_ready: {
+    title: "Wait For Kernel Ready",
+    summary: "Wait until the notebook's current or target kernel generation is ready, or return the latest not-ready state if setup is still in progress or times out.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","timeout_ms"?:30000,"target_generation"?:2}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","timeout_ms":45000,"target_generation":2}',
+    ],
+  },
   read_cell_outputs: {
     title: "Read Cell Outputs",
     summary: "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs.",
@@ -483,6 +503,7 @@ const NOTEBOOK_RULES = [
   "Use search_notebook for text, find_symbols for semantic names.",
   "Use get_diagnostics for editor errors. Runtime errors are in outputs.",
   "Use select_kernel or select_jupyter_interpreter when the notebook kernel or Python environment needs user-driven setup.",
+  "Use get_kernel_info or wait_for_kernel_ready to reason about a notebook's current kernel generation and readiness.",
   "Then use targeted read_notebook, go_to_definition, or read_cell_outputs.",
   "Notebook data may change between turns because the user can edit cells.",
   "Use notebook versions and source_sha256 values to avoid stale edits.",
@@ -579,6 +600,10 @@ export class NotebookTools {
 
     register("restart_kernel", singleNotebookInputSchema, async (input) =>
       (await this.getClient()).restartKernel(this.parseNotebookUriOnlyInput("restart_kernel", input)),
+    );
+
+    register("wait_for_kernel_ready", waitForKernelReadyInputSchema, async (input) =>
+      (await this.getClient()).waitForKernelReady(this.parseWaitForKernelReadyRequest(input)),
     );
 
     register("read_cell_outputs", readCellOutputsInputSchema, async (input) =>
@@ -967,6 +992,24 @@ export class NotebookTools {
         params.skip_if_already_selected === undefined
           ? undefined
           : this.requiredBoolean(params.skip_if_already_selected, `${toolName}.skip_if_already_selected`),
+    };
+  }
+
+  private parseWaitForKernelReadyRequest(input: unknown): WaitForKernelReadyRequest {
+    const toolName = "wait_for_kernel_ready";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "timeout_ms", "target_generation"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      timeout_ms:
+        params.timeout_ms === undefined
+          ? undefined
+          : this.requiredPositiveInteger(params.timeout_ms, `${toolName}.timeout_ms`),
+      target_generation:
+        params.target_generation === undefined
+          ? undefined
+          : this.requiredNonNegativeInteger(params.target_generation, `${toolName}.target_generation`),
     };
   }
 

@@ -34,6 +34,8 @@ import {
   SearchNotebookResult,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForKernelReadyRequest,
+  WaitForKernelReadyResult,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -317,6 +319,12 @@ export class NotebookBridgeService {
       await this.mutationService.ensureStableCellIds(document);
       return this.kernelCommandService.interruptExecution(document);
     });
+  }
+
+  public async waitForKernelReady(request: WaitForKernelReadyRequest): Promise<WaitForKernelReadyResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.kernelCommandService.waitForKernelReady(document, request);
   }
 
   public async summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult> {

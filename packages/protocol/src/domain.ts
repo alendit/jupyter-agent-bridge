@@ -9,12 +9,33 @@ export type ExecutionStatus =
   | "cancelled"
   | "timed_out";
 
+export type KernelState =
+  | "unknown"
+  | "idle"
+  | "busy"
+  | "starting"
+  | "restarting"
+  | "interrupting"
+  | "selecting"
+  | "disconnected";
+
+export type KernelPendingAction =
+  | "restart"
+  | "interrupt"
+  | "select_kernel"
+  | "select_interpreter"
+  | null;
+
 export interface KernelInfo {
   kernel_label: string | null;
   kernel_id: string | null;
   language: string | null;
   execution_supported: boolean;
-  state: "unknown" | "idle" | "busy";
+  state: KernelState;
+  generation: number;
+  last_seen_at: string | null;
+  pending_action: KernelPendingAction;
+  requires_user_interaction: boolean;
 }
 
 export interface NotebookSummary {
@@ -84,6 +105,9 @@ export interface NotebookCellPreview {
   source_line_count: number;
   source_sha256: string;
   execution_status: ExecutionStatus | null;
+  execution_order: number | null;
+  started_at: string | null;
+  ended_at: string | null;
   has_outputs: boolean;
   output_kinds: OutputKind[];
   section_path: string[];
@@ -204,6 +228,12 @@ export interface SelectKernelRequest {
   skip_if_already_selected?: boolean;
 }
 
+export interface WaitForKernelReadyRequest {
+  notebook_uri: string;
+  timeout_ms?: number;
+  target_generation?: number;
+}
+
 export interface PatchCellSourceRequest {
   notebook_uri: string;
   cell_id: string;
@@ -233,7 +263,6 @@ export interface NotebookStateSummary {
   notebook_version: number;
   dirty: boolean;
   kernel: KernelInfo | null;
-  last_executed_cell_ids: string[];
   cells_with_errors: string[];
   cells_with_images: string[];
   active_cell_id?: string;
@@ -369,6 +398,16 @@ export interface KernelCommandResult {
   message: string;
 }
 
+export interface WaitForKernelReadyResult {
+  notebook_uri: string;
+  notebook_version: number;
+  kernel: KernelInfo | null;
+  ready: boolean;
+  timed_out: boolean;
+  target_generation: number;
+  message: string;
+}
+
 export interface ExecuteCellResult {
   cell_id: string;
   execution: CellExecutionSummary | null;
@@ -417,3 +456,4 @@ export type ListOpenNotebooksResult = NotebookSummary[];
 export type OpenNotebookResult = NotebookSummary;
 export type ReadNotebookResult = NotebookSnapshot;
 export type SummarizeNotebookStateResult = NotebookStateSummary;
+export type WaitForKernelReadyRpcResult = WaitForKernelReadyResult;

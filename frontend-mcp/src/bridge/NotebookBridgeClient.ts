@@ -33,6 +33,8 @@ import {
   SearchNotebookResult,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForKernelReadyRequest,
+  WaitForKernelReadyResult,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -48,6 +50,7 @@ export interface NotebookBridgeClient {
       execute_cells: boolean;
       interrupt_execution: boolean;
       restart_kernel: boolean;
+      wait_for_kernel_ready: boolean;
       select_kernel: boolean;
       select_jupyter_interpreter: boolean;
     };
@@ -70,6 +73,7 @@ export interface NotebookBridgeClient {
   executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult>;
   interruptExecution(request: InterruptExecutionRequest): Promise<KernelCommandResult>;
   restartKernel(request: RestartKernelRequest): Promise<KernelCommandResult>;
+  waitForKernelReady(request: WaitForKernelReadyRequest): Promise<WaitForKernelReadyResult>;
   readCellOutputs(request: ReadCellOutputsRequest): Promise<ReadCellOutputsResult>;
   getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult>;
   selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult>;

@@ -55,6 +55,7 @@ export class NotebookExecutionService {
       stopOnError,
     );
 
+    this.registry.markKernelExecutionStarted(notebookUri);
     await this.commandAdapter.executeCells(
       document,
       cells.map((cell) => new vscode.NotebookRange(cell.index, cell.index + 1)),
@@ -63,7 +64,6 @@ export class NotebookExecutionService {
     const completionState = await completion;
     const timedOut = !completionState.completed;
     const refreshedDocument = this.registry.getDocument(notebookUri) ?? document;
-    this.registry.setLastExecuted(notebookUri, request.cell_ids);
 
     const results: ExecuteCellResult[] = request.cell_ids.map((cellId) => {
       const cell = this.readService.requireCell(refreshedDocument, cellId);
@@ -102,6 +102,10 @@ export class NotebookExecutionService {
           recoverable: true,
         });
       }
+    }
+
+    if (completionState.pendingCellIds.size === 0) {
+      this.registry.markKernelExecutionCompleted(notebookUri);
     }
 
     return {

@@ -16,6 +16,9 @@ export interface PreviewSourceCell {
   source: string;
   source_sha256: string;
   execution_status: ExecutionStatus | null;
+  execution_order: number | null;
+  started_at: string | null;
+  ended_at: string | null;
   output_mime_types: string[];
 }
 
@@ -36,6 +39,9 @@ export function buildNotebookCellPreviews(
       source_line_count: countSourceLines(cell.source),
       source_sha256: cell.source_sha256,
       execution_status: cell.execution_status,
+      execution_order: cell.execution_order,
+      started_at: cell.started_at,
+      ended_at: cell.ended_at,
       has_outputs: cell.output_mime_types.length > 0,
       output_kinds: outputKinds,
       section_path: sectionPath,

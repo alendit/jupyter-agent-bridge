@@ -60,6 +60,8 @@ export class NotebookReadService {
             return [];
           }
 
+          const execution = this.toExecutionSummary(cell);
+
           return [
             {
               cell_id: cellId,
@@ -68,7 +70,10 @@ export class NotebookReadService {
               language: cell.kind === vscode.NotebookCellKind.Code ? cell.document.languageId : null,
               source: cell.document.getText(),
               source_sha256: computeSourceSha256(cell.document.getText()),
-              execution_status: this.toExecutionSummary(cell)?.status ?? null,
+              execution_status: execution?.status ?? null,
+              execution_order: execution?.execution_order ?? null,
+              started_at: execution?.started_at ?? null,
+              ended_at: execution?.ended_at ?? null,
               output_mime_types: cell.outputs.flatMap((output) => output.items.map((item) => item.mime)),
             },
           ];
@@ -167,7 +172,6 @@ export class NotebookReadService {
       notebook_version: this.registry.getVersion(document.uri.toString()),
       dirty: document.isDirty,
       kernel: this.kernelInspectionService.getKernelInfo(document),
-      last_executed_cell_ids: this.registry.getLastExecuted(document.uri.toString()).slice(0, 20),
       cells_with_errors: errorCells.slice(0, 20),
       cells_with_images: imageCells.slice(0, 20),
       active_cell_id: activeCellId,
