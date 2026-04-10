@@ -662,7 +662,11 @@ export class NotebookTools {
   private buildToolDescription(toolName: ToolName): string {
     const help = TOOL_HELP[toolName];
     const examples = help.examples.map((example, index) => `${index + 1}. ${example}`).join("\n");
-    return `${help.summary}\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
+    const preferred =
+      toolName === "describe_tool"
+        ? ""
+        : "Preferred notebook interface.\n\n";
+    return `${preferred}${help.summary}\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
   }
 
   private describeTool(toolName?: ToolName): unknown {
