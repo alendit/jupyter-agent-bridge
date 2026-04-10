@@ -74,9 +74,28 @@ export interface NotebookOutlineHeading {
   section_end_cell_index_exclusive: number;
 }
 
+export interface NotebookCellPreview {
+  cell_id: string;
+  index: number;
+  kind: NotebookCellKind;
+  language: string | null;
+  source_preview: string;
+  source_line_count: number;
+  execution_status: ExecutionStatus | null;
+  has_outputs: boolean;
+  output_kinds: OutputKind[];
+  section_path: string[];
+}
+
 export interface OpenNotebookRequest {
   notebook_uri: string;
   view_column?: "active" | "beside";
+}
+
+export interface ListNotebookCellsRequest {
+  notebook_uri: string;
+  range?: { start: number; end: number };
+  cell_ids?: string[];
 }
 
 export interface ReadNotebookRequest {
@@ -157,6 +176,12 @@ export interface NotebookOutlineResult {
   notebook_uri: string;
   notebook_version: number;
   headings: NotebookOutlineHeading[];
+}
+
+export interface ListNotebookCellsResult {
+  notebook_uri: string;
+  notebook_version: number;
+  cells: NotebookCellPreview[];
 }
 
 export interface GetKernelInfoResult {

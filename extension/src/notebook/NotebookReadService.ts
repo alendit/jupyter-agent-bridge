@@ -4,6 +4,8 @@ import {
   CellSnapshot,
   GetKernelInfoResult,
   KernelInfo,
+  ListNotebookCellsRequest,
+  ListNotebookCellsResult,
   ListOpenNotebooksResult,
   MutationResult,
   NotebookOutlineResult,
@@ -22,6 +24,7 @@ import { NotebookRegistry } from "./NotebookRegistry";
 import { OutputNormalizationService } from "./OutputNormalizationService";
 import { KernelInspectionService } from "./KernelInspectionService";
 import { buildNotebookOutline } from "./outline";
+import { buildNotebookCellPreviews } from "./previews";
 
 export class NotebookReadService {
   public constructor(
@@ -35,21 +38,42 @@ export class NotebookReadService {
   }
 
   public readNotebook(document: vscode.NotebookDocument, request: ReadNotebookRequest): ReadNotebookResult {
-    let cells = document.getCells();
-
-    if (request.cell_ids && request.cell_ids.length > 0) {
-      const wanted = new Set(request.cell_ids);
-      cells = cells.filter((cell) => {
-        const cellId = getStoredCellId(cell);
-        return cellId !== null && wanted.has(cellId);
-      });
-    } else if (request.range) {
-      cells = cells.slice(request.range.start, request.range.end);
-    }
+    const cells = this.selectCells(document, request.range, request.cell_ids);
 
     return {
       notebook: this.toNotebookSummary(document),
       cells: cells.map((cell) => this.toCellSnapshot(cell, request.include_outputs ?? false)),
+    };
+  }
+
+  public listNotebookCells(document: vscode.NotebookDocument, request: ListNotebookCellsRequest): ListNotebookCellsResult {
+    const selectedCells = this.selectCells(document, request.range, request.cell_ids);
+    const outline = this.getNotebookOutline(document).headings;
+
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      cells: buildNotebookCellPreviews(
+        selectedCells.flatMap((cell) => {
+          const cellId = getStoredCellId(cell);
+          if (!cellId) {
+            return [];
+          }
+
+          return [
+            {
+              cell_id: cellId,
+              index: cell.index,
+              kind: notebookCellKindToProtocol(cell.kind),
+              language: cell.kind === vscode.NotebookCellKind.Code ? cell.document.languageId : null,
+              source: cell.document.getText(),
+              execution_status: this.toExecutionSummary(cell)?.status ?? null,
+              output_mime_types: cell.outputs.flatMap((output) => output.items.map((item) => item.mime)),
+            },
+          ];
+        }),
+        outline,
+      ),
     };
   }
 
@@ -84,6 +108,26 @@ export class NotebookReadService {
         }),
       ),
     };
+  }
+
+  private selectCells(
+    document: vscode.NotebookDocument,
+    range?: { start: number; end: number },
+    cellIds?: readonly string[],
+  ): vscode.NotebookCell[] {
+    let cells = document.getCells();
+
+    if (cellIds && cellIds.length > 0) {
+      const wanted = new Set(cellIds);
+      cells = cells.filter((cell) => {
+        const cellId = getStoredCellId(cell);
+        return cellId !== null && wanted.has(cellId);
+      });
+    } else if (range) {
+      cells = cells.slice(range.start, range.end);
+    }
+
+    return cells;
   }
 
   public getKernelInfo(document: vscode.NotebookDocument): GetKernelInfoResult {

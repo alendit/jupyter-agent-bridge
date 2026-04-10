@@ -5,6 +5,8 @@ import {
   ExecuteCellsResult,
   GetKernelInfoResult,
   InsertCellRequest,
+  ListNotebookCellsRequest,
+  ListNotebookCellsResult,
   ListOpenNotebooksResult,
   MutationResult,
   NotebookOutlineResult,
@@ -55,6 +57,12 @@ export class NotebookBridgeService {
     const document = await this.requireDocument(notebookUri);
     await this.mutationService.ensureStableCellIds(document);
     return this.readService.getNotebookOutline(document);
+  }
+
+  public async listNotebookCells(request: ListNotebookCellsRequest): Promise<ListNotebookCellsResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.readService.listNotebookCells(document, request);
   }
 
   public async readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult> {

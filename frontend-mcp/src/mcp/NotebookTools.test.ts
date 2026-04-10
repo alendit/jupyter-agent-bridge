@@ -200,3 +200,38 @@ test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", ()
   assert.deepEqual(request.range, { start: 0, end: 3 });
   assert.deepEqual(request.cell_ids, ["cell-1", "cell-2"]);
 });
+
+test("parseListNotebookCellsRequest accepts targeted preview queries", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseListNotebookCellsRequest: (value: unknown) => {
+        notebook_uri: string;
+        range?: { start: number; end: number };
+        cell_ids?: string[];
+      };
+    }
+  ).parseListNotebookCellsRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    range: { start: 10, end: 20 },
+    cell_ids: ["cell-10", "cell-11"],
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual(request.range, { start: 10, end: 20 });
+  assert.deepEqual(request.cell_ids, ["cell-10", "cell-11"]);
+});
+
+test("describeTool includes notebook rules and the preview tool", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const description = (tools as unknown as { describeTool: (toolName?: string) => Record<string, unknown> }).describeTool();
+
+  assert.ok(Array.isArray(description.notebook_rules));
+  assert.match(JSON.stringify(description.tools), /list_notebook_cells/);
+});

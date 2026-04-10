@@ -3,6 +3,7 @@ export const BRIDGE_METHODS = {
   listOpen: "notebook.list_open",
   open: "notebook.open",
   getOutline: "notebook.get_outline",
+  listCells: "notebook.list_cells",
   read: "notebook.read",
   insertCell: "notebook.insert_cell",
   replaceCellSource: "notebook.replace_cell_source",

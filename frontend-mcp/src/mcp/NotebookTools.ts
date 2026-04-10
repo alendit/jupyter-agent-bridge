@@ -2,6 +2,7 @@ import {
   DeleteCellRequest,
   ExecuteCellsRequest,
   InsertCellRequest,
+  ListNotebookCellsRequest,
   MoveCellRequest,
   NormalizedOutput,
   OpenNotebookRequest,
@@ -19,6 +20,7 @@ const TOOL_NAMES = [
   "describe_tool",
   "open_notebook",
   "get_notebook_outline",
+  "list_notebook_cells",
   "read_notebook",
   "insert_cell",
   "replace_cell_source",
@@ -63,6 +65,20 @@ const readNotebookInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
     include_outputs: optionalBooleanSchema,
+    range: z
+      .object({
+        start: optionalNumberSchema,
+        end: optionalNumberSchema,
+      })
+      .passthrough()
+      .optional(),
+    cell_ids: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+
+const listNotebookCellsInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
     range: z
       .object({
         start: optionalNumberSchema,
@@ -182,9 +198,19 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
+  list_notebook_cells: {
+    title: "List Notebook Cells",
+    summary: "Cheap per-cell previews for navigation, especially for code-heavy notebooks without useful headings. Returns no full source and no outputs.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":50},"cell_ids"?:["cell-1","cell-2"]}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":30}}',
+    ],
+  },
   read_notebook: {
     title: "Read Notebook",
-    summary: "Read live notebook cells. Outputs are excluded by default. For large notebooks: get_notebook_outline first, then use cell_ids or range.",
+    summary: "Read live notebook cells. Outputs are excluded by default. For large notebooks: get_notebook_outline or list_notebook_cells first, then use cell_ids or range.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -253,7 +279,9 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
 const NOTEBOOK_RULES = [
   "Kernel state changes only when code cells execute.",
   "Editing source changes notebook text, not runtime state.",
-  "For large notebooks: get_notebook_outline first, then targeted read_notebook or read_cell_outputs.",
+  "For structured notebooks: get_notebook_outline first.",
+  "For code-heavy notebooks: list_notebook_cells first.",
+  "Then use targeted read_notebook or read_cell_outputs.",
 ];
 
 export class NotebookTools {
@@ -306,6 +334,17 @@ export class NotebookTools {
             this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri,
           ),
         ),
+    );
+
+    server.registerTool(
+      "list_notebook_cells",
+      {
+        title: TOOL_HELP.list_notebook_cells.title,
+        description: this.buildToolDescription("list_notebook_cells"),
+        inputSchema: listNotebookCellsInputSchema,
+      },
+      async (input) =>
+        this.toToolResult(await (await this.getClient()).listNotebookCells(this.parseListNotebookCellsRequest(input))),
     );
 
     server.registerTool(
@@ -484,6 +523,18 @@ export class NotebookTools {
         params.include_outputs === undefined
           ? undefined
           : this.requiredBoolean(params.include_outputs, `${toolName}.include_outputs`),
+      range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
+      cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+    };
+  }
+
+  private parseListNotebookCellsRequest(input: unknown): ListNotebookCellsRequest {
+    const toolName = "list_notebook_cells";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "range", "cell_ids"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
       range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
       cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
     };

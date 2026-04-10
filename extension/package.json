@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/extension/src/notebook/outline.test.js"
+    "test": "npm run build && node --test dist/extension/src/notebook/*.test.js"
   },
   "dependencies": {
     "@jupyter-mcp/protocol": "file:../packages/protocol"
