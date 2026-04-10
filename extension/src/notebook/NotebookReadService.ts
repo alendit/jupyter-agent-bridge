@@ -43,7 +43,9 @@ export class NotebookReadService {
 
     return {
       notebook: this.toNotebookSummary(document),
-      cells: cells.map((cell) => this.toCellSnapshot(cell, request.include_outputs ?? false)),
+      cells: cells.map((cell) =>
+        this.toCellSnapshot(cell, request.include_outputs ?? false, request.include_rich_output_text ?? false),
+      ),
     };
   }
 
@@ -84,12 +86,18 @@ export class NotebookReadService {
     };
   }
 
-  public readCellOutputs(document: vscode.NotebookDocument, cell: vscode.NotebookCell): ReadCellOutputsResult {
+  public readCellOutputs(
+    document: vscode.NotebookDocument,
+    cell: vscode.NotebookCell,
+    includeRichOutputText = false,
+  ): ReadCellOutputsResult {
     return {
       notebook_uri: document.uri.toString(),
       notebook_version: this.registry.getVersion(document.uri.toString()),
       cell_id: getStoredCellId(cell) ?? "",
-      outputs: this.outputNormalizationService.normalizeOutputs(cell.outputs),
+      outputs: this.outputNormalizationService.normalizeOutputs(cell.outputs, {
+        includeRichOutputText,
+      }),
     };
   }
 
@@ -192,10 +200,14 @@ export class NotebookReadService {
     return cell as vscode.NotebookCell;
   }
 
-  public toNotebookSnapshot(document: vscode.NotebookDocument, includeOutputs = true): NotebookSnapshot {
+  public toNotebookSnapshot(
+    document: vscode.NotebookDocument,
+    includeOutputs = true,
+    includeRichOutputText = false,
+  ): NotebookSnapshot {
     return {
       notebook: this.toNotebookSummary(document),
-      cells: document.getCells().map((cell) => this.toCellSnapshot(cell, includeOutputs)),
+      cells: document.getCells().map((cell) => this.toCellSnapshot(cell, includeOutputs, includeRichOutputText)),
     };
   }
 
@@ -233,7 +245,7 @@ export class NotebookReadService {
     };
   }
 
-  public toCellSnapshot(cell: vscode.NotebookCell, includeOutputs: boolean): CellSnapshot {
+  public toCellSnapshot(cell: vscode.NotebookCell, includeOutputs: boolean, includeRichOutputText = false): CellSnapshot {
     const cellId = getStoredCellId(cell);
     if (!cellId) {
       fail({
@@ -254,7 +266,9 @@ export class NotebookReadService {
     };
 
     if (includeOutputs) {
-      snapshot.outputs = this.outputNormalizationService.normalizeOutputs(cell.outputs);
+      snapshot.outputs = this.outputNormalizationService.normalizeOutputs(cell.outputs, {
+        includeRichOutputText,
+      });
     }
 
     return snapshot;

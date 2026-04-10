@@ -307,6 +307,7 @@ test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", ()
       parseReadNotebookRequest: (value: unknown) => {
         notebook_uri: string;
         include_outputs?: boolean;
+        include_rich_output_text?: boolean;
         range?: { start: number; end: number };
         cell_ids?: string[];
       };
@@ -314,14 +315,40 @@ test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", ()
   ).parseReadNotebookRequest({
     notebook_uri: "file:///workspace/demo.ipynb",
     include_outputs: true,
+    include_rich_output_text: true,
     range: { start: 0, end: 3 },
     cell_ids: ["cell-1", "cell-2"],
   });
 
   assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
   assert.equal(request.include_outputs, true);
+  assert.equal(request.include_rich_output_text, true);
   assert.deepEqual(request.range, { start: 0, end: 3 });
   assert.deepEqual(request.cell_ids, ["cell-1", "cell-2"]);
+});
+
+test("parseReadCellOutputsRequest accepts include_rich_output_text", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseReadCellOutputsRequest: (value: unknown) => {
+        notebook_uri: string;
+        cell_id: string;
+        include_rich_output_text?: boolean;
+      };
+    }
+  ).parseReadCellOutputsRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-1",
+    include_rich_output_text: true,
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(request.cell_id, "cell-1");
+  assert.equal(request.include_rich_output_text, true);
 });
 
 test("parseListNotebookCellsRequest accepts targeted preview queries", () => {

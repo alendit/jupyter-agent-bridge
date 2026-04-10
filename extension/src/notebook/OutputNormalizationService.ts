@@ -6,10 +6,17 @@ const JSON_LIMIT_BYTES = 256 * 1024;
 const IMAGE_LIMIT_BYTES = 1024 * 1024;
 const OUTPUT_ITEM_LIMIT = 200;
 
+interface NormalizeOutputOptions {
+  includeRichOutputText?: boolean;
+}
+
 export class OutputNormalizationService {
   private readonly decoder = new TextDecoder();
 
-  public normalizeOutputs(outputs: readonly vscode.NotebookCellOutput[]): NormalizedOutput[] {
+  public normalizeOutputs(
+    outputs: readonly vscode.NotebookCellOutput[],
+    options: NormalizeOutputOptions = {},
+  ): NormalizedOutput[] {
     const normalized: NormalizedOutput[] = [];
 
     for (const output of outputs) {
@@ -18,19 +25,23 @@ export class OutputNormalizationService {
           return normalized;
         }
 
-        normalized.push(this.normalizeItem(item));
+        normalized.push(this.normalizeItem(item, options));
       }
     }
 
     return normalized;
   }
 
-  private normalizeItem(item: vscode.NotebookCellOutputItem): NormalizedOutput {
+  private normalizeItem(item: vscode.NotebookCellOutputItem, options: NormalizeOutputOptions): NormalizedOutput {
     const mime = item.mime;
     const rawBuffer = Buffer.from(item.data);
 
     if (mime.startsWith("image/")) {
       return this.normalizeImage(mime, rawBuffer);
+    }
+
+    if (!options.includeRichOutputText && this.isRichRenderedMime(mime)) {
+      return this.normalizeOmittedRenderedOutput(mime, rawBuffer);
     }
 
     if (mime === "text/markdown") {
@@ -62,6 +73,16 @@ export class OutputNormalizationService {
       kind: "unknown",
       mime,
       text: this.decoder.decode(rawBuffer),
+    };
+  }
+
+  private normalizeOmittedRenderedOutput(mime: string, rawBuffer: Buffer): NormalizedOutput {
+    return {
+      kind: this.classifyRenderedOutputKind(mime),
+      mime,
+      summary: `Rendered output omitted by default. Re-run with include_rich_output_text=true to inspect the raw payload.`,
+      omitted: true,
+      original_bytes: rawBuffer.byteLength,
     };
   }
 
@@ -144,5 +165,30 @@ export class OutputNormalizationService {
       original_bytes: rawBuffer.byteLength,
       returned_bytes: limitedBuffer.byteLength,
     };
+  }
+
+  private isRichRenderedMime(mime: string): boolean {
+    return (
+      mime === "text/html" ||
+      mime === "application/javascript" ||
+      mime === "text/javascript" ||
+      mime.startsWith("application/vnd.")
+    );
+  }
+
+  private classifyRenderedOutputKind(mime: string): NormalizedOutput["kind"] {
+    if (mime === "text/html") {
+      return "html";
+    }
+
+    if (mime.includes("json")) {
+      return "json";
+    }
+
+    if (mime.startsWith("text/")) {
+      return "text";
+    }
+
+    return "unknown";
   }
 }

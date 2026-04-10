@@ -90,6 +90,7 @@ const readNotebookInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
     include_outputs: optionalBooleanSchema,
+    include_rich_output_text: optionalBooleanSchema,
     range: z
       .object({
         start: optionalNumberSchema,
@@ -295,6 +296,7 @@ const readCellOutputsInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
     cell_id: optionalStringSchema,
+    include_rich_output_text: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -393,9 +395,10 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   read_notebook: {
     title: "Read Notebook",
-    summary: "Read live notebook cells. Outputs are excluded by default and cells include source_sha256. For large notebooks: get_notebook_outline or list_notebook_cells first, then use cell_ids or range.",
+    summary:
+      "Read live notebook cells. Outputs are excluded by default and cells include source_sha256. Rich rendered HTML/JS/widget output text is also omitted by default when outputs are included; set include_rich_output_text=true only if you need the raw payload.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
+      '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"include_rich_output_text"?:boolean,"range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":18}}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
@@ -482,9 +485,13 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   read_cell_outputs: {
     title: "Read Cell Outputs",
-    summary: "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs.",
-    schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1"}',
-    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1"}'],
+    summary:
+      "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload.",
+    schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","include_rich_output_text"?:boolean}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","include_rich_output_text":true}',
+    ],
   },
   get_kernel_info: {
     title: "Get Kernel Info",
@@ -525,6 +532,8 @@ const NOTEBOOK_RULES = [
   "Use search_notebook or find_symbols before broad reads.",
   "Read only needed ranges or cell_ids, not whole notebooks.",
   "Use read_cell_outputs for one cell instead of full outputs.",
+  "Rich rendered HTML/JS/widget outputs are omitted by default.",
+  "Only request include_rich_output_text when raw rendered payload is necessary.",
   "Page variables with query, offset, and max_results.",
   "Use search_notebook for text, find_symbols for semantic names.",
   "Use get_diagnostics for editor errors. Runtime errors are in outputs.",
@@ -735,7 +744,7 @@ export class NotebookTools {
   private parseReadNotebookRequest(input: unknown): ReadNotebookRequest {
     const toolName = "read_notebook";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "include_outputs", "range", "cell_ids"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "include_outputs", "include_rich_output_text", "range", "cell_ids"]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -743,6 +752,10 @@ export class NotebookTools {
         params.include_outputs === undefined
           ? undefined
           : this.requiredBoolean(params.include_outputs, `${toolName}.include_outputs`),
+      include_rich_output_text:
+        params.include_rich_output_text === undefined
+          ? undefined
+          : this.requiredBoolean(params.include_rich_output_text, `${toolName}.include_rich_output_text`),
       range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
       cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
     };
@@ -1067,11 +1080,15 @@ export class NotebookTools {
   private parseReadCellOutputsRequest(input: unknown): ReadCellOutputsRequest {
     const toolName = "read_cell_outputs";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "include_rich_output_text"]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
       cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
+      include_rich_output_text:
+        params.include_rich_output_text === undefined
+          ? undefined
+          : this.requiredBoolean(params.include_rich_output_text, `${toolName}.include_rich_output_text`),
     };
   }
 

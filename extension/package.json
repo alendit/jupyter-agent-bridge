@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/executionCompletionPolicy.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/kernelRuntime.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/outline.test.js dist/extension/src/notebook/previews.test.js dist/extension/src/notebook/searchCore.test.js dist/extension/src/notebook/variableExplorer.test.js"
+    "test": "npm run build && node --test dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/executionCompletionPolicy.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/kernelRuntime.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/OutputNormalizationService.test.js dist/extension/src/notebook/outline.test.js dist/extension/src/notebook/previews.test.js dist/extension/src/notebook/searchCore.test.js dist/extension/src/notebook/variableExplorer.test.js"
   },
   "dependencies": {
     "@jupyter-mcp/protocol": "file:../packages/protocol"

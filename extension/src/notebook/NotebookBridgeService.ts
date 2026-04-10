@@ -292,7 +292,7 @@ export class NotebookBridgeService {
     const document = await this.requireDocument(request.notebook_uri);
     await this.mutationService.ensureStableCellIds(document);
     const cell = this.readService.requireCell(document, request.cell_id);
-    return this.readService.readCellOutputs(document, cell);
+    return this.readService.readCellOutputs(document, cell, request.include_rich_output_text ?? false);
   }
 
   public async getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult> {

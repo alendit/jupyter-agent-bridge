@@ -59,12 +59,14 @@ export interface NormalizedOutput {
   kind: OutputKind;
   mime: string | null;
   text?: string;
+  summary?: string;
   json?: unknown;
   html?: string;
   base64?: string;
   ename?: string;
   evalue?: string;
   traceback?: string[];
+  omitted?: boolean;
   truncated?: boolean;
   original_bytes?: number;
   returned_bytes?: number;
@@ -127,6 +129,7 @@ export interface ListNotebookCellsRequest {
 export interface ReadNotebookRequest {
   notebook_uri: string;
   include_outputs?: boolean;
+  include_rich_output_text?: boolean;
   range?: { start: number; end: number };
   cell_ids?: string[];
 }
@@ -198,6 +201,7 @@ export interface MoveCellRequest {
 export interface ReadCellOutputsRequest {
   notebook_uri: string;
   cell_id: string;
+  include_rich_output_text?: boolean;
 }
 
 export interface ExecuteCellsRequest {
