@@ -517,10 +517,15 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
 };
 
 const NOTEBOOK_RULES = [
+  "Keep context small: use notebook tools before shell or ad-hoc Python.",
   "Kernel state changes only when code cells execute.",
   "Editing source changes notebook text, not runtime state.",
   "For structured notebooks: get_notebook_outline first.",
   "For code-heavy notebooks: list_notebook_cells first.",
+  "Use search_notebook or find_symbols before broad reads.",
+  "Read only needed ranges or cell_ids, not whole notebooks.",
+  "Use read_cell_outputs for one cell instead of full outputs.",
+  "Page variables with query, offset, and max_results.",
   "Use search_notebook for text, find_symbols for semantic names.",
   "Use get_diagnostics for editor errors. Runtime errors are in outputs.",
   "Use select_kernel or select_jupyter_interpreter when the notebook kernel or Python environment needs user-driven setup.",
