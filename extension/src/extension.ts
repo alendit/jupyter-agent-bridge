@@ -53,8 +53,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const searchService = new NotebookSearchService(registry, readService);
   const variableService = new NotebookVariableService(registry);
   const cellPatchService = new CellPatchService();
-  const commandAdapter = new NotebookCommandAdapter();
-  const executionService = new NotebookExecutionService(registry, readService, commandAdapter);
+  const commandAdapter = new NotebookCommandAdapter(log);
+  const executionService = new NotebookExecutionService(registry, readService, commandAdapter, log);
   const kernelCommandService = new NotebookKernelCommandService(
     registry,
     readService,

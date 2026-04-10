@@ -20,6 +20,7 @@ export class NotebookExecutionService {
     private readonly registry: NotebookRegistry,
     private readonly readService: NotebookReadService,
     private readonly commandAdapter: NotebookCommandAdapter,
+    private readonly log?: (message: string) => void,
   ) {}
 
   public async executeCells(
@@ -49,6 +50,10 @@ export class NotebookExecutionService {
     const notebookUri = document.uri.toString();
     const timeoutMs = request.timeout_ms ?? 60_000;
     const stopOnError = request.stop_on_error ?? true;
+    this.log?.(
+      `execute_cells.start notebook_uri=${JSON.stringify(notebookUri)} cell_ids=${JSON.stringify(request.cell_ids)} timeout_ms=${timeoutMs} stop_on_error=${stopOnError} kernel=${JSON.stringify(this.readService.getKernelInfoValue(document))}`,
+    );
+    this.logExecutionBaselines(document, request.cell_ids, baselineSignatures);
     const completion = this.waitForExecutionCompletion(
       notebookUri,
       request.cell_ids,
@@ -66,6 +71,9 @@ export class NotebookExecutionService {
     const completionState = await completion;
     const timedOut = !completionState.completed;
     const refreshedDocument = this.registry.getDocument(notebookUri) ?? document;
+    this.log?.(
+      `execute_cells.complete notebook_uri=${JSON.stringify(notebookUri)} timed_out=${timedOut} pending_cell_ids=${JSON.stringify([...completionState.pendingCellIds])} skipped_cell_ids=${JSON.stringify([...completionState.skippedCellIds])} any_observed_change=${completionState.anyObservedChange} kernel=${JSON.stringify(this.readService.getKernelInfoValue(refreshedDocument))}`,
+    );
 
     const results: ExecuteCellResult[] = request.cell_ids.map((cellId) => {
       const cell = this.readService.requireCell(refreshedDocument, cellId);
@@ -169,6 +177,7 @@ export class NotebookExecutionService {
     };
 
     const initialState = check();
+    this.logWaitState("initial", notebookUri, cellIds, baselineSignatures, initialState);
     if (initialState.completed) {
       return initialState;
     }
@@ -176,7 +185,9 @@ export class NotebookExecutionService {
     return new Promise<ExecutionWaitState>((resolve) => {
       const timeout = setTimeout(() => {
         subscription.dispose();
-        resolve(check());
+        const finalState = check();
+        this.logWaitState("timeout", notebookUri, cellIds, baselineSignatures, finalState);
+        resolve(finalState);
       }, timeoutMs);
 
       const subscription = this.registry.onDidChangeNotebook((event) => {
@@ -185,6 +196,7 @@ export class NotebookExecutionService {
         }
 
         const currentState = check();
+        this.logWaitState("poll", notebookUri, cellIds, baselineSignatures, currentState);
         if (!currentState.completed) {
           return;
         }
@@ -194,6 +206,49 @@ export class NotebookExecutionService {
         resolve(currentState);
       });
     });
+  }
+
+  private logExecutionBaselines(
+    document: vscode.NotebookDocument,
+    cellIds: readonly string[],
+    baselineSignatures: Map<string, string>,
+  ): void {
+    const entries = cellIds.map((cellId) => {
+      const cell = document.getCells().find((candidate) => getStoredCellId(candidate) === cellId);
+      return {
+        cell_id: cellId,
+        baseline_signature: baselineSignatures.get(cellId) ?? null,
+        execution: cell ? this.readService.toExecutionSummary(cell) : null,
+        output_count: cell?.outputs.length ?? 0,
+      };
+    });
+    this.log?.(`execute_cells.baseline notebook_uri=${JSON.stringify(document.uri.toString())} cells=${JSON.stringify(entries)}`);
+  }
+
+  private logWaitState(
+    phase: "initial" | "poll" | "timeout",
+    notebookUri: string,
+    cellIds: readonly string[],
+    baselineSignatures: Map<string, string>,
+    state: ExecutionWaitState,
+  ): void {
+    const document = this.registry.getDocument(notebookUri);
+    const cells = cellIds.map((cellId) => {
+      const cell = document?.getCells().find((candidate) => getStoredCellId(candidate) === cellId);
+      const signature = cell ? this.executionSignature(cell) : null;
+      return {
+        cell_id: cellId,
+        changed_from_baseline:
+          signature !== null && baselineSignatures.get(cellId) !== undefined
+            ? signature !== baselineSignatures.get(cellId)
+            : false,
+        execution: cell ? this.readService.toExecutionSummary(cell) : null,
+        output_count: cell?.outputs.length ?? 0,
+      };
+    });
+    this.log?.(
+      `execute_cells.${phase} notebook_uri=${JSON.stringify(notebookUri)} completed=${state.completed} pending_cell_ids=${JSON.stringify([...state.pendingCellIds])} skipped_cell_ids=${JSON.stringify([...state.skippedCellIds])} any_observed_change=${state.anyObservedChange} kernel=${JSON.stringify(document ? this.readService.getKernelInfoValue(document) : null)} cells=${JSON.stringify(cells)}`,
+    );
   }
 
   private executionSignature(cell: vscode.NotebookCell): string {
