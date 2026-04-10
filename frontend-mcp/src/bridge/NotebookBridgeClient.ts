@@ -11,11 +11,15 @@ import {
   NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
+  PatchCellSourceRequest,
+  PatchCellSourceResult,
   ReadCellOutputsRequest,
   ReadCellOutputsResult,
   ReadNotebookRequest,
   ReadNotebookResult,
   ReplaceCellSourceRequest,
+  SearchNotebookRequest,
+  SearchNotebookResult,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -37,9 +41,11 @@ export interface NotebookBridgeClient {
   openNotebook(request: OpenNotebookRequest): Promise<OpenNotebookResult>;
   getNotebookOutline(notebookUri: string): Promise<NotebookOutlineResult>;
   listNotebookCells(request: ListNotebookCellsRequest): Promise<ListNotebookCellsResult>;
+  searchNotebook(request: SearchNotebookRequest): Promise<SearchNotebookResult>;
   readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult>;
   insertCell(request: InsertCellRequest): Promise<MutationResult>;
   replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult>;
+  patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult>;
   deleteCell(request: DeleteCellRequest): Promise<MutationResult>;
   moveCell(request: MoveCellRequest): Promise<MutationResult>;
   executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult>;

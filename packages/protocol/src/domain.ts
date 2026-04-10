@@ -55,6 +55,7 @@ export interface CellSnapshot {
   kind: NotebookCellKind;
   language: string | null;
   source: string;
+  source_sha256: string;
   metadata: Record<string, unknown>;
   execution: CellExecutionSummary | null;
   outputs?: NormalizedOutput[];
@@ -81,6 +82,7 @@ export interface NotebookCellPreview {
   language: string | null;
   source_preview: string;
   source_line_count: number;
+  source_sha256: string;
   execution_status: ExecutionStatus | null;
   has_outputs: boolean;
   output_kinds: OutputKind[];
@@ -103,6 +105,18 @@ export interface ReadNotebookRequest {
   include_outputs?: boolean;
   range?: { start: number; end: number };
   cell_ids?: string[];
+}
+
+export interface SearchNotebookRequest {
+  notebook_uri: string;
+  query: string;
+  case_sensitive?: boolean;
+  regex?: boolean;
+  whole_word?: boolean;
+  max_results?: number;
+  range?: { start: number; end: number };
+  cell_ids?: string[];
+  cell_kind?: "code" | "markdown";
 }
 
 export interface InsertCellRequest {
@@ -154,6 +168,15 @@ export interface ExecuteCellsRequest {
   wait_for_completion?: true;
 }
 
+export interface PatchCellSourceRequest {
+  notebook_uri: string;
+  cell_id: string;
+  patch: string;
+  format?: "auto" | "unified_diff" | "codex_apply_patch" | "search_replace_json";
+  expected_notebook_version?: number;
+  expected_cell_source_sha256?: string;
+}
+
 export interface NotebookStateSummary {
   notebook_uri: string;
   notebook_version: number;
@@ -184,6 +207,30 @@ export interface ListNotebookCellsResult {
   cells: NotebookCellPreview[];
 }
 
+export interface SearchNotebookMatch {
+  cell_id: string;
+  cell_index: number;
+  kind: NotebookCellKind;
+  line: number;
+  column: number;
+  match_text: string;
+  line_text: string;
+  section_path: string[];
+  source_sha256: string;
+}
+
+export interface SearchNotebookResult {
+  notebook_uri: string;
+  notebook_version: number;
+  query: string;
+  regex: boolean;
+  case_sensitive: boolean;
+  whole_word: boolean;
+  max_results: number;
+  truncated: boolean;
+  matches: SearchNotebookMatch[];
+}
+
 export interface GetKernelInfoResult {
   notebook_uri: string;
   notebook_version: number;
@@ -205,11 +252,18 @@ export interface ExecuteCellsResult {
 
 export interface MutationResult {
   notebook: NotebookSummary;
-  operation: "insert_cell" | "replace_cell_source" | "delete_cell" | "move_cell";
+  operation: "insert_cell" | "replace_cell_source" | "patch_cell_source" | "delete_cell" | "move_cell";
   changed_cell_ids: string[];
   deleted_cell_ids: string[];
   cells: CellSnapshot[];
   outline_maybe_changed: boolean;
+}
+
+export interface PatchCellSourceResult extends MutationResult {
+  operation: "patch_cell_source";
+  applied_patch_format: "unified_diff" | "codex_apply_patch" | "search_replace_json";
+  before_source_sha256: string;
+  after_source_sha256: string;
 }
 
 export type ListOpenNotebooksResult = NotebookSummary[];

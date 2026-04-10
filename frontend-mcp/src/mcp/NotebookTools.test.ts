@@ -235,3 +235,60 @@ test("describeTool includes notebook rules and the preview tool", () => {
   assert.ok(Array.isArray(description.notebook_rules));
   assert.match(JSON.stringify(description.tools), /list_notebook_cells/);
 });
+
+test("parseSearchNotebookRequest accepts targeted search options", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseSearchNotebookRequest: (value: unknown) => {
+        notebook_uri: string;
+        query: string;
+        regex?: boolean;
+        whole_word?: boolean;
+        cell_kind?: string;
+      };
+    }
+  ).parseSearchNotebookRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    query: "fit_model",
+    regex: false,
+    whole_word: true,
+    cell_kind: "code",
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(request.query, "fit_model");
+  assert.equal(request.whole_word, true);
+  assert.equal(request.cell_kind, "code");
+});
+
+test("parsePatchCellSourceRequest accepts source hash guarded patch edits", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parsePatchCellSourceRequest: (value: unknown) => {
+        notebook_uri: string;
+        cell_id: string;
+        patch: string;
+        format?: string;
+        expected_cell_source_sha256?: string;
+      };
+    }
+  ).parsePatchCellSourceRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-1",
+    patch: "@@\n-print(x)\n+print(x + 1)",
+    format: "unified_diff",
+    expected_cell_source_sha256: "abc123",
+  });
+
+  assert.equal(request.cell_id, "cell-1");
+  assert.equal(request.format, "unified_diff");
+  assert.equal(request.expected_cell_source_sha256, "abc123");
+});

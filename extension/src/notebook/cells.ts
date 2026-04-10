@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { createHash } from "node:crypto";
 
 export const METADATA_NAMESPACE = "jupyterMcp";
 export const CELL_ID_KEY = "cellId";
@@ -36,6 +37,10 @@ export function withStoredCellId(
 
 export function createGeneratedCellId(): string {
   return `c_${crypto.randomUUID().replace(/-/g, "")}`;
+}
+
+export function computeSourceSha256(source: string): string {
+  return createHash("sha256").update(source, "utf8").digest("hex");
 }
 
 export function notebookCellKindToProtocol(kind: vscode.NotebookCellKind): "markdown" | "code" {

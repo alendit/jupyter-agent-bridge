@@ -48,12 +48,16 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.getNotebookOutline(requiredString(params, "notebook_uri"));
       case BRIDGE_METHODS.listCells:
         return this.notebookBridgeService.listNotebookCells(object(params) as never);
+      case BRIDGE_METHODS.search:
+        return this.notebookBridgeService.searchNotebook(object(params) as never);
       case BRIDGE_METHODS.read:
         return this.notebookBridgeService.readNotebook(object(params) as never);
       case BRIDGE_METHODS.insertCell:
         return this.notebookBridgeService.insertCell(object(params) as never);
       case BRIDGE_METHODS.replaceCellSource:
         return this.notebookBridgeService.replaceCellSource(object(params) as never);
+      case BRIDGE_METHODS.patchCellSource:
+        return this.notebookBridgeService.patchCellSource(object(params) as never);
       case BRIDGE_METHODS.deleteCell:
         return this.notebookBridgeService.deleteCell(object(params) as never);
       case BRIDGE_METHODS.moveCell:

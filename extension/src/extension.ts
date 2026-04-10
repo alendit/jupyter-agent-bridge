@@ -11,10 +11,12 @@ import { CursorMcpRegistrar } from "./cursor/CursorMcpRegistrar";
 import { buildBundledMcpServerConfig, renderMcpDefinitionSnippet } from "./mcp/BundledMcpServer";
 import { KernelInspectionService } from "./notebook/KernelInspectionService";
 import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
+import { CellPatchService } from "./notebook/CellPatchService";
 import { NotebookExecutionService } from "./notebook/NotebookExecutionService";
 import { NotebookMutationService } from "./notebook/NotebookMutationService";
 import { NotebookReadService } from "./notebook/NotebookReadService";
 import { NotebookRegistry } from "./notebook/NotebookRegistry";
+import { NotebookSearchService } from "./notebook/NotebookSearchService";
 import { OutputNormalizationService } from "./notebook/OutputNormalizationService";
 
 const EXTENSION_VERSION = "0.1.0";
@@ -40,6 +42,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const kernelInspectionService = new KernelInspectionService();
   const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
   const mutationService = new NotebookMutationService();
+  const searchService = new NotebookSearchService(registry, readService);
+  const cellPatchService = new CellPatchService();
   const commandAdapter = new NotebookCommandAdapter();
   const executionService = new NotebookExecutionService(registry, readService, commandAdapter);
   const notebookBridgeService = new NotebookBridgeService(
@@ -47,6 +51,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     readService,
     mutationService,
     executionService,
+    searchService,
+    cellPatchService,
   );
 
   const log = (message: string): void => {

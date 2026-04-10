@@ -16,11 +16,15 @@ import {
   NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
+  PatchCellSourceRequest,
+  PatchCellSourceResult,
   ReadCellOutputsRequest,
   ReadCellOutputsResult,
   ReadNotebookRequest,
   ReadNotebookResult,
   ReplaceCellSourceRequest,
+  SearchNotebookRequest,
+  SearchNotebookResult,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -77,6 +81,10 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
     return this.call(BRIDGE_METHODS.listCells, request);
   }
 
+  public searchNotebook(request: SearchNotebookRequest): Promise<SearchNotebookResult> {
+    return this.call(BRIDGE_METHODS.search, request);
+  }
+
   public readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult> {
     return this.call(BRIDGE_METHODS.read, request);
   }
@@ -87,6 +95,10 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult> {
     return this.call(BRIDGE_METHODS.replaceCellSource, request);
+  }
+
+  public patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult> {
+    return this.call(BRIDGE_METHODS.patchCellSource, request);
   }
 
   public deleteCell(request: DeleteCellRequest): Promise<MutationResult> {

@@ -6,9 +6,11 @@ import {
   MoveCellRequest,
   NormalizedOutput,
   OpenNotebookRequest,
+  PatchCellSourceRequest,
   ReadCellOutputsRequest,
   ReadNotebookRequest,
   ReplaceCellSourceRequest,
+  SearchNotebookRequest,
 } from "../../../packages/protocol/src";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult, ImageContent } from "@modelcontextprotocol/sdk/types.js";
@@ -21,9 +23,11 @@ const TOOL_NAMES = [
   "open_notebook",
   "get_notebook_outline",
   "list_notebook_cells",
+  "search_notebook",
   "read_notebook",
   "insert_cell",
   "replace_cell_source",
+  "patch_cell_source",
   "delete_cell",
   "move_cell",
   "execute_cells",
@@ -90,6 +94,26 @@ const listNotebookCellsInputSchema = z
   })
   .passthrough();
 
+const searchNotebookInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    query: optionalStringSchema,
+    case_sensitive: optionalBooleanSchema,
+    regex: optionalBooleanSchema,
+    whole_word: optionalBooleanSchema,
+    max_results: optionalNumberSchema,
+    range: z
+      .object({
+        start: optionalNumberSchema,
+        end: optionalNumberSchema,
+      })
+      .passthrough()
+      .optional(),
+    cell_ids: z.array(z.unknown()).optional(),
+    cell_kind: optionalStringSchema,
+  })
+  .passthrough();
+
 const insertCellInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
@@ -127,6 +151,17 @@ const replaceCellSourceInputSchema = z
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
     source: optionalStringSchema,
+  })
+  .passthrough();
+
+const patchCellSourceInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    cell_id: optionalStringSchema,
+    patch: optionalStringSchema,
+    format: optionalStringSchema,
+    expected_notebook_version: notebookVersionSchema,
+    expected_cell_source_sha256: optionalStringSchema,
   })
   .passthrough();
 
@@ -200,7 +235,7 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   list_notebook_cells: {
     title: "List Notebook Cells",
-    summary: "Cheap per-cell previews for navigation, especially for code-heavy notebooks without useful headings. Returns no full source and no outputs.",
+    summary: "Cheap per-cell previews for navigation, especially for code-heavy notebooks without useful headings. Returns no full source, no outputs, and includes source_sha256 for stale-safe patching.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":50},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -208,9 +243,19 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
       '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":30}}',
     ],
   },
+  search_notebook: {
+    title: "Search Notebook",
+    summary: "Fast source search across notebook cells. Use this to find symbols or strings before reading specific cells.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","query":"fit_model","case_sensitive"?:false,"regex"?:false,"whole_word"?:false,"max_results"?:50,"range"?:{"start":0,"end":50},"cell_ids"?:["cell-1"],"cell_kind"?: "code"|"markdown"}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","query":"fit_model","cell_kind":"code"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","query":"^## ","regex":true,"cell_kind":"markdown"}',
+    ],
+  },
   read_notebook: {
     title: "Read Notebook",
-    summary: "Read live notebook cells. Outputs are excluded by default. For large notebooks: get_notebook_outline or list_notebook_cells first, then use cell_ids or range.",
+    summary: "Read live notebook cells. Outputs are excluded by default and cells include source_sha256. For large notebooks: get_notebook_outline or list_notebook_cells first, then use cell_ids or range.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -233,6 +278,16 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
     summary: "Replace one cell source. Editing source does not change kernel state until code cells are executed. Returns a compact mutation receipt.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"source":"..."}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)"}'],
+  },
+  patch_cell_source: {
+    title: "Patch Cell Source",
+    summary: "Apply a patch to one cell without resending full source. Prefer expected_cell_source_sha256 from a recent read or preview to guard against stale cell state.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"...","format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_sha256"?: "<sha256>"}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"unified_diff","patch":"@@\\n-print(x)\\n+print(x + 1)","expected_cell_source_sha256":"<sha256>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"search_replace_json","patch":"[{\"old\":\"epochs=10\",\"new\":\"epochs=20\"}]","expected_cell_source_sha256":"<sha256>"}',
+    ],
   },
   delete_cell: {
     title: "Delete Cell",
@@ -282,6 +337,8 @@ const NOTEBOOK_RULES = [
   "For structured notebooks: get_notebook_outline first.",
   "For code-heavy notebooks: list_notebook_cells first.",
   "Then use targeted read_notebook or read_cell_outputs.",
+  "Notebook data may change between turns because the user can edit cells.",
+  "Use notebook versions and source_sha256 values to avoid stale edits.",
 ];
 
 export class NotebookTools {
@@ -348,6 +405,17 @@ export class NotebookTools {
     );
 
     server.registerTool(
+      "search_notebook",
+      {
+        title: TOOL_HELP.search_notebook.title,
+        description: this.buildToolDescription("search_notebook"),
+        inputSchema: searchNotebookInputSchema,
+      },
+      async (input) =>
+        this.toToolResult(await (await this.getClient()).searchNotebook(this.parseSearchNotebookRequest(input))),
+    );
+
+    server.registerTool(
       "read_notebook",
       {
         title: TOOL_HELP.read_notebook.title,
@@ -376,6 +444,17 @@ export class NotebookTools {
       },
       async (input) =>
         this.toToolResult(await (await this.getClient()).replaceCellSource(this.parseReplaceCellSourceRequest(input))),
+    );
+
+    server.registerTool(
+      "patch_cell_source",
+      {
+        title: TOOL_HELP.patch_cell_source.title,
+        description: this.buildToolDescription("patch_cell_source"),
+        inputSchema: patchCellSourceInputSchema,
+      },
+      async (input) =>
+        this.toToolResult(await (await this.getClient()).patchCellSource(this.parsePatchCellSourceRequest(input))),
     );
 
     server.registerTool(
@@ -540,6 +619,40 @@ export class NotebookTools {
     };
   }
 
+  private parseSearchNotebookRequest(input: unknown): SearchNotebookRequest {
+    const toolName = "search_notebook";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "query",
+      "case_sensitive",
+      "regex",
+      "whole_word",
+      "max_results",
+      "range",
+      "cell_ids",
+      "cell_kind",
+    ]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      query: this.requiredString(params.query, `${toolName}.query`),
+      case_sensitive:
+        params.case_sensitive === undefined ? undefined : this.requiredBoolean(params.case_sensitive, `${toolName}.case_sensitive`),
+      regex: params.regex === undefined ? undefined : this.requiredBoolean(params.regex, `${toolName}.regex`),
+      whole_word:
+        params.whole_word === undefined ? undefined : this.requiredBoolean(params.whole_word, `${toolName}.whole_word`),
+      max_results:
+        params.max_results === undefined ? undefined : this.requiredPositiveInteger(params.max_results, `${toolName}.max_results`),
+      range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
+      cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+      cell_kind:
+        params.cell_kind === undefined
+          ? undefined
+          : this.parseEnum(params.cell_kind, `${toolName}.cell_kind`, ["code", "markdown"]),
+    };
+  }
+
   private normalizeInsertCellRequest(input: unknown): InsertCellRequest {
     const toolName = "insert_cell";
     const params = this.requireObject(input, toolName);
@@ -569,6 +682,42 @@ export class NotebookTools {
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
       source: this.requiredString(params.source, `${toolName}.source`),
+    };
+  }
+
+  private parsePatchCellSourceRequest(input: unknown): PatchCellSourceRequest {
+    const toolName = "patch_cell_source";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "cell_id",
+      "patch",
+      "format",
+      "expected_notebook_version",
+      "expected_cell_source_sha256",
+    ]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
+      patch: this.requiredString(params.patch, `${toolName}.patch`),
+      format:
+        params.format === undefined
+          ? undefined
+          : this.parseEnum(params.format, `${toolName}.format`, [
+              "auto",
+              "unified_diff",
+              "codex_apply_patch",
+              "search_replace_json",
+            ]),
+      expected_notebook_version:
+        params.expected_notebook_version === undefined
+          ? undefined
+          : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      expected_cell_source_sha256:
+        params.expected_cell_source_sha256 === undefined
+          ? undefined
+          : this.requiredString(params.expected_cell_source_sha256, `${toolName}.expected_cell_source_sha256`),
     };
   }
 

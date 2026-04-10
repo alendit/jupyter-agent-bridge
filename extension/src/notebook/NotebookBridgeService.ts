@@ -12,11 +12,15 @@ import {
   NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
+  PatchCellSourceRequest,
+  PatchCellSourceResult,
   ReadCellOutputsRequest,
   ReadCellOutputsResult,
   ReadNotebookRequest,
   ReadNotebookResult,
   ReplaceCellSourceRequest,
+  SearchNotebookRequest,
+  SearchNotebookResult,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -25,6 +29,9 @@ import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookMutationService } from "./NotebookMutationService";
 import { NotebookExecutionService } from "./NotebookExecutionService";
+import { NotebookSearchService } from "./NotebookSearchService";
+import { CellPatchService } from "./CellPatchService";
+import { computeSourceSha256 } from "./cells";
 
 export class NotebookBridgeService {
   public constructor(
@@ -32,6 +39,8 @@ export class NotebookBridgeService {
     private readonly readService: NotebookReadService,
     private readonly mutationService: NotebookMutationService,
     private readonly executionService: NotebookExecutionService,
+    private readonly searchService: NotebookSearchService,
+    private readonly cellPatchService: CellPatchService,
   ) {}
 
   public async listOpenNotebooks(): Promise<ListOpenNotebooksResult> {
@@ -63,6 +72,12 @@ export class NotebookBridgeService {
     const document = await this.requireDocument(request.notebook_uri);
     await this.mutationService.ensureStableCellIds(document);
     return this.readService.listNotebookCells(document, request);
+  }
+
+  public async searchNotebook(request: SearchNotebookRequest): Promise<SearchNotebookResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.searchService.search(document, request);
   }
 
   public async readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult> {
@@ -106,6 +121,55 @@ export class NotebookBridgeService {
         outcome.deleted_cell_ids,
         outcome.outline_maybe_changed,
       );
+    });
+  }
+
+  public async patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult> {
+    return this.registry.runExclusive(request.notebook_uri, async () => {
+      const document = await this.requireDocument(request.notebook_uri);
+      await this.mutationService.ensureStableCellIds(document);
+      const currentVersion = this.registry.getVersion(request.notebook_uri);
+      const cell = this.readService.requireCell(document, request.cell_id);
+      const currentSource = cell.document.getText();
+      const currentSourceSha256 = computeSourceSha256(currentSource);
+
+      if (request.expected_cell_source_sha256 && request.expected_cell_source_sha256 !== currentSourceSha256) {
+        fail({
+          code: "NotebookChanged",
+          message: `Cell source changed since last read. Expected sha256 ${request.expected_cell_source_sha256}, got ${currentSourceSha256}.`,
+          recoverable: true,
+        });
+      }
+
+      if (
+        request.expected_notebook_version !== undefined &&
+        currentVersion !== request.expected_notebook_version &&
+        !request.expected_cell_source_sha256
+      ) {
+        this.mutationService.assertExpectedVersion(currentVersion, request.expected_notebook_version);
+      }
+
+      const patchResult = this.cellPatchService.applyPatch(currentSource, request.patch, request.format);
+      const outcome = await this.mutationService.replaceCellSource(document, {
+        notebook_uri: request.notebook_uri,
+        cell_id: request.cell_id,
+        source: patchResult.updatedSource,
+      });
+      const mutation = this.readService.toMutationResult(
+        this.requireDocumentSync(request.notebook_uri),
+        "patch_cell_source",
+        outcome.changed_cell_ids,
+        outcome.deleted_cell_ids,
+        outcome.outline_maybe_changed,
+      );
+
+      return {
+        ...mutation,
+        operation: "patch_cell_source",
+        applied_patch_format: patchResult.format,
+        before_source_sha256: currentSourceSha256,
+        after_source_sha256: computeSourceSha256(patchResult.updatedSource),
+      };
     });
   }
 

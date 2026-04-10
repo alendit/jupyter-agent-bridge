@@ -19,7 +19,7 @@ import {
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
 import { fail } from "../../../packages/protocol/src";
-import { getStoredCellId, notebookCellKindToProtocol, cloneMetadata } from "./cells";
+import { computeSourceSha256, getStoredCellId, notebookCellKindToProtocol, cloneMetadata } from "./cells";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { OutputNormalizationService } from "./OutputNormalizationService";
 import { KernelInspectionService } from "./KernelInspectionService";
@@ -67,6 +67,7 @@ export class NotebookReadService {
               kind: notebookCellKindToProtocol(cell.kind),
               language: cell.kind === vscode.NotebookCellKind.Code ? cell.document.languageId : null,
               source: cell.document.getText(),
+              source_sha256: computeSourceSha256(cell.document.getText()),
               execution_status: this.toExecutionSummary(cell)?.status ?? null,
               output_mime_types: cell.outputs.flatMap((output) => output.items.map((item) => item.mime)),
             },
@@ -242,6 +243,7 @@ export class NotebookReadService {
       kind: notebookCellKindToProtocol(cell.kind),
       language: cell.kind === vscode.NotebookCellKind.Code ? cell.document.languageId : null,
       source: cell.document.getText(),
+      source_sha256: computeSourceSha256(cell.document.getText()),
       metadata: cloneMetadata(cell.metadata),
       execution: this.toExecutionSummary(cell),
     };
