@@ -17,13 +17,11 @@ export class NotebookCommandAdapter {
     document: vscode.NotebookDocument,
     ranges: readonly vscode.NotebookRange[],
   ): Promise<void> {
-    const editor = await vscode.window.showNotebookDocument(document, {
-      preserveFocus: true,
-      preview: false,
-      selections: [...ranges],
-    });
+    const editor = await this.ensureEditor(document);
+    editor.selections = [...ranges];
 
     await vscode.commands.executeCommand("notebook.cell.execute", {
+      notebookEditor: editor,
       ranges: editor.selections.map((selection) => ({
         start: selection.start,
         end: selection.end,
@@ -31,4 +29,3 @@ export class NotebookCommandAdapter {
     });
   }
 }
-

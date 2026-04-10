@@ -25,6 +25,7 @@ import { OutputNormalizationService } from "./OutputNormalizationService";
 import { KernelInspectionService } from "./KernelInspectionService";
 import { buildNotebookOutline } from "./outline";
 import { buildNotebookCellPreviews } from "./previews";
+import { toCellExecutionSummary } from "./executionSummary";
 
 export class NotebookReadService {
   public constructor(
@@ -260,20 +261,7 @@ export class NotebookReadService {
   }
 
   public toExecutionSummary(cell: vscode.NotebookCell): CellExecutionSummary | null {
-    const summary = cell.executionSummary;
-    if (!summary) {
-      return null;
-    }
-
-    const success = (summary as { success?: boolean }).success;
-    const timing = (summary as { timing?: { startTime?: number; endTime?: number } }).timing;
-
-    return {
-      status: success === false ? "failed" : "succeeded",
-      execution_order: summary.executionOrder ?? null,
-      started_at: timing?.startTime ? new Date(timing.startTime).toISOString() : null,
-      ended_at: timing?.endTime ? new Date(timing.endTime).toISOString() : null,
-    };
+    return toCellExecutionSummary(cell.executionSummary);
   }
 
   public normalizeCellOutputs(cell: vscode.NotebookCell): NormalizedOutput[] {

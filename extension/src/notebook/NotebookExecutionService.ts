@@ -11,6 +11,7 @@ interface ExecutionWaitState {
   completed: boolean;
   pendingCellIds: Set<string>;
   skippedCellIds: Set<string>;
+  anyObservedChange: boolean;
 }
 
 export class NotebookExecutionService {
@@ -95,6 +96,9 @@ export class NotebookExecutionService {
     if (timedOut) {
       const allCompleted = results.every((result) => result.execution?.status && result.execution.status !== "timed_out");
       if (!allCompleted) {
+        if (!completionState.anyObservedChange) {
+          this.registry.markKernelExecutionCompleted(notebookUri);
+        }
         fail({
           code: "ExecutionTimedOut",
           message: `Execution did not complete within ${timeoutMs}ms.`,
@@ -127,6 +131,7 @@ export class NotebookExecutionService {
       completed: false,
       pendingCellIds: new Set(cellIds),
       skippedCellIds: new Set<string>(),
+      anyObservedChange: false,
     });
 
     const check = (): ExecutionWaitState => {
@@ -158,6 +163,7 @@ export class NotebookExecutionService {
         completed: progress.pending_cell_ids.length === 0,
         pendingCellIds: new Set(progress.pending_cell_ids),
         skippedCellIds: new Set(progress.skipped_cell_ids),
+        anyObservedChange: observations.some((observation) => observation.changed_from_baseline),
       };
     };
 
