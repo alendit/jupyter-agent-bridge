@@ -4,6 +4,7 @@ export const BRIDGE_METHODS = {
   open: "notebook.open",
   getOutline: "notebook.get_outline",
   listCells: "notebook.list_cells",
+  listVariables: "notebook.list_variables",
   search: "notebook.search",
   getDiagnostics: "notebook.get_diagnostics",
   findSymbols: "notebook.find_symbols",
@@ -30,6 +31,7 @@ export interface SessionCapabilities {
   execute_cells: boolean;
   interrupt_execution: boolean;
   restart_kernel: boolean;
+  list_variables: boolean;
   wait_for_kernel_ready: boolean;
   select_kernel: boolean;
   select_jupyter_interpreter: boolean;

@@ -15,6 +15,8 @@ import {
   KernelCommandResult,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
+  ListNotebookVariablesRequest,
+  ListNotebookVariablesResult,
   ListOpenNotebooksResult,
   MutationResult,
   NotebookDiagnosticsRequest,
@@ -49,6 +51,7 @@ import { NotebookSearchService } from "./NotebookSearchService";
 import { CellPatchService } from "./CellPatchService";
 import { computeSourceSha256 } from "./cells";
 import { NotebookLanguageService } from "./NotebookLanguageService";
+import { NotebookVariableService } from "./NotebookVariableService";
 
 export class NotebookBridgeService {
   public constructor(
@@ -60,6 +63,7 @@ export class NotebookBridgeService {
     private readonly searchService: NotebookSearchService,
     private readonly cellPatchService: CellPatchService,
     private readonly languageService: NotebookLanguageService,
+    private readonly variableService: NotebookVariableService,
   ) {}
 
   public async listOpenNotebooks(): Promise<ListOpenNotebooksResult> {
@@ -91,6 +95,12 @@ export class NotebookBridgeService {
     const document = await this.requireDocument(request.notebook_uri);
     await this.mutationService.ensureStableCellIds(document);
     return this.readService.listNotebookCells(document, request);
+  }
+
+  public async listVariables(request: ListNotebookVariablesRequest): Promise<ListNotebookVariablesResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.variableService.listVariables(document, request);
   }
 
   public async searchNotebook(request: SearchNotebookRequest): Promise<SearchNotebookResult> {

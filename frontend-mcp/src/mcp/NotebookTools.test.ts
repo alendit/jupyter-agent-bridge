@@ -136,6 +136,15 @@ test("describeTool returns exact schema and examples for insert_cell", () => {
   assert.match(String((description.examples as string[])[0]), /"mode":"at_end"/);
 });
 
+test("describeTool index includes list_variables", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const description = (tools as unknown as { describeTool: (toolName?: string) => Record<string, unknown> }).describeTool();
+  assert.match(JSON.stringify(description.tools), /list_variables/);
+});
+
 test("parseOpenNotebookRequest suggests the expected key name", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
@@ -239,6 +248,33 @@ test("parseWaitForKernelReadyRequest accepts timeout and target generation", () 
   assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
   assert.equal(request.timeout_ms, 45000);
   assert.equal(request.target_generation, 2);
+});
+
+test("parseListVariablesRequest accepts optional query and max_results", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseListVariablesRequest: (value: unknown) => {
+        notebook_uri: string;
+        query?: string;
+        offset?: number;
+        max_results?: number;
+      };
+    }
+  ).parseListVariablesRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    query: "df",
+    offset: 25,
+    max_results: 25,
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(request.query, "df");
+  assert.equal(request.offset, 25);
+  assert.equal(request.max_results, 25);
 });
 
 test("toErrorToolResult returns structured invalid request details", () => {

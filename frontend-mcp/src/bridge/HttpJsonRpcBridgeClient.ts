@@ -19,6 +19,8 @@ import {
   KernelCommandResult,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
+  ListNotebookVariablesRequest,
+  ListNotebookVariablesResult,
   ListOpenNotebooksResult,
   MutationResult,
   NotebookDiagnosticsRequest,
@@ -94,6 +96,10 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public listNotebookCells(request: ListNotebookCellsRequest): Promise<ListNotebookCellsResult> {
     return this.call(BRIDGE_METHODS.listCells, request);
+  }
+
+  public listVariables(request: ListNotebookVariablesRequest): Promise<ListNotebookVariablesResult> {
+    return this.call(BRIDGE_METHODS.listVariables, request);
   }
 
   public searchNotebook(request: SearchNotebookRequest): Promise<SearchNotebookResult> {

@@ -14,6 +14,8 @@ import {
   KernelCommandResult,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
+  ListNotebookVariablesRequest,
+  ListNotebookVariablesResult,
   ListOpenNotebooksResult,
   MutationResult,
   NotebookDiagnosticsRequest,
@@ -50,6 +52,7 @@ export interface NotebookBridgeClient {
       execute_cells: boolean;
       interrupt_execution: boolean;
       restart_kernel: boolean;
+      list_variables: boolean;
       wait_for_kernel_ready: boolean;
       select_kernel: boolean;
       select_jupyter_interpreter: boolean;
@@ -59,6 +62,7 @@ export interface NotebookBridgeClient {
   openNotebook(request: OpenNotebookRequest): Promise<OpenNotebookResult>;
   getNotebookOutline(notebookUri: string): Promise<NotebookOutlineResult>;
   listNotebookCells(request: ListNotebookCellsRequest): Promise<ListNotebookCellsResult>;
+  listVariables(request: ListNotebookVariablesRequest): Promise<ListNotebookVariablesResult>;
   searchNotebook(request: SearchNotebookRequest): Promise<SearchNotebookResult>;
   getDiagnostics(request: NotebookDiagnosticsRequest): Promise<NotebookDiagnosticsResult>;
   findSymbols(request: FindSymbolsRequest): Promise<FindSymbolsResult>;

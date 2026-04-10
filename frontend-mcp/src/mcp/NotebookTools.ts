@@ -8,6 +8,7 @@ import {
   InterruptExecutionRequest,
   InsertCellRequest,
   ListNotebookCellsRequest,
+  ListNotebookVariablesRequest,
   MoveCellRequest,
   NotebookDiagnosticsRequest,
   NormalizedOutput,
@@ -33,6 +34,7 @@ const TOOL_NAMES = [
   "open_notebook",
   "get_notebook_outline",
   "list_notebook_cells",
+  "list_variables",
   "search_notebook",
   "find_symbols",
   "get_diagnostics",
@@ -110,6 +112,15 @@ const listNotebookCellsInputSchema = z
       .passthrough()
       .optional(),
     cell_ids: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+
+const listVariablesInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    query: optionalStringSchema,
+    offset: optionalNonNegativeIntSchema,
+    max_results: optionalPositiveIntSchema,
   })
   .passthrough();
 
@@ -331,6 +342,16 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
       '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":30}}',
     ],
   },
+  list_variables: {
+    title: "List Variables",
+    summary:
+      "List variables from the active kernel for one notebook using VS Code Jupyter's variable explorer command. Results are paged and preview fields are capped so agents can fetch small chunks incrementally.",
+    schema: '{"notebook_uri":"file:///.../demo.ipynb","query"?: "df","offset"?:0,"max_results"?:50}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","query":"dataframe","offset":0,"max_results":25}',
+    ],
+  },
   search_notebook: {
     title: "Search Notebook",
     summary: "Fast source search across notebook cells. Use this to find symbols or strings before reading specific cells.",
@@ -546,6 +567,10 @@ export class NotebookTools {
       (await this.getClient()).listNotebookCells(this.parseListNotebookCellsRequest(input)),
     );
 
+    register("list_variables", listVariablesInputSchema, async (input) =>
+      (await this.getClient()).listVariables(this.parseListVariablesRequest(input)),
+    );
+
     register("search_notebook", searchNotebookInputSchema, async (input) =>
       (await this.getClient()).searchNotebook(this.parseSearchNotebookRequest(input)),
     );
@@ -720,6 +745,20 @@ export class NotebookTools {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
       range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
       cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+    };
+  }
+
+  private parseListVariablesRequest(input: unknown): ListNotebookVariablesRequest {
+    const toolName = "list_variables";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "query", "offset", "max_results"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      query: params.query === undefined ? undefined : this.requiredString(params.query, `${toolName}.query`),
+      offset: params.offset === undefined ? undefined : this.requiredNonNegativeInteger(params.offset, `${toolName}.offset`),
+      max_results:
+        params.max_results === undefined ? undefined : this.requiredPositiveInteger(params.max_results, `${toolName}.max_results`),
     };
   }
 

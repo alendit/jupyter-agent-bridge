@@ -228,6 +228,13 @@ export interface SelectKernelRequest {
   skip_if_already_selected?: boolean;
 }
 
+export interface ListNotebookVariablesRequest {
+  notebook_uri: string;
+  query?: string;
+  offset?: number;
+  max_results?: number;
+}
+
 export interface WaitForKernelReadyRequest {
   notebook_uri: string;
   timeout_ms?: number;
@@ -285,6 +292,28 @@ export interface ListNotebookCellsResult {
   notebook_uri: string;
   notebook_version: number;
   cells: NotebookCellPreview[];
+}
+
+export interface NotebookVariableSummary {
+  name: string;
+  type: string | null;
+  value_preview: string | null;
+  summary: string | null;
+  size: string | null;
+  shape: string | null;
+  supports_data_explorer: boolean;
+}
+
+export interface ListNotebookVariablesResult {
+  notebook_uri: string;
+  notebook_version: number;
+  query?: string;
+  offset: number;
+  max_results: number;
+  total_available: number;
+  next_offset: number | null;
+  truncated: boolean;
+  variables: NotebookVariableSummary[];
 }
 
 export interface SearchNotebookMatch {

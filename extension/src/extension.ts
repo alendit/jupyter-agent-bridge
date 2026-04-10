@@ -19,6 +19,7 @@ import { NotebookMutationService } from "./notebook/NotebookMutationService";
 import { NotebookReadService } from "./notebook/NotebookReadService";
 import { NotebookRegistry } from "./notebook/NotebookRegistry";
 import { NotebookSearchService } from "./notebook/NotebookSearchService";
+import { NotebookVariableService } from "./notebook/NotebookVariableService";
 import { OutputNormalizationService } from "./notebook/OutputNormalizationService";
 
 const EXTENSION_VERSION = "0.1.0";
@@ -45,6 +46,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
   const mutationService = new NotebookMutationService();
   const searchService = new NotebookSearchService(registry, readService);
+  const variableService = new NotebookVariableService(registry);
   const cellPatchService = new CellPatchService();
   const commandAdapter = new NotebookCommandAdapter();
   const executionService = new NotebookExecutionService(registry, readService, commandAdapter);
@@ -59,6 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     searchService,
     cellPatchService,
     languageService,
+    variableService,
   );
 
   const log = (message: string): void => {
@@ -132,6 +135,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
         execute_cells: true,
         interrupt_execution: true,
         restart_kernel: true,
+        list_variables: true,
         wait_for_kernel_ready: true,
         select_kernel: true,
         select_jupyter_interpreter: true,

@@ -796,7 +796,30 @@ Return:
 
 ---
 
-## 12.5 Kernel operations
+## 12.5 Variable explorer
+
+### `list_variables`
+Input:
+- notebook URI
+- optional `query`
+- optional `offset`
+- optional `max_results`
+
+Return:
+- normalized variable summaries
+- the effective `offset`
+- whether the result was truncated
+- the effective `max_results`
+- `total_available`
+- `next_offset` when more variables can be fetched
+
+This operation should be notebook-scoped and backed by VS Code Jupyter's variable explorer state, so it reflects the current kernel state even when the user executed cells outside the MCP bridge.
+
+Preview fields should be capped to a modest length so agents can inspect variable inventories cheaply, then page through additional rows with `offset` and `max_results` instead of fetching one huge payload.
+
+---
+
+## 12.6 Kernel operations
 
 ### `get_kernel_info`
 Input:
@@ -927,6 +950,7 @@ Required MVP methods:
 - `bridge.get_session_info`
 - `notebook.list_open`
 - `notebook.open`
+- `notebook.list_variables`
 - `notebook.read`
 - `notebook.insert_cell`
 - `notebook.replace_cell_source`
@@ -952,6 +976,7 @@ Suggested MCP tools:
 
 - `list_open_notebooks`
 - `open_notebook`
+- `list_variables`
 - `read_notebook`
 - `insert_cell`
 - `replace_cell_source`
@@ -1333,6 +1358,7 @@ Specific MVP rules:
 - `execute_cells` supports code cells only; markdown cells in the request cause `InvalidRequest`
 - `wait_for_completion=false` is not part of the MVP; reject it with `InvalidRequest`
 - `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` are supported through VS Code and Jupyter command surfaces, and some of them may require user interaction
+- `list_variables` is notebook-scoped and must read live variable explorer state rather than bridge-local cache
 - `wait_for_kernel_ready` is supported and must be notebook-scoped, because different open notebooks may be attached to different kernels or different generations of the same kernel selection
 - if `vscode.cursor.mcp.registerServer` is available, use it to register the bundled MCP server instead of requiring manual Cursor MCP config
 - the Cursor registration must use stdio transport and launch the bundled `frontend-mcp` entrypoint, not a second embedded notebook implementation
@@ -1550,6 +1576,7 @@ The JSON-RPC method names for the first implementation are fixed:
 - `bridge.get_session_info`
 - `notebook.list_open`
 - `notebook.open`
+- `notebook.list_variables`
 - `notebook.read`
 - `notebook.insert_cell`
 - `notebook.replace_cell_source`
