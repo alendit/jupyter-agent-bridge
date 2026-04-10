@@ -57,6 +57,40 @@ test("markKernelCommandRequested tracks pending interactive selection", () => {
   assert.equal(next.requires_user_interaction, true);
 });
 
+test("reconcileKernelRuntimeState expires stale interactive selection state", () => {
+  const initial = createInitialKernelRuntimeState(
+    {
+      ...baseMetadata,
+      kernel_label: null,
+      kernel_id: null,
+      has_kernel: false,
+      signature: null,
+    },
+    1000,
+  );
+  const selecting = markKernelCommandRequested(initial, "select_kernel", {
+    now: 2000,
+    requires_user_interaction: true,
+  });
+
+  const reconciled = reconcileKernelRuntimeState(
+    selecting,
+    {
+      ...baseMetadata,
+      kernel_label: null,
+      kernel_id: null,
+      has_kernel: false,
+      signature: null,
+    },
+    { now: 8000 },
+  );
+
+  assert.equal(reconciled.pending_action, null);
+  assert.equal(reconciled.requires_user_interaction, false);
+  assert.equal(reconciled.state, "unknown");
+  assert.equal(reconciled.last_seen_at_ms, null);
+});
+
 test("isKernelReady requires matching generation and no pending interaction", () => {
   assert.equal(
     isKernelReady(

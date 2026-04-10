@@ -52,6 +52,7 @@ import { CellPatchService } from "./CellPatchService";
 import { computeSourceSha256 } from "./cells";
 import { NotebookLanguageService } from "./NotebookLanguageService";
 import { NotebookVariableService } from "./NotebookVariableService";
+import { HostKernelObservationService } from "./HostKernelObservationService";
 
 export class NotebookBridgeService {
   public constructor(
@@ -63,6 +64,7 @@ export class NotebookBridgeService {
     private readonly searchService: NotebookSearchService,
     private readonly cellPatchService: CellPatchService,
     private readonly languageService: NotebookLanguageService,
+    private readonly hostKernelObservationService: HostKernelObservationService,
     private readonly variableService: NotebookVariableService,
   ) {}
 
@@ -296,6 +298,7 @@ export class NotebookBridgeService {
   public async getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult> {
     const document = await this.requireDocument(notebookUri);
     await this.mutationService.ensureStableCellIds(document);
+    await this.hostKernelObservationService.refresh(document);
     return this.readService.getKernelInfo(document);
   }
 
@@ -340,6 +343,7 @@ export class NotebookBridgeService {
   public async summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult> {
     const document = await this.requireDocument(notebookUri);
     await this.mutationService.ensureStableCellIds(document);
+    await this.hostKernelObservationService.refresh(document);
     return this.readService.summarizeNotebookState(document);
   }
 

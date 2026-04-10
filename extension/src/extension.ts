@@ -9,6 +9,7 @@ import { RendezvousStore } from "./bridge/RendezvousStore";
 import { NotebookCommandAdapter } from "./commands/NotebookCommandAdapter";
 import { CursorMcpRegistrar } from "./cursor/CursorMcpRegistrar";
 import { buildBundledMcpServerConfig, renderMcpDefinitionSnippet } from "./mcp/BundledMcpServer";
+import { HostKernelObservationService } from "./notebook/HostKernelObservationService";
 import { KernelInspectionService } from "./notebook/KernelInspectionService";
 import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
 import { CellPatchService } from "./notebook/CellPatchService";
@@ -40,9 +41,13 @@ let runtimeState: RuntimeState | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const outputChannel = vscode.window.createOutputChannel("Jupyter MCP", { log: true });
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  const log = (message: string): void => {
+    outputChannel.appendLine(message);
+  };
   const registry = new NotebookRegistry();
+  const hostKernelObservationService = new HostKernelObservationService(log);
   const outputNormalizationService = new OutputNormalizationService();
-  const kernelInspectionService = new KernelInspectionService(registry);
+  const kernelInspectionService = new KernelInspectionService(registry, hostKernelObservationService);
   const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
   const mutationService = new NotebookMutationService();
   const searchService = new NotebookSearchService(registry, readService);
@@ -50,7 +55,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const cellPatchService = new CellPatchService();
   const commandAdapter = new NotebookCommandAdapter();
   const executionService = new NotebookExecutionService(registry, readService, commandAdapter);
-  const kernelCommandService = new NotebookKernelCommandService(registry, readService, commandAdapter);
+  const kernelCommandService = new NotebookKernelCommandService(
+    registry,
+    readService,
+    commandAdapter,
+    hostKernelObservationService,
+    log,
+  );
   const languageService = new NotebookLanguageService(registry, readService, mutationService);
   const notebookBridgeService = new NotebookBridgeService(
     registry,
@@ -61,12 +72,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     searchService,
     cellPatchService,
     languageService,
+    hostKernelObservationService,
     variableService,
   );
-
-  const log = (message: string): void => {
-    outputChannel.appendLine(message);
-  };
 
   const renderTooltip = (): vscode.MarkdownString => {
     const tooltip = new vscode.MarkdownString(undefined, true);

@@ -10,6 +10,8 @@ export interface NotebookKernelRuntimeState {
   kernel_signature: string | null;
 }
 
+const INTERACTIVE_PENDING_ACTION_TTL_MS = 5_000;
+
 export function createInitialKernelRuntimeState(
   metadata: ParsedNotebookKernelMetadata,
   now = Date.now(),
@@ -45,6 +47,18 @@ export function reconcileKernelRuntimeState(
       metadata.execution_supported && metadata.has_kernel ? observedExecutionState ?? "idle" : "unknown";
     next.last_seen_at_ms = metadata.has_kernel ? now : null;
     return next;
+  }
+
+  if (
+    next.requires_user_interaction &&
+    (next.pending_action === "select_kernel" || next.pending_action === "select_interpreter") &&
+    next.last_seen_at_ms !== null &&
+    now - next.last_seen_at_ms >= INTERACTIVE_PENDING_ACTION_TTL_MS
+  ) {
+    next.pending_action = null;
+    next.requires_user_interaction = false;
+    next.state = metadata.execution_supported && metadata.has_kernel ? observedExecutionState ?? "idle" : "unknown";
+    next.last_seen_at_ms = metadata.has_kernel ? now : null;
   }
 
   if (observedExecutionState) {

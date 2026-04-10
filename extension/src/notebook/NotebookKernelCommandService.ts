@@ -7,6 +7,7 @@ import {
   fail,
 } from "../../../packages/protocol/src";
 import { NotebookCommandAdapter } from "../commands/NotebookCommandAdapter";
+import { HostKernelObservationService } from "./HostKernelObservationService";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { isKernelReady } from "./kernelRuntime";
@@ -16,6 +17,8 @@ export class NotebookKernelCommandService {
     private readonly registry: NotebookRegistry,
     private readonly readService: NotebookReadService,
     private readonly commandAdapter: NotebookCommandAdapter,
+    private readonly hostKernelObservationService: HostKernelObservationService,
+    private readonly log?: (message: string) => void,
   ) {}
 
   public async selectKernel(
@@ -23,6 +26,7 @@ export class NotebookKernelCommandService {
     request: SelectKernelRequest,
   ): Promise<KernelCommandResult> {
     const editor = await this.commandAdapter.ensureEditor(document);
+    this.logKernelDebug("select_kernel.before", document);
 
     if ((request.kernel_id && !request.extension_id) || (!request.kernel_id && request.extension_id)) {
       fail({
@@ -39,7 +43,7 @@ export class NotebookKernelCommandService {
         `Failed to select kernel ${request.kernel_id}.`,
         async () => {
           await vscode.commands.executeCommand("notebook.selectKernel", {
-            notebookEditor: editor,
+            editor,
             id: request.kernel_id,
             extension: request.extension_id,
             skipIfAlreadySelected: request.skip_if_already_selected ?? true,
@@ -57,8 +61,8 @@ export class NotebookKernelCommandService {
       "Failed to open the notebook kernel picker.",
       async () => {
         await vscode.commands.executeCommand("notebook.selectKernel", {
-          notebookEditor: editor,
-          skipIfAlreadySelected: request.skip_if_already_selected ?? false,
+          notebookUri: document.uri,
+          skipIfAlreadySelected: request.skip_if_already_selected ?? true,
         });
         this.registry.markKernelCommandRequested(document.uri.toString(), "select_kernel", {
           requires_user_interaction: true,
@@ -148,7 +152,11 @@ export class NotebookKernelCommandService {
       };
     };
 
+    await this.hostKernelObservationService.refresh(document);
     const immediate = currentResult();
+    this.log?.(
+      `wait_for_kernel_ready immediate notebook_uri=${JSON.stringify(notebookUri)} ready=${immediate.ready} state=${immediate.kernel?.state ?? "null"} pending_action=${immediate.kernel?.pending_action ?? "null"} requires_user_interaction=${immediate.kernel?.requires_user_interaction ?? false} kernel_id=${JSON.stringify(immediate.kernel?.kernel_id ?? null)} kernel_label=${JSON.stringify(immediate.kernel?.kernel_label ?? null)}`,
+    );
     if (
       immediate.ready ||
       immediate.kernel?.requires_user_interaction ||
@@ -157,45 +165,23 @@ export class NotebookKernelCommandService {
       return immediate;
     }
 
-    return new Promise<WaitForKernelReadyResult>((resolve) => {
-      const settle = (timedOut: boolean): void => {
-        const result = currentResult();
-        result.timed_out = timedOut;
-        if (timedOut && !result.ready) {
-          result.message = `Timed out waiting for kernel readiness. ${result.message}`;
-        }
-        resolve(result);
-      };
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const refreshedDocument = this.registry.getDocument(notebookUri) ?? document;
+      await this.hostKernelObservationService.refresh(refreshedDocument);
+      const result = currentResult();
+      if (result.ready || result.kernel?.requires_user_interaction || !result.kernel?.execution_supported) {
+        return result;
+      }
+    }
 
-      const timeout = setTimeout(() => {
-        notebookSubscription.dispose();
-        kernelSubscription.dispose();
-        settle(true);
-      }, timeoutMs);
-
-      const onMaybeReady = (): void => {
-        const result = currentResult();
-        if (!result.ready && !result.kernel?.requires_user_interaction) {
-          return;
-        }
-
-        clearTimeout(timeout);
-        notebookSubscription.dispose();
-        kernelSubscription.dispose();
-        resolve(result);
-      };
-
-      const notebookSubscription = this.registry.onDidChangeNotebook((event) => {
-        if (event.notebook_uri === notebookUri) {
-          onMaybeReady();
-        }
-      });
-      const kernelSubscription = this.registry.onDidChangeKernelState((event) => {
-        if (event.notebook_uri === notebookUri) {
-          onMaybeReady();
-        }
-      });
-    });
+    const timedOut = currentResult();
+    timedOut.timed_out = true;
+    if (!timedOut.ready) {
+      timedOut.message = `Timed out waiting for kernel readiness. ${timedOut.message}`;
+    }
+    return timedOut;
   }
 
   private async runKernelCommand(
@@ -209,6 +195,7 @@ export class NotebookKernelCommandService {
   ): Promise<KernelCommandResult> {
     try {
       await command();
+      await this.hostKernelObservationService.refresh(document);
     } catch (error) {
       fail({
         code: errorCode,
@@ -218,6 +205,8 @@ export class NotebookKernelCommandService {
       });
     }
 
+    this.logKernelDebug(`kernel_command.${status}`, document);
+
     return {
       notebook_uri: document.uri.toString(),
       notebook_version: this.registry.getVersion(document.uri.toString()),
@@ -226,6 +215,15 @@ export class NotebookKernelCommandService {
       requires_user_interaction: requiresUserInteraction,
       message,
     };
+  }
+
+  private logKernelDebug(prefix: string, document: vscode.NotebookDocument): void {
+    const kernel = this.readService.getKernelInfoValue(document);
+    const metadata = document.metadata as Record<string, unknown> | undefined;
+    const customMetadata = (metadata?.custom as Record<string, unknown> | undefined)?.metadata;
+    this.log?.(
+      `${prefix} notebook_uri=${JSON.stringify(document.uri.toString())} kernel_id=${JSON.stringify(kernel.kernel_id)} kernel_label=${JSON.stringify(kernel.kernel_label)} state=${kernel.state} pending_action=${kernel.pending_action ?? "null"} requires_user_interaction=${kernel.requires_user_interaction} metadata_keys=${JSON.stringify(Object.keys(metadata ?? {}))} custom_metadata_keys=${JSON.stringify(customMetadata && typeof customMetadata === "object" ? Object.keys(customMetadata as Record<string, unknown>) : [])}`,
+    );
   }
 
   private describeKernelWaitState(
