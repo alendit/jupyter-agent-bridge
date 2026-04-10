@@ -18,6 +18,7 @@ const TOOL_NAMES = [
   "list_open_notebooks",
   "describe_tool",
   "open_notebook",
+  "get_notebook_outline",
   "read_notebook",
   "insert_cell",
   "replace_cell_source",
@@ -168,26 +169,32 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   open_notebook: {
     title: "Open Notebook",
-    summary: "Open a notebook in the live editor session. If unsure about any field, call describe_tool first.",
+    summary: "Open a notebook in the live editor session. Returns notebook summary only, not cells.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","view_column"?: "active"|"beside"}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb"}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","view_column":"beside"}',
     ],
   },
+  get_notebook_outline: {
+    title: "Get Notebook Outline",
+    summary: "Cheap notebook structure view from markdown headings. Use this first on large notebooks, then read only the relevant range or cell_ids.",
+    schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
+    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
+  },
   read_notebook: {
     title: "Read Notebook",
-    summary: "Read the live notebook state. `cell_ids` is more specific than `range` if both are provided.",
+    summary: "Read live notebook cells. Outputs are excluded by default. For large notebooks: get_notebook_outline first, then use cell_ids or range.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
-      '{"notebook_uri":"file:///workspace/demo.ipynb","include_outputs":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":18}}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
     ],
   },
   insert_cell: {
     title: "Insert Cell",
-    summary: "Insert a new cell. Prefer the `position.mode` form instead of legacy one-key union objects.",
+    summary: "Insert a new cell. Prefer the position.mode form. Returns only a compact mutation receipt, not the whole notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","expected_notebook_version"?:7,"position":{"mode":"before_index","index":0}|{"mode":"before_cell_id","cell_id":"cell-1"}|{"mode":"after_cell_id","cell_id":"cell-1"}|{"mode":"at_end"},"cell":{"kind":"markdown"|"code","source":"...","language"?:string|null,"metadata"?:object}}',
     examples: [
@@ -197,25 +204,25 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   replace_cell_source: {
     title: "Replace Cell Source",
-    summary: "Replace the source text of one existing cell.",
+    summary: "Replace one cell source. Editing source does not change kernel state until code cells are executed. Returns a compact mutation receipt.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"source":"..."}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)"}'],
   },
   delete_cell: {
     title: "Delete Cell",
-    summary: "Delete one cell from the live notebook.",
+    summary: "Delete one cell from the live notebook. Returns a compact mutation receipt.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1"}'],
   },
   move_cell: {
     title: "Move Cell",
-    summary: "Move one cell to a target notebook index.",
+    summary: "Move one cell to a target notebook index. Returns a compact mutation receipt.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","target_index":0,"expected_notebook_version"?:7}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","target_index":0}'],
   },
   execute_cells: {
     title: "Execute Cells",
-    summary: "Execute one or more code cells and return normalized outputs, including native MCP image blocks.",
+    summary: "Execute code cells. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"timeout_ms"?:30000,"wait_for_completion"?:true}',
     examples: [
@@ -225,7 +232,7 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   read_cell_outputs: {
     title: "Read Cell Outputs",
-    summary: "Read normalized outputs for one cell.",
+    summary: "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1"}'],
   },
@@ -237,11 +244,17 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   summarize_notebook_state: {
     title: "Summarize Notebook State",
-    summary: "Return a compact machine-readable notebook summary.",
+    summary: "Return a compact machine-readable notebook status summary.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
 };
+
+const NOTEBOOK_RULES = [
+  "Kernel state changes only when code cells execute.",
+  "Editing source changes notebook text, not runtime state.",
+  "For large notebooks: get_notebook_outline first, then targeted read_notebook or read_cell_outputs.",
+];
 
 export class NotebookTools {
   public constructor(private readonly getClient: () => Promise<NotebookBridgeClient>) {}
@@ -278,6 +291,21 @@ export class NotebookTools {
         inputSchema: openNotebookInputSchema,
       },
       async (input) => this.toToolResult(await (await this.getClient()).openNotebook(this.parseOpenNotebookRequest(input))),
+    );
+
+    server.registerTool(
+      "get_notebook_outline",
+      {
+        title: TOOL_HELP.get_notebook_outline.title,
+        description: this.buildToolDescription("get_notebook_outline"),
+        inputSchema: singleNotebookInputSchema,
+      },
+      async (input) =>
+        this.toToolResult(
+          await (await this.getClient()).getNotebookOutline(
+            this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri,
+          ),
+        ),
     );
 
     server.registerTool(
@@ -360,7 +388,9 @@ export class NotebookTools {
         inputSchema: singleNotebookInputSchema,
       },
       async (input) =>
-        this.toToolResult(await (await this.getClient()).getKernelInfo(this.parseSingleNotebookInput("get_kernel_info", input).notebook_uri)),
+        this.toToolResult(
+          await (await this.getClient()).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
+        ),
     );
 
     server.registerTool(
@@ -373,7 +403,7 @@ export class NotebookTools {
       async (input) =>
         this.toToolResult(
           await (await this.getClient()).summarizeNotebookState(
-            this.parseSingleNotebookInput("summarize_notebook_state", input).notebook_uri,
+            this.parseNotebookUriOnlyInput("summarize_notebook_state", input).notebook_uri,
           ),
         ),
     );
@@ -388,6 +418,7 @@ export class NotebookTools {
   private describeTool(toolName?: ToolName): unknown {
     if (!toolName) {
       return {
+        notebook_rules: NOTEBOOK_RULES,
         tools: TOOL_NAMES.map((name) => ({
           name,
           title: TOOL_HELP[name].title,
@@ -404,6 +435,7 @@ export class NotebookTools {
       summary: TOOL_HELP[toolName].summary,
       schema: TOOL_HELP[toolName].schema,
       examples: TOOL_HELP[toolName].examples,
+      notebook_rules: NOTEBOOK_RULES,
     };
   }
 
@@ -563,7 +595,10 @@ export class NotebookTools {
     };
   }
 
-  private parseSingleNotebookInput(toolName: Extract<ToolName, "get_kernel_info" | "summarize_notebook_state">, input: unknown): {
+  private parseNotebookUriOnlyInput(
+    toolName: Extract<ToolName, "get_notebook_outline" | "get_kernel_info" | "summarize_notebook_state">,
+    input: unknown,
+  ): {
     notebook_uri: string;
   } {
     const params = this.requireObject(input, toolName);

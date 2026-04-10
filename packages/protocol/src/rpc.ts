@@ -2,6 +2,7 @@ export const BRIDGE_METHODS = {
   getSessionInfo: "bridge.get_session_info",
   listOpen: "notebook.list_open",
   open: "notebook.open",
+  getOutline: "notebook.get_outline",
   read: "notebook.read",
   insertCell: "notebook.insert_cell",
   replaceCellSource: "notebook.replace_cell_source",
@@ -63,4 +64,3 @@ export const JSON_RPC_ERRORS = {
   internalError: -32603,
   domainError: -32000,
 } as const;
-

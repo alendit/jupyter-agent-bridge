@@ -5,6 +5,8 @@ import {
   GetKernelInfoResult,
   KernelInfo,
   ListOpenNotebooksResult,
+  MutationResult,
+  NotebookOutlineResult,
   NotebookSnapshot,
   NotebookStateSummary,
   NotebookSummary,
@@ -19,6 +21,7 @@ import { getStoredCellId, notebookCellKindToProtocol, cloneMetadata } from "./ce
 import { NotebookRegistry } from "./NotebookRegistry";
 import { OutputNormalizationService } from "./OutputNormalizationService";
 import { KernelInspectionService } from "./KernelInspectionService";
+import { buildNotebookOutline } from "./outline";
 
 export class NotebookReadService {
   public constructor(
@@ -56,6 +59,30 @@ export class NotebookReadService {
       notebook_version: this.registry.getVersion(document.uri.toString()),
       cell_id: getStoredCellId(cell) ?? "",
       outputs: this.outputNormalizationService.normalizeOutputs(cell.outputs),
+    };
+  }
+
+  public getNotebookOutline(document: vscode.NotebookDocument): NotebookOutlineResult {
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      headings: buildNotebookOutline(
+        document.getCells().flatMap((cell) => {
+          const cellId = getStoredCellId(cell);
+          if (!cellId) {
+            return [];
+          }
+
+          return [
+            {
+              cell_id: cellId,
+              index: cell.index,
+              kind: notebookCellKindToProtocol(cell.kind),
+              source: cell.document.getText(),
+            },
+          ];
+        }),
+      ),
     };
   }
 
@@ -119,6 +146,28 @@ export class NotebookReadService {
     return {
       notebook: this.toNotebookSummary(document),
       cells: document.getCells().map((cell) => this.toCellSnapshot(cell, includeOutputs)),
+    };
+  }
+
+  public toMutationResult(
+    document: vscode.NotebookDocument,
+    operation: MutationResult["operation"],
+    changedCellIds: readonly string[],
+    deletedCellIds: readonly string[],
+    outlineMaybeChanged: boolean,
+  ): MutationResult {
+    const remainingChangedCells = changedCellIds
+      .map((cellId) => document.getCells().find((candidate) => getStoredCellId(candidate) === cellId))
+      .filter((cell): cell is vscode.NotebookCell => Boolean(cell))
+      .map((cell) => this.toCellSnapshot(cell, false));
+
+    return {
+      notebook: this.toNotebookSummary(document),
+      operation,
+      changed_cell_ids: [...changedCellIds],
+      deleted_cell_ids: [...deletedCellIds],
+      cells: remainingChangedCells,
+      outline_maybe_changed: outlineMaybeChanged,
     };
   }
 

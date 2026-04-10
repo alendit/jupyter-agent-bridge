@@ -6,6 +6,7 @@ import {
   InsertCellRequest,
   ListOpenNotebooksResult,
   MutationResult,
+  NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
   ReadCellOutputsRequest,
@@ -32,6 +33,7 @@ export interface NotebookBridgeClient {
   }>;
   listOpenNotebooks(): Promise<ListOpenNotebooksResult>;
   openNotebook(request: OpenNotebookRequest): Promise<OpenNotebookResult>;
+  getNotebookOutline(notebookUri: string): Promise<NotebookOutlineResult>;
   readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult>;
   insertCell(request: InsertCellRequest): Promise<MutationResult>;
   replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult>;

@@ -11,6 +11,7 @@ import {
   JSON_RPC_ERRORS,
   ListOpenNotebooksResult,
   MutationResult,
+  NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
   ReadCellOutputsRequest,
@@ -64,6 +65,10 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public openNotebook(request: OpenNotebookRequest): Promise<OpenNotebookResult> {
     return this.call(BRIDGE_METHODS.open, request);
+  }
+
+  public getNotebookOutline(notebookUri: string): Promise<NotebookOutlineResult> {
+    return this.call(BRIDGE_METHODS.getOutline, { notebook_uri: notebookUri });
   }
 
   public readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult> {

@@ -14,6 +14,13 @@ import {
   withStoredCellId,
 } from "./cells";
 
+export interface MutationOutcome {
+  operation: "insert_cell" | "replace_cell_source" | "delete_cell" | "move_cell";
+  changed_cell_ids: string[];
+  deleted_cell_ids: string[];
+  outline_maybe_changed: boolean;
+}
+
 export class NotebookMutationService {
   public async ensureStableCellIds(document: vscode.NotebookDocument): Promise<vscode.NotebookDocument> {
     const edits: vscode.NotebookEdit[] = [];
@@ -59,41 +66,63 @@ export class NotebookMutationService {
     }
   }
 
-  public async insertCell(document: vscode.NotebookDocument, request: InsertCellRequest): Promise<void> {
+  public async insertCell(document: vscode.NotebookDocument, request: InsertCellRequest): Promise<MutationOutcome> {
     const index = this.resolveInsertIndex(document, request.position);
+    const cellId = createGeneratedCellId();
     const cellData = new vscode.NotebookCellData(
       protocolCellKindToNotebook(request.cell.kind),
       request.cell.source,
       request.cell.language ?? (request.cell.kind === "code" ? "python" : "markdown"),
     );
-    cellData.metadata = withStoredCellId(request.cell.metadata, createGeneratedCellId());
+    cellData.metadata = withStoredCellId(request.cell.metadata, cellId);
     cellData.outputs = [];
 
     await this.applyNotebookEdits(document, [
       vscode.NotebookEdit.replaceCells(new vscode.NotebookRange(index, index), [cellData]),
     ]);
+
+    return {
+      operation: "insert_cell",
+      changed_cell_ids: [cellId],
+      deleted_cell_ids: [],
+      outline_maybe_changed: request.cell.kind === "markdown",
+    };
   }
 
   public async replaceCellSource(
     document: vscode.NotebookDocument,
     request: ReplaceCellSourceRequest,
-  ): Promise<void> {
+  ): Promise<MutationOutcome> {
     const cell = this.requireCell(document, request.cell_id);
     const cellData = toNotebookCellData(cell, request.source);
     cellData.outputs = [];
     await this.applyNotebookEdits(document, [
       vscode.NotebookEdit.replaceCells(new vscode.NotebookRange(cell.index, cell.index + 1), [cellData]),
     ]);
+
+    return {
+      operation: "replace_cell_source",
+      changed_cell_ids: [request.cell_id],
+      deleted_cell_ids: [],
+      outline_maybe_changed: cell.kind === vscode.NotebookCellKind.Markup,
+    };
   }
 
-  public async deleteCell(document: vscode.NotebookDocument, request: DeleteCellRequest): Promise<void> {
+  public async deleteCell(document: vscode.NotebookDocument, request: DeleteCellRequest): Promise<MutationOutcome> {
     const cell = this.requireCell(document, request.cell_id);
     await this.applyNotebookEdits(document, [
       vscode.NotebookEdit.replaceCells(new vscode.NotebookRange(cell.index, cell.index + 1), []),
     ]);
+
+    return {
+      operation: "delete_cell",
+      changed_cell_ids: [],
+      deleted_cell_ids: [request.cell_id],
+      outline_maybe_changed: cell.kind === vscode.NotebookCellKind.Markup,
+    };
   }
 
-  public async moveCell(document: vscode.NotebookDocument, request: MoveCellRequest): Promise<void> {
+  public async moveCell(document: vscode.NotebookDocument, request: MoveCellRequest): Promise<MutationOutcome> {
     const cell = this.requireCell(document, request.cell_id);
     const sourceIndex = cell.index;
     const original = toNotebookCellData(cell);
@@ -117,6 +146,13 @@ export class NotebookMutationService {
     edits.push(vscode.NotebookEdit.replaceCells(new vscode.NotebookRange(targetIndex, targetIndex), [original]));
 
     await this.applyNotebookEdits(document, edits);
+
+    return {
+      operation: "move_cell",
+      changed_cell_ids: [request.cell_id],
+      deleted_cell_ids: [],
+      outline_maybe_changed: cell.kind === vscode.NotebookCellKind.Markup,
+    };
   }
 
   private resolveInsertIndex(

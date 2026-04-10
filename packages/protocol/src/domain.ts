@@ -65,6 +65,15 @@ export interface NotebookSnapshot {
   cells: CellSnapshot[];
 }
 
+export interface NotebookOutlineHeading {
+  cell_id: string;
+  cell_index: number;
+  level: number;
+  title: string;
+  path: string[];
+  section_end_cell_index_exclusive: number;
+}
+
 export interface OpenNotebookRequest {
   notebook_uri: string;
   view_column?: "active" | "beside";
@@ -144,6 +153,12 @@ export interface ReadCellOutputsResult {
   outputs: NormalizedOutput[];
 }
 
+export interface NotebookOutlineResult {
+  notebook_uri: string;
+  notebook_version: number;
+  headings: NotebookOutlineHeading[];
+}
+
 export interface GetKernelInfoResult {
   notebook_uri: string;
   notebook_version: number;
@@ -163,8 +178,16 @@ export interface ExecuteCellsResult {
   results: ExecuteCellResult[];
 }
 
+export interface MutationResult {
+  notebook: NotebookSummary;
+  operation: "insert_cell" | "replace_cell_source" | "delete_cell" | "move_cell";
+  changed_cell_ids: string[];
+  deleted_cell_ids: string[];
+  cells: CellSnapshot[];
+  outline_maybe_changed: boolean;
+}
+
 export type ListOpenNotebooksResult = NotebookSummary[];
-export type OpenNotebookResult = NotebookSnapshot;
+export type OpenNotebookResult = NotebookSummary;
 export type ReadNotebookResult = NotebookSnapshot;
-export type MutationResult = NotebookSnapshot;
 export type SummarizeNotebookStateResult = NotebookStateSummary;

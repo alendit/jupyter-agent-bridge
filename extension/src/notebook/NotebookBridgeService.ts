@@ -7,6 +7,7 @@ import {
   InsertCellRequest,
   ListOpenNotebooksResult,
   MutationResult,
+  NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
   ReadCellOutputsRequest,
@@ -47,7 +48,13 @@ export class NotebookBridgeService {
       preserveFocus: true,
       viewColumn: request.view_column === "beside" ? vscode.ViewColumn.Beside : vscode.ViewColumn.Active,
     });
-    return this.readService.toNotebookSnapshot(document, true);
+    return this.readService.toNotebookSummary(document);
+  }
+
+  public async getNotebookOutline(notebookUri: string): Promise<NotebookOutlineResult> {
+    const document = await this.requireDocument(notebookUri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.readService.getNotebookOutline(document);
   }
 
   public async readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult> {
@@ -64,8 +71,14 @@ export class NotebookBridgeService {
         this.registry.getVersion(request.notebook_uri),
         request.expected_notebook_version,
       );
-      await this.mutationService.insertCell(document, request);
-      return this.readService.toNotebookSnapshot(this.requireDocumentSync(request.notebook_uri), true);
+      const outcome = await this.mutationService.insertCell(document, request);
+      return this.readService.toMutationResult(
+        this.requireDocumentSync(request.notebook_uri),
+        outcome.operation,
+        outcome.changed_cell_ids,
+        outcome.deleted_cell_ids,
+        outcome.outline_maybe_changed,
+      );
     });
   }
 
@@ -77,8 +90,14 @@ export class NotebookBridgeService {
         this.registry.getVersion(request.notebook_uri),
         request.expected_notebook_version,
       );
-      await this.mutationService.replaceCellSource(document, request);
-      return this.readService.toNotebookSnapshot(this.requireDocumentSync(request.notebook_uri), true);
+      const outcome = await this.mutationService.replaceCellSource(document, request);
+      return this.readService.toMutationResult(
+        this.requireDocumentSync(request.notebook_uri),
+        outcome.operation,
+        outcome.changed_cell_ids,
+        outcome.deleted_cell_ids,
+        outcome.outline_maybe_changed,
+      );
     });
   }
 
@@ -90,8 +109,14 @@ export class NotebookBridgeService {
         this.registry.getVersion(request.notebook_uri),
         request.expected_notebook_version,
       );
-      await this.mutationService.deleteCell(document, request);
-      return this.readService.toNotebookSnapshot(this.requireDocumentSync(request.notebook_uri), true);
+      const outcome = await this.mutationService.deleteCell(document, request);
+      return this.readService.toMutationResult(
+        this.requireDocumentSync(request.notebook_uri),
+        outcome.operation,
+        outcome.changed_cell_ids,
+        outcome.deleted_cell_ids,
+        outcome.outline_maybe_changed,
+      );
     });
   }
 
@@ -103,8 +128,14 @@ export class NotebookBridgeService {
         this.registry.getVersion(request.notebook_uri),
         request.expected_notebook_version,
       );
-      await this.mutationService.moveCell(document, request);
-      return this.readService.toNotebookSnapshot(this.requireDocumentSync(request.notebook_uri), true);
+      const outcome = await this.mutationService.moveCell(document, request);
+      return this.readService.toMutationResult(
+        this.requireDocumentSync(request.notebook_uri),
+        outcome.operation,
+        outcome.changed_cell_ids,
+        outcome.deleted_cell_ids,
+        outcome.outline_maybe_changed,
+      );
     });
   }
 
