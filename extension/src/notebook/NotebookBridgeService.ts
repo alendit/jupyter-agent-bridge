@@ -3,12 +3,20 @@ import {
   DeleteCellRequest,
   ExecuteCellsRequest,
   ExecuteCellsResult,
+  FindSymbolsRequest,
+  FindSymbolsResult,
+  FormatCellRequest,
+  FormatCellResult,
   GetKernelInfoResult,
+  GoToDefinitionRequest,
+  GoToDefinitionResult,
   InsertCellRequest,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
   ListOpenNotebooksResult,
   MutationResult,
+  NotebookDiagnosticsRequest,
+  NotebookDiagnosticsResult,
   NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
@@ -32,6 +40,7 @@ import { NotebookExecutionService } from "./NotebookExecutionService";
 import { NotebookSearchService } from "./NotebookSearchService";
 import { CellPatchService } from "./CellPatchService";
 import { computeSourceSha256 } from "./cells";
+import { NotebookLanguageService } from "./NotebookLanguageService";
 
 export class NotebookBridgeService {
   public constructor(
@@ -41,6 +50,7 @@ export class NotebookBridgeService {
     private readonly executionService: NotebookExecutionService,
     private readonly searchService: NotebookSearchService,
     private readonly cellPatchService: CellPatchService,
+    private readonly languageService: NotebookLanguageService,
   ) {}
 
   public async listOpenNotebooks(): Promise<ListOpenNotebooksResult> {
@@ -78,6 +88,24 @@ export class NotebookBridgeService {
     const document = await this.requireDocument(request.notebook_uri);
     await this.mutationService.ensureStableCellIds(document);
     return this.searchService.search(document, request);
+  }
+
+  public async getDiagnostics(request: NotebookDiagnosticsRequest): Promise<NotebookDiagnosticsResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.languageService.getDiagnostics(document, request);
+  }
+
+  public async findSymbols(request: FindSymbolsRequest): Promise<FindSymbolsResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.languageService.findSymbols(document, request);
+  }
+
+  public async goToDefinition(request: GoToDefinitionRequest): Promise<GoToDefinitionResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    return this.languageService.goToDefinition(document, request);
   }
 
   public async readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult> {
@@ -170,6 +198,14 @@ export class NotebookBridgeService {
         before_source_sha256: currentSourceSha256,
         after_source_sha256: computeSourceSha256(patchResult.updatedSource),
       };
+    });
+  }
+
+  public async formatCell(request: FormatCellRequest): Promise<FormatCellResult> {
+    return this.registry.runExclusive(request.notebook_uri, async () => {
+      const document = await this.requireDocument(request.notebook_uri);
+      await this.mutationService.ensureStableCellIds(document);
+      return this.languageService.formatCell(document, request);
     });
   }
 

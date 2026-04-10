@@ -265,6 +265,86 @@ test("parseSearchNotebookRequest accepts targeted search options", () => {
   assert.equal(request.cell_kind, "code");
 });
 
+test("parseFindSymbolsRequest accepts targeted semantic navigation queries", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseFindSymbolsRequest: (value: unknown) => {
+        notebook_uri: string;
+        query?: string;
+        range?: { start: number; end: number };
+        cell_ids?: string[];
+      };
+    }
+  ).parseFindSymbolsRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    query: "Trainer",
+    range: { start: 5, end: 12 },
+    cell_ids: ["cell-7"],
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(request.query, "Trainer");
+  assert.deepEqual(request.range, { start: 5, end: 12 });
+  assert.deepEqual(request.cell_ids, ["cell-7"]);
+});
+
+test("parseGetDiagnosticsRequest accepts severity filters", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseGetDiagnosticsRequest: (value: unknown) => {
+        notebook_uri: string;
+        severities?: string[];
+        max_results?: number;
+      };
+    }
+  ).parseGetDiagnosticsRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    severities: ["error", "warning"],
+    max_results: 25,
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual(request.severities, ["error", "warning"]);
+  assert.equal(request.max_results, 25);
+});
+
+test("parseGoToDefinitionRequest requires an exact cell position", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseGoToDefinitionRequest: (value: unknown) => {
+        notebook_uri: string;
+        cell_id: string;
+        line: number;
+        column: number;
+        expected_cell_source_sha256?: string;
+      };
+    }
+  ).parseGoToDefinitionRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-4",
+    line: 12,
+    column: 9,
+    expected_cell_source_sha256: "sha",
+  });
+
+  assert.equal(request.cell_id, "cell-4");
+  assert.equal(request.line, 12);
+  assert.equal(request.column, 9);
+  assert.equal(request.expected_cell_source_sha256, "sha");
+});
+
 test("parsePatchCellSourceRequest accepts source hash guarded patch edits", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
@@ -291,4 +371,30 @@ test("parsePatchCellSourceRequest accepts source hash guarded patch edits", () =
   assert.equal(request.cell_id, "cell-1");
   assert.equal(request.format, "unified_diff");
   assert.equal(request.expected_cell_source_sha256, "abc123");
+});
+
+test("parseFormatCellRequest accepts stale-safe formatter requests", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseFormatCellRequest: (value: unknown) => {
+        notebook_uri: string;
+        cell_id: string;
+        expected_notebook_version?: number;
+        expected_cell_source_sha256?: string;
+      };
+    }
+  ).parseFormatCellRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-3",
+    expected_notebook_version: 11,
+    expected_cell_source_sha256: "sha-3",
+  });
+
+  assert.equal(request.cell_id, "cell-3");
+  assert.equal(request.expected_notebook_version, 11);
+  assert.equal(request.expected_cell_source_sha256, "sha-3");
 });

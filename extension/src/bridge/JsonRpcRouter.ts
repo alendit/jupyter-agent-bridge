@@ -50,6 +50,12 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.listNotebookCells(object(params) as never);
       case BRIDGE_METHODS.search:
         return this.notebookBridgeService.searchNotebook(object(params) as never);
+      case BRIDGE_METHODS.getDiagnostics:
+        return this.notebookBridgeService.getDiagnostics(object(params) as never);
+      case BRIDGE_METHODS.findSymbols:
+        return this.notebookBridgeService.findSymbols(object(params) as never);
+      case BRIDGE_METHODS.goToDefinition:
+        return this.notebookBridgeService.goToDefinition(object(params) as never);
       case BRIDGE_METHODS.read:
         return this.notebookBridgeService.readNotebook(object(params) as never);
       case BRIDGE_METHODS.insertCell:
@@ -58,6 +64,8 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.replaceCellSource(object(params) as never);
       case BRIDGE_METHODS.patchCellSource:
         return this.notebookBridgeService.patchCellSource(object(params) as never);
+      case BRIDGE_METHODS.formatCell:
+        return this.notebookBridgeService.formatCell(object(params) as never);
       case BRIDGE_METHODS.deleteCell:
         return this.notebookBridgeService.deleteCell(object(params) as never);
       case BRIDGE_METHODS.moveCell:

@@ -119,6 +119,22 @@ export interface SearchNotebookRequest {
   cell_kind?: "code" | "markdown";
 }
 
+export interface NotebookDiagnosticsRequest {
+  notebook_uri: string;
+  range?: { start: number; end: number };
+  cell_ids?: string[];
+  severities?: Array<"error" | "warning" | "information" | "hint">;
+  max_results?: number;
+}
+
+export interface FindSymbolsRequest {
+  notebook_uri: string;
+  query?: string;
+  range?: { start: number; end: number };
+  cell_ids?: string[];
+  max_results?: number;
+}
+
 export interface InsertCellRequest {
   notebook_uri: string;
   expected_notebook_version?: number;
@@ -177,6 +193,21 @@ export interface PatchCellSourceRequest {
   expected_cell_source_sha256?: string;
 }
 
+export interface GoToDefinitionRequest {
+  notebook_uri: string;
+  cell_id: string;
+  line: number;
+  column: number;
+  expected_cell_source_sha256?: string;
+}
+
+export interface FormatCellRequest {
+  notebook_uri: string;
+  cell_id: string;
+  expected_notebook_version?: number;
+  expected_cell_source_sha256?: string;
+}
+
 export interface NotebookStateSummary {
   notebook_uri: string;
   notebook_version: number;
@@ -231,6 +262,78 @@ export interface SearchNotebookResult {
   matches: SearchNotebookMatch[];
 }
 
+export interface NotebookDiagnostic {
+  cell_id: string;
+  cell_index: number;
+  severity: "error" | "warning" | "information" | "hint";
+  message: string;
+  source?: string;
+  code?: string;
+  start_line: number;
+  start_column: number;
+  end_line: number;
+  end_column: number;
+  source_sha256: string;
+}
+
+export interface NotebookDiagnosticsResult {
+  notebook_uri: string;
+  notebook_version: number;
+  truncated: boolean;
+  diagnostics: NotebookDiagnostic[];
+}
+
+export interface NotebookSymbol {
+  cell_id: string;
+  cell_index: number;
+  name: string;
+  detail?: string;
+  kind: string;
+  container_name?: string;
+  start_line: number;
+  start_column: number;
+  end_line: number;
+  end_column: number;
+  selection_start_line: number;
+  selection_start_column: number;
+  selection_end_line: number;
+  selection_end_column: number;
+  source_sha256: string;
+}
+
+export interface FindSymbolsResult {
+  notebook_uri: string;
+  notebook_version: number;
+  query?: string;
+  truncated: boolean;
+  symbols: NotebookSymbol[];
+}
+
+export interface DefinitionTarget {
+  target_uri: string;
+  start_line: number;
+  start_column: number;
+  end_line: number;
+  end_column: number;
+  target_selection_start_line?: number;
+  target_selection_start_column?: number;
+  target_selection_end_line?: number;
+  target_selection_end_column?: number;
+  target_notebook_uri?: string;
+  target_cell_id?: string;
+  target_cell_index?: number;
+}
+
+export interface GoToDefinitionResult {
+  notebook_uri: string;
+  notebook_version: number;
+  cell_id: string;
+  line: number;
+  column: number;
+  source_sha256: string;
+  definitions: DefinitionTarget[];
+}
+
 export interface GetKernelInfoResult {
   notebook_uri: string;
   notebook_version: number;
@@ -252,7 +355,13 @@ export interface ExecuteCellsResult {
 
 export interface MutationResult {
   notebook: NotebookSummary;
-  operation: "insert_cell" | "replace_cell_source" | "patch_cell_source" | "delete_cell" | "move_cell";
+  operation:
+    | "insert_cell"
+    | "replace_cell_source"
+    | "patch_cell_source"
+    | "format_cell"
+    | "delete_cell"
+    | "move_cell";
   changed_cell_ids: string[];
   deleted_cell_ids: string[];
   cells: CellSnapshot[];
@@ -262,6 +371,15 @@ export interface MutationResult {
 export interface PatchCellSourceResult extends MutationResult {
   operation: "patch_cell_source";
   applied_patch_format: "unified_diff" | "codex_apply_patch" | "search_replace_json";
+  before_source_sha256: string;
+  after_source_sha256: string;
+}
+
+export interface FormatCellResult extends MutationResult {
+  operation: "format_cell";
+  formatter_found: boolean;
+  formatted: boolean;
+  applied_edit_count: number;
   before_source_sha256: string;
   after_source_sha256: string;
 }

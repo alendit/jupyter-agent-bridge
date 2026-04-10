@@ -13,6 +13,7 @@ import { KernelInspectionService } from "./notebook/KernelInspectionService";
 import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
 import { CellPatchService } from "./notebook/CellPatchService";
 import { NotebookExecutionService } from "./notebook/NotebookExecutionService";
+import { NotebookLanguageService } from "./notebook/NotebookLanguageService";
 import { NotebookMutationService } from "./notebook/NotebookMutationService";
 import { NotebookReadService } from "./notebook/NotebookReadService";
 import { NotebookRegistry } from "./notebook/NotebookRegistry";
@@ -46,6 +47,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const cellPatchService = new CellPatchService();
   const commandAdapter = new NotebookCommandAdapter();
   const executionService = new NotebookExecutionService(registry, readService, commandAdapter);
+  const languageService = new NotebookLanguageService(registry, readService, mutationService);
   const notebookBridgeService = new NotebookBridgeService(
     registry,
     readService,
@@ -53,6 +55,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     executionService,
     searchService,
     cellPatchService,
+    languageService,
   );
 
   const log = (message: string): void => {

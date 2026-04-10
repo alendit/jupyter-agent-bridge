@@ -6,13 +6,21 @@ import {
   DeleteCellRequest,
   ExecuteCellsRequest,
   ExecuteCellsResult,
+  FindSymbolsRequest,
+  FindSymbolsResult,
+  FormatCellRequest,
+  FormatCellResult,
   GetKernelInfoResult,
+  GoToDefinitionRequest,
+  GoToDefinitionResult,
   InsertCellRequest,
   JSON_RPC_ERRORS,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
   ListOpenNotebooksResult,
   MutationResult,
+  NotebookDiagnosticsRequest,
+  NotebookDiagnosticsResult,
   NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
@@ -85,6 +93,18 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
     return this.call(BRIDGE_METHODS.search, request);
   }
 
+  public getDiagnostics(request: NotebookDiagnosticsRequest): Promise<NotebookDiagnosticsResult> {
+    return this.call(BRIDGE_METHODS.getDiagnostics, request);
+  }
+
+  public findSymbols(request: FindSymbolsRequest): Promise<FindSymbolsResult> {
+    return this.call(BRIDGE_METHODS.findSymbols, request);
+  }
+
+  public goToDefinition(request: GoToDefinitionRequest): Promise<GoToDefinitionResult> {
+    return this.call(BRIDGE_METHODS.goToDefinition, request);
+  }
+
   public readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult> {
     return this.call(BRIDGE_METHODS.read, request);
   }
@@ -99,6 +119,10 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult> {
     return this.call(BRIDGE_METHODS.patchCellSource, request);
+  }
+
+  public formatCell(request: FormatCellRequest): Promise<FormatCellResult> {
+    return this.call(BRIDGE_METHODS.formatCell, request);
   }
 
   public deleteCell(request: DeleteCellRequest): Promise<MutationResult> {

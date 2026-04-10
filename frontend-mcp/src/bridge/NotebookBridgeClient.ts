@@ -2,12 +2,20 @@ import {
   DeleteCellRequest,
   ExecuteCellsRequest,
   ExecuteCellsResult,
+  FindSymbolsRequest,
+  FindSymbolsResult,
+  FormatCellRequest,
+  FormatCellResult,
   GetKernelInfoResult,
+  GoToDefinitionRequest,
+  GoToDefinitionResult,
   InsertCellRequest,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
   ListOpenNotebooksResult,
   MutationResult,
+  NotebookDiagnosticsRequest,
+  NotebookDiagnosticsResult,
   NotebookOutlineResult,
   OpenNotebookRequest,
   OpenNotebookResult,
@@ -42,10 +50,14 @@ export interface NotebookBridgeClient {
   getNotebookOutline(notebookUri: string): Promise<NotebookOutlineResult>;
   listNotebookCells(request: ListNotebookCellsRequest): Promise<ListNotebookCellsResult>;
   searchNotebook(request: SearchNotebookRequest): Promise<SearchNotebookResult>;
+  getDiagnostics(request: NotebookDiagnosticsRequest): Promise<NotebookDiagnosticsResult>;
+  findSymbols(request: FindSymbolsRequest): Promise<FindSymbolsResult>;
+  goToDefinition(request: GoToDefinitionRequest): Promise<GoToDefinitionResult>;
   readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult>;
   insertCell(request: InsertCellRequest): Promise<MutationResult>;
   replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult>;
   patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult>;
+  formatCell(request: FormatCellRequest): Promise<FormatCellResult>;
   deleteCell(request: DeleteCellRequest): Promise<MutationResult>;
   moveCell(request: MoveCellRequest): Promise<MutationResult>;
   executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult>;
