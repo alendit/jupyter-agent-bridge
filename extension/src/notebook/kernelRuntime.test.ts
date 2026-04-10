@@ -119,4 +119,20 @@ test("isKernelReady requires matching generation and no pending interaction", ()
     ),
     false,
   );
+
+  assert.equal(
+    isKernelReady(
+      {
+        kernel_label: null,
+        kernel_id: null,
+        execution_supported: true,
+        state: "idle",
+        generation: 2,
+        pending_action: null,
+        requires_user_interaction: false,
+      },
+      2,
+    ),
+    false,
+  );
 });

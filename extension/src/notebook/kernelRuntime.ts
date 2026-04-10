@@ -152,17 +152,19 @@ export function isKernelReady(
     return false;
   }
 
+  const hasKernelIdentity = kernel.kernel_id !== null || kernel.kernel_label !== null;
+
   if (kernel.requires_user_interaction || kernel.generation < targetGeneration) {
     return false;
   }
 
-  if (kernel.state === "idle") {
+  if (kernel.state === "idle" && hasKernelIdentity) {
     return true;
   }
 
   return (
     kernel.state === "unknown" &&
     kernel.pending_action === null &&
-    (kernel.kernel_id !== null || kernel.kernel_label !== null)
+    hasKernelIdentity
   );
 }

@@ -64,3 +64,30 @@ test("parseNotebookKernelMetadata falls back to first code cell language", () =>
   assert.equal(parsed.has_kernel, false);
   assert.equal(parsed.signature, null);
 });
+
+test("parseNotebookKernelMetadata reads top-level notebook metadata", () => {
+  const parsed = parseNotebookKernelMetadata(
+    createDocument({
+      metadata: {
+        metadata: {
+          kernelspec: {
+            name: "python3",
+            display_name: "Python 3.13",
+          },
+          language_info: {
+            name: "python",
+          },
+        },
+      },
+    }),
+  );
+
+  assert.deepEqual(parsed, {
+    kernel_label: "Python 3.13",
+    kernel_id: "python3",
+    language: "python",
+    execution_supported: true,
+    has_kernel: true,
+    signature: "python3::Python 3.13",
+  });
+});

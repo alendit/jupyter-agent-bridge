@@ -3,14 +3,17 @@ import * as vscode from "vscode";
 export class NotebookCommandAdapter {
   public constructor(private readonly log?: (message: string) => void) {}
 
-  public async ensureEditor(document: vscode.NotebookDocument): Promise<vscode.NotebookEditor> {
+  public async ensureEditor(
+    document: vscode.NotebookDocument,
+    options?: { preserveFocus?: boolean },
+  ): Promise<vscode.NotebookEditor> {
     const active = vscode.window.activeNotebookEditor;
     if (active && active.notebook.uri.toString() === document.uri.toString()) {
       return active;
     }
 
     return vscode.window.showNotebookDocument(document, {
-      preserveFocus: true,
+      preserveFocus: options?.preserveFocus ?? true,
       preview: false,
     });
   }
@@ -19,7 +22,7 @@ export class NotebookCommandAdapter {
     document: vscode.NotebookDocument,
     ranges: readonly vscode.NotebookRange[],
   ): Promise<void> {
-    const editor = await this.ensureEditor(document);
+    const editor = await this.ensureEditor(document, { preserveFocus: false });
     editor.selections = [...ranges];
     const executeRanges = editor.selections.map((selection) => ({
       start: selection.start,

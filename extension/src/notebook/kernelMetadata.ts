@@ -13,10 +13,11 @@ export function parseNotebookKernelMetadata(
   document: Pick<vscode.NotebookDocument, "metadata" | "notebookType" | "getCells">,
 ): ParsedNotebookKernelMetadata {
   const metadata = document.metadata as Record<string, unknown> | undefined;
-  const kernelspecRoot =
-    (metadata?.custom as Record<string, unknown> | undefined)?.metadata as
-      | Record<string, unknown>
-      | undefined;
+  const customMetadata = (metadata?.custom as Record<string, unknown> | undefined)?.metadata as
+    | Record<string, unknown>
+    | undefined;
+  const notebookMetadata = metadata?.metadata as Record<string, unknown> | undefined;
+  const kernelspecRoot = customMetadata ?? notebookMetadata ?? metadata;
   const kernelSpecInfo = kernelspecRoot?.kernelspec as Record<string, unknown> | undefined;
   const languageInfo = kernelspecRoot?.language_info as Record<string, unknown> | undefined;
   const kernelLabel =
