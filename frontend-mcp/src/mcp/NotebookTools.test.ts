@@ -135,3 +135,68 @@ test("describeTool returns exact schema and examples for insert_cell", () => {
   assert.ok(Array.isArray(description.examples));
   assert.match(String((description.examples as string[])[0]), /"mode":"at_end"/);
 });
+
+test("parseOpenNotebookRequest suggests the expected key name", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseOpenNotebookRequest: (value: unknown) => unknown;
+        }
+      ).parseOpenNotebookRequest({
+        notebook: "file:///workspace/demo.ipynb",
+      }),
+    /Unknown key "notebook"; expected "notebook_uri"\./,
+  );
+});
+
+test("parseExecuteCellsRequest rejects false wait_for_completion with a clear message", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseExecuteCellsRequest: (value: unknown) => unknown;
+        }
+      ).parseExecuteCellsRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        cell_ids: ["cell-1"],
+        wait_for_completion: false,
+      }),
+    /wait_for_completion may be omitted or set to true, but false is not supported\./,
+  );
+});
+
+test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseReadNotebookRequest: (value: unknown) => {
+        notebook_uri: string;
+        include_outputs?: boolean;
+        range?: { start: number; end: number };
+        cell_ids?: string[];
+      };
+    }
+  ).parseReadNotebookRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    include_outputs: true,
+    range: { start: 0, end: 3 },
+    cell_ids: ["cell-1", "cell-2"],
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(request.include_outputs, true);
+  assert.deepEqual(request.range, { start: 0, end: 3 });
+  assert.deepEqual(request.cell_ids, ["cell-1", "cell-2"]);
+});

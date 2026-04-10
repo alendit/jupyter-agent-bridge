@@ -31,31 +31,8 @@ const TOOL_NAMES = [
 
 type ToolName = (typeof TOOL_NAMES)[number];
 
-const toolNameSchema = z.enum(TOOL_NAMES);
-
-const emptyInputSchema = z.object({}).strict();
-const notebookUriSchema = z.string().describe("Absolute notebook URI, for example file:///workspace/demo.ipynb");
-const notebookCellSchema = z
-  .object({
-    kind: z.enum(["markdown", "code"]),
-    language: z.string().nullable().optional(),
-    source: z.string(),
-    metadata: z.record(z.unknown()).optional(),
-  })
-  .strict();
-const insertCellInputSchema = z
-  .object({
-    notebook_uri: notebookUriSchema,
-    expected_notebook_version: z.number().int().optional(),
-    position: z
-      .object({})
-      .catchall(z.unknown())
-      .describe(
-        'Preferred shape: {"mode":"before_index","index":0} | {"mode":"before_cell_id","cell_id":"..."} | {"mode":"after_cell_id","cell_id":"..."} | {"mode":"at_end"}. Legacy one-key shapes are also accepted.',
-      ),
-    cell: notebookCellSchema,
-  })
-  .strict();
+type ToolInput = Record<string, unknown>;
+type NotebookCellInput = InsertCellRequest["cell"];
 
 interface ToolHelp {
   title: string;
@@ -63,6 +40,118 @@ interface ToolHelp {
   schema: string;
   examples: string[];
 }
+
+const toolNameSchema = z.enum(TOOL_NAMES).optional();
+const permissiveObjectSchema = z.object({}).catchall(z.unknown());
+const notebookUriSchema = z.string().describe("Absolute notebook URI, for example file:///workspace/demo.ipynb").optional();
+const notebookVersionSchema = z.number().int().optional();
+const optionalStringSchema = z.string().optional();
+const optionalBooleanSchema = z.boolean().optional();
+const optionalNumberSchema = z.number().optional();
+const optionalPositiveIntSchema = z.number().int().positive().optional();
+const optionalNonNegativeIntSchema = z.number().int().nonnegative().optional();
+
+const openNotebookInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    view_column: optionalStringSchema,
+  })
+  .passthrough();
+
+const readNotebookInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    include_outputs: optionalBooleanSchema,
+    range: z
+      .object({
+        start: optionalNumberSchema,
+        end: optionalNumberSchema,
+      })
+      .passthrough()
+      .optional(),
+    cell_ids: z.array(z.unknown()).optional(),
+  })
+  .passthrough();
+
+const insertCellInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    expected_notebook_version: notebookVersionSchema,
+    position: z
+      .object({
+        mode: optionalStringSchema,
+        index: optionalNumberSchema,
+        cell_id: optionalStringSchema,
+        before_index: optionalNumberSchema,
+        before_cell_id: optionalStringSchema,
+        after_cell_id: optionalStringSchema,
+        at_end: optionalBooleanSchema,
+      })
+      .passthrough()
+      .optional()
+      .describe(
+        'Preferred shape: {"mode":"before_index","index":0} | {"mode":"before_cell_id","cell_id":"..."} | {"mode":"after_cell_id","cell_id":"..."} | {"mode":"at_end"}. Legacy one-key shapes are also accepted.',
+      ),
+    cell: z
+      .object({
+        kind: optionalStringSchema,
+        language: z.string().nullable().optional(),
+        source: optionalStringSchema,
+        metadata: z.record(z.unknown()).optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+const replaceCellSourceInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    cell_id: optionalStringSchema,
+    expected_notebook_version: notebookVersionSchema,
+    source: optionalStringSchema,
+  })
+  .passthrough();
+
+const deleteCellInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    cell_id: optionalStringSchema,
+    expected_notebook_version: notebookVersionSchema,
+  })
+  .passthrough();
+
+const moveCellInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    cell_id: optionalStringSchema,
+    expected_notebook_version: notebookVersionSchema,
+    target_index: optionalNumberSchema,
+  })
+  .passthrough();
+
+const executeCellsInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    cell_ids: z.array(z.unknown()).optional(),
+    expected_notebook_version: notebookVersionSchema,
+    timeout_ms: optionalNumberSchema,
+    wait_for_completion: optionalBooleanSchema,
+  })
+  .passthrough();
+
+const readCellOutputsInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    cell_id: optionalStringSchema,
+  })
+  .passthrough();
+
+const singleNotebookInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+  })
+  .passthrough();
 
 const TOOL_HELP: Record<ToolName, ToolHelp> = {
   list_open_notebooks: {
@@ -79,7 +168,7 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   open_notebook: {
     title: "Open Notebook",
-    summary: "Open a notebook in the live editor session.",
+    summary: "Open a notebook in the live editor session. If unsure about any field, call describe_tool first.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","view_column"?: "active"|"beside"}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb"}',
@@ -110,9 +199,7 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
     title: "Replace Cell Source",
     summary: "Replace the source text of one existing cell.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"source":"..."}',
-    examples: [
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)"}',
-    ],
+    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)"}'],
   },
   delete_cell: {
     title: "Delete Cell",
@@ -165,9 +252,12 @@ export class NotebookTools {
       {
         title: TOOL_HELP.list_open_notebooks.title,
         description: this.buildToolDescription("list_open_notebooks"),
-        inputSchema: emptyInputSchema,
+        inputSchema: permissiveObjectSchema,
       },
-      async () => this.toToolResult(await (await this.getClient()).listOpenNotebooks()),
+      async (input) => {
+        this.parseEmptyInput("list_open_notebooks", input);
+        return this.toToolResult(await (await this.getClient()).listOpenNotebooks());
+      },
     );
 
     server.registerTool(
@@ -175,9 +265,9 @@ export class NotebookTools {
       {
         title: TOOL_HELP.describe_tool.title,
         description: this.buildToolDescription("describe_tool"),
-        inputSchema: z.object({ tool_name: toolNameSchema.optional() }).strict(),
+        inputSchema: z.object({ tool_name: toolNameSchema }).passthrough(),
       },
-      async (input) => this.toToolResult(this.describeTool((input as { tool_name?: ToolName }).tool_name)),
+      async (input) => this.toToolResult(this.describeTool(this.parseDescribeToolInput(input).tool_name)),
     );
 
     server.registerTool(
@@ -185,14 +275,9 @@ export class NotebookTools {
       {
         title: TOOL_HELP.open_notebook.title,
         description: this.buildToolDescription("open_notebook"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-            view_column: z.enum(["active", "beside"]).optional(),
-          })
-          .strict(),
+        inputSchema: openNotebookInputSchema,
       },
-      async (input) => this.toToolResult(await (await this.getClient()).openNotebook(input as OpenNotebookRequest)),
+      async (input) => this.toToolResult(await (await this.getClient()).openNotebook(this.parseOpenNotebookRequest(input))),
     );
 
     server.registerTool(
@@ -200,16 +285,9 @@ export class NotebookTools {
       {
         title: TOOL_HELP.read_notebook.title,
         description: this.buildToolDescription("read_notebook"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-            include_outputs: z.boolean().optional(),
-            range: z.object({ start: z.number().int(), end: z.number().int() }).strict().optional(),
-            cell_ids: z.array(z.string()).optional(),
-          })
-          .strict(),
+        inputSchema: readNotebookInputSchema,
       },
-      async (input) => this.toToolResult(await (await this.getClient()).readNotebook(input as ReadNotebookRequest)),
+      async (input) => this.toToolResult(await (await this.getClient()).readNotebook(this.parseReadNotebookRequest(input))),
     );
 
     server.registerTool(
@@ -219,8 +297,7 @@ export class NotebookTools {
         description: this.buildToolDescription("insert_cell"),
         inputSchema: insertCellInputSchema,
       },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).insertCell(this.normalizeInsertCellRequest(input))),
+      async (input) => this.toToolResult(await (await this.getClient()).insertCell(this.normalizeInsertCellRequest(input))),
     );
 
     server.registerTool(
@@ -228,17 +305,10 @@ export class NotebookTools {
       {
         title: TOOL_HELP.replace_cell_source.title,
         description: this.buildToolDescription("replace_cell_source"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-            cell_id: z.string(),
-            expected_notebook_version: z.number().int().optional(),
-            source: z.string(),
-          })
-          .strict(),
+        inputSchema: replaceCellSourceInputSchema,
       },
       async (input) =>
-        this.toToolResult(await (await this.getClient()).replaceCellSource(input as ReplaceCellSourceRequest)),
+        this.toToolResult(await (await this.getClient()).replaceCellSource(this.parseReplaceCellSourceRequest(input))),
     );
 
     server.registerTool(
@@ -246,15 +316,9 @@ export class NotebookTools {
       {
         title: TOOL_HELP.delete_cell.title,
         description: this.buildToolDescription("delete_cell"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-            cell_id: z.string(),
-            expected_notebook_version: z.number().int().optional(),
-          })
-          .strict(),
+        inputSchema: deleteCellInputSchema,
       },
-      async (input) => this.toToolResult(await (await this.getClient()).deleteCell(input as DeleteCellRequest)),
+      async (input) => this.toToolResult(await (await this.getClient()).deleteCell(this.parseDeleteCellRequest(input))),
     );
 
     server.registerTool(
@@ -262,16 +326,9 @@ export class NotebookTools {
       {
         title: TOOL_HELP.move_cell.title,
         description: this.buildToolDescription("move_cell"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-            cell_id: z.string(),
-            expected_notebook_version: z.number().int().optional(),
-            target_index: z.number().int().nonnegative(),
-          })
-          .strict(),
+        inputSchema: moveCellInputSchema,
       },
-      async (input) => this.toToolResult(await (await this.getClient()).moveCell(input as MoveCellRequest)),
+      async (input) => this.toToolResult(await (await this.getClient()).moveCell(this.parseMoveCellRequest(input))),
     );
 
     server.registerTool(
@@ -279,17 +336,9 @@ export class NotebookTools {
       {
         title: TOOL_HELP.execute_cells.title,
         description: this.buildToolDescription("execute_cells"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-            cell_ids: z.array(z.string()),
-            expected_notebook_version: z.number().int().optional(),
-            timeout_ms: z.number().int().positive().optional(),
-            wait_for_completion: z.literal(true).optional(),
-          })
-          .strict(),
+        inputSchema: executeCellsInputSchema,
       },
-      async (input) => this.toToolResult(await (await this.getClient()).executeCells(input as ExecuteCellsRequest)),
+      async (input) => this.toToolResult(await (await this.getClient()).executeCells(this.parseExecuteCellsRequest(input))),
     );
 
     server.registerTool(
@@ -297,15 +346,10 @@ export class NotebookTools {
       {
         title: TOOL_HELP.read_cell_outputs.title,
         description: this.buildToolDescription("read_cell_outputs"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-            cell_id: z.string(),
-          })
-          .strict(),
+        inputSchema: readCellOutputsInputSchema,
       },
       async (input) =>
-        this.toToolResult(await (await this.getClient()).readCellOutputs(input as ReadCellOutputsRequest)),
+        this.toToolResult(await (await this.getClient()).readCellOutputs(this.parseReadCellOutputsRequest(input))),
     );
 
     server.registerTool(
@@ -313,14 +357,10 @@ export class NotebookTools {
       {
         title: TOOL_HELP.get_kernel_info.title,
         description: this.buildToolDescription("get_kernel_info"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-          })
-          .strict(),
+        inputSchema: singleNotebookInputSchema,
       },
       async (input) =>
-        this.toToolResult(await (await this.getClient()).getKernelInfo((input as { notebook_uri: string }).notebook_uri)),
+        this.toToolResult(await (await this.getClient()).getKernelInfo(this.parseSingleNotebookInput("get_kernel_info", input).notebook_uri)),
     );
 
     server.registerTool(
@@ -328,15 +368,13 @@ export class NotebookTools {
       {
         title: TOOL_HELP.summarize_notebook_state.title,
         description: this.buildToolDescription("summarize_notebook_state"),
-        inputSchema: z
-          .object({
-            notebook_uri: notebookUriSchema,
-          })
-          .strict(),
+        inputSchema: singleNotebookInputSchema,
       },
       async (input) =>
         this.toToolResult(
-          await (await this.getClient()).summarizeNotebookState((input as { notebook_uri: string }).notebook_uri),
+          await (await this.getClient()).summarizeNotebookState(
+            this.parseSingleNotebookInput("summarize_notebook_state", input).notebook_uri,
+          ),
         ),
     );
   }
@@ -355,6 +393,7 @@ export class NotebookTools {
           title: TOOL_HELP[name].title,
           summary: TOOL_HELP[name].summary,
           schema: TOOL_HELP[name].schema,
+          examples: TOOL_HELP[name].examples,
         })),
       };
     }
@@ -368,24 +407,217 @@ export class NotebookTools {
     };
   }
 
-  private normalizeInsertCellRequest(input: unknown): InsertCellRequest {
-    const parsed = insertCellInputSchema.parse(input);
+  private parseEmptyInput(toolName: ToolName, input: unknown): void {
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, []);
+  }
+
+  private parseDescribeToolInput(input: unknown): { tool_name?: ToolName } {
+    const toolName = "describe_tool";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["tool_name"]);
+
+    const candidate = params.tool_name;
+    if (candidate === undefined) {
+      return {};
+    }
+
     return {
-      notebook_uri: parsed.notebook_uri,
-      expected_notebook_version: parsed.expected_notebook_version,
-      position: this.normalizeInsertCellPosition(parsed.position),
-      cell: parsed.cell,
+      tool_name: this.parseEnum(candidate, `${toolName}.tool_name`, TOOL_NAMES),
     };
   }
 
+  private parseOpenNotebookRequest(input: unknown): OpenNotebookRequest {
+    const toolName = "open_notebook";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "view_column"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      view_column:
+        params.view_column === undefined
+          ? undefined
+          : this.parseEnum(params.view_column, `${toolName}.view_column`, ["active", "beside"]),
+    };
+  }
+
+  private parseReadNotebookRequest(input: unknown): ReadNotebookRequest {
+    const toolName = "read_notebook";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "include_outputs", "range", "cell_ids"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      include_outputs:
+        params.include_outputs === undefined
+          ? undefined
+          : this.requiredBoolean(params.include_outputs, `${toolName}.include_outputs`),
+      range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
+      cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+    };
+  }
+
+  private normalizeInsertCellRequest(input: unknown): InsertCellRequest {
+    const toolName = "insert_cell";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "expected_notebook_version", "position", "cell"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      expected_notebook_version:
+        params.expected_notebook_version === undefined
+          ? undefined
+          : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      position: this.normalizeInsertCellPosition(this.requireObject(params.position, toolName, "position")),
+      cell: this.parseCell(toolName, params.cell),
+    };
+  }
+
+  private parseReplaceCellSourceRequest(input: unknown): ReplaceCellSourceRequest {
+    const toolName = "replace_cell_source";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "source"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
+      expected_notebook_version:
+        params.expected_notebook_version === undefined
+          ? undefined
+          : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      source: this.requiredString(params.source, `${toolName}.source`),
+    };
+  }
+
+  private parseDeleteCellRequest(input: unknown): DeleteCellRequest {
+    const toolName = "delete_cell";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
+      expected_notebook_version:
+        params.expected_notebook_version === undefined
+          ? undefined
+          : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+    };
+  }
+
+  private parseMoveCellRequest(input: unknown): MoveCellRequest {
+    const toolName = "move_cell";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "target_index"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
+      expected_notebook_version:
+        params.expected_notebook_version === undefined
+          ? undefined
+          : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      target_index: this.requiredNonNegativeInteger(params.target_index, `${toolName}.target_index`),
+    };
+  }
+
+  private parseExecuteCellsRequest(input: unknown): ExecuteCellsRequest {
+    const toolName = "execute_cells";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "cell_ids",
+      "expected_notebook_version",
+      "timeout_ms",
+      "wait_for_completion",
+    ]);
+
+    const waitForCompletion =
+      params.wait_for_completion === undefined
+        ? undefined
+        : this.requiredBoolean(params.wait_for_completion, `${toolName}.wait_for_completion`);
+    if (waitForCompletion === false) {
+      this.failValidation(toolName, "wait_for_completion may be omitted or set to true, but false is not supported.");
+    }
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      cell_ids: this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+      expected_notebook_version:
+        params.expected_notebook_version === undefined
+          ? undefined
+          : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      timeout_ms:
+        params.timeout_ms === undefined ? undefined : this.requiredPositiveInteger(params.timeout_ms, `${toolName}.timeout_ms`),
+      wait_for_completion: waitForCompletion ? true : undefined,
+    };
+  }
+
+  private parseReadCellOutputsRequest(input: unknown): ReadCellOutputsRequest {
+    const toolName = "read_cell_outputs";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id"]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
+    };
+  }
+
+  private parseSingleNotebookInput(toolName: Extract<ToolName, "get_kernel_info" | "summarize_notebook_state">, input: unknown): {
+    notebook_uri: string;
+  } {
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri"]);
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+    };
+  }
+
+  private parseRange(toolName: ToolName, value: unknown): { start: number; end: number } {
+    const range = this.requireObject(value, toolName, "range");
+    this.assertKnownKeys(toolName, range, ["start", "end"], "range");
+
+    return {
+      start: this.requiredInteger(range.start, `${toolName}.range.start`),
+      end: this.requiredInteger(range.end, `${toolName}.range.end`),
+    };
+  }
+
+  private parseCell(toolName: ToolName, value: unknown): NotebookCellInput {
+    const cell = this.requireObject(value, toolName, "cell");
+    this.assertKnownKeys(toolName, cell, ["kind", "language", "source", "metadata"], "cell");
+
+    const kind = this.parseEnum(cell.kind, `${toolName}.cell.kind`, ["markdown", "code"]);
+    const languageValue = cell.language;
+    const metadataValue = cell.metadata;
+
+    const parsedCell: NotebookCellInput = {
+      kind,
+      source: this.requiredString(cell.source, `${toolName}.cell.source`),
+    };
+
+    if (languageValue !== undefined) {
+      parsedCell.language =
+        languageValue === null ? null : this.requiredString(languageValue, `${toolName}.cell.language`);
+    }
+
+    if (metadataValue !== undefined) {
+      parsedCell.metadata = this.requiredPlainObject(metadataValue, `${toolName}.cell.metadata`);
+    }
+
+    return parsedCell;
+  }
+
   private normalizeInsertCellPosition(position: Record<string, unknown>): InsertCellRequest["position"] {
+    const toolName = "insert_cell";
     if ("mode" in position) {
       return this.normalizeModeInsertPosition(position);
     }
 
     const keys = Object.keys(position);
     if (keys.length !== 1) {
-      this.failInsertCellValidation(
+      this.failValidation(
+        toolName,
         'position must be exactly one preferred shape like {"mode":"after_cell_id","cell_id":"cell-1"} or one legacy one-key object like {"after_cell_id":"cell-1"}.',
       );
     }
@@ -394,67 +626,72 @@ export class NotebookTools {
     const value = position[key];
     switch (key) {
       case "before_index":
-        return { before_index: this.requiredNonNegativeInteger(value, "position.before_index") };
+        return { before_index: this.requiredNonNegativeInteger(value, "insert_cell.position.before_index") };
       case "before_cell_id":
-        return { before_cell_id: this.requiredString(value, "position.before_cell_id") };
+        return { before_cell_id: this.requiredString(value, "insert_cell.position.before_cell_id") };
       case "after_cell_id":
-        return { after_cell_id: this.requiredString(value, "position.after_cell_id") };
+        return { after_cell_id: this.requiredString(value, "insert_cell.position.after_cell_id") };
       case "at_end":
         if (value !== true) {
-          this.failInsertCellValidation('Legacy position {"at_end":true} requires the boolean value true.');
+          this.failValidation(toolName, 'Legacy position {"at_end":true} requires the boolean value true.');
         }
         return { at_end: true };
       default:
-        this.failInsertCellValidation(this.unknownPositionKeyMessage(key));
+        this.failValidation(toolName, this.unknownPositionKeyMessage(key));
     }
   }
 
   private normalizeModeInsertPosition(position: Record<string, unknown>): InsertCellRequest["position"] {
+    const toolName = "insert_cell";
     const mode = position.mode;
     if (typeof mode !== "string") {
-      this.failInsertCellValidation('position.mode must be one of "before_index", "before_cell_id", "after_cell_id", or "at_end".');
+      this.failValidation(
+        toolName,
+        'position.mode must be one of "before_index", "before_cell_id", "after_cell_id", or "at_end".',
+      );
     }
 
     switch (mode) {
       case "before_index":
-        this.assertKnownKeys(position, ["mode", "index"], mode);
-        return { before_index: this.requiredNonNegativeInteger(position.index, "position.index") };
+        this.assertKnownKeys(toolName, position, ["mode", "index"], "position");
+        return { before_index: this.requiredNonNegativeInteger(position.index, "insert_cell.position.index") };
       case "before_cell_id":
-        this.assertKnownKeys(position, ["mode", "cell_id"], mode);
-        return { before_cell_id: this.requiredString(position.cell_id, "position.cell_id") };
+        this.assertKnownKeys(toolName, position, ["mode", "cell_id"], "position");
+        return { before_cell_id: this.requiredString(position.cell_id, "insert_cell.position.cell_id") };
       case "after_cell_id":
-        this.assertKnownKeys(position, ["mode", "cell_id"], mode);
-        return { after_cell_id: this.requiredString(position.cell_id, "position.cell_id") };
+        this.assertKnownKeys(toolName, position, ["mode", "cell_id"], "position");
+        return { after_cell_id: this.requiredString(position.cell_id, "insert_cell.position.cell_id") };
       case "at_end":
-        this.assertKnownKeys(position, ["mode"], mode);
+        this.assertKnownKeys(toolName, position, ["mode"], "position");
         return { at_end: true };
       default: {
         const suggestion = this.closestMatch(mode, ["before_index", "before_cell_id", "after_cell_id", "at_end"]);
         const message = suggestion
           ? `Unknown position.mode "${mode}"; did you mean "${suggestion}"?`
           : `Unknown position.mode "${mode}". Expected "before_index", "before_cell_id", "after_cell_id", or "at_end".`;
-        this.failInsertCellValidation(message);
+        this.failValidation(toolName, message);
       }
     }
   }
 
-  private assertKnownKeys(position: Record<string, unknown>, allowedKeys: readonly string[], mode: string): void {
-    const allowed = new Set(allowedKeys);
-    const unknownKey = Object.keys(position).find((key) => !allowed.has(key));
-    if (!unknownKey) {
-      return;
+  private requireObject(input: unknown, toolName: ToolName, label = "arguments"): ToolInput {
+    if (input && typeof input === "object" && !Array.isArray(input)) {
+      return input as ToolInput;
     }
 
-    const expectedKey = this.closestMatch(unknownKey, allowedKeys.filter((key) => key !== "mode"));
-    if (expectedKey) {
-      this.failInsertCellValidation(
-        `Unknown key "${unknownKey}" in position for mode "${mode}"; expected "${expectedKey}".`,
-      );
+    if (input === undefined || input === null) {
+      return {};
     }
 
-    this.failInsertCellValidation(
-      `Unknown key "${unknownKey}" in position for mode "${mode}". Allowed keys: ${allowedKeys.join(", ")}.`,
-    );
+    this.failValidation(toolName, `${label} must be an object.`);
+  }
+
+  private requiredPlainObject(value: unknown, label: string): Record<string, unknown> {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+
+    throw new Error(`${label} must be an object.`);
   }
 
   private requiredString(value: unknown, label: string): string {
@@ -462,7 +699,23 @@ export class NotebookTools {
       return value;
     }
 
-    this.failInsertCellValidation(`${label} must be a non-empty string.`);
+    throw new Error(`${label} must be a non-empty string.`);
+  }
+
+  private requiredBoolean(value: unknown, label: string): boolean {
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    throw new Error(`${label} must be a boolean.`);
+  }
+
+  private requiredInteger(value: unknown, label: string): number {
+    if (typeof value === "number" && Number.isInteger(value)) {
+      return value;
+    }
+
+    throw new Error(`${label} must be an integer.`);
   }
 
   private requiredNonNegativeInteger(value: unknown, label: string): number {
@@ -470,21 +723,74 @@ export class NotebookTools {
       return value;
     }
 
-    this.failInsertCellValidation(`${label} must be a non-negative integer.`);
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+
+  private requiredPositiveInteger(value: unknown, label: string): number {
+    if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+      return value;
+    }
+
+    throw new Error(`${label} must be a positive integer.`);
+  }
+
+  private requiredStringArray(value: unknown, label: string): string[] {
+    if (Array.isArray(value) && value.every((entry) => typeof entry === "string" && entry.length > 0)) {
+      return value;
+    }
+
+    throw new Error(`${label} must be an array of non-empty strings.`);
+  }
+
+  private parseEnum<const TValue extends readonly string[]>(value: unknown, label: string, candidates: TValue): TValue[number] {
+    if (typeof value !== "string" || value.length === 0) {
+      throw new Error(`${label} must be one of ${candidates.map((candidate) => `"${candidate}"`).join(", ")}.`);
+    }
+
+    const match = candidates.find((candidate) => candidate === value);
+    if (match) {
+      return match;
+    }
+
+    const suggestion = this.closestMatch(value, candidates);
+    if (suggestion) {
+      throw new Error(`${label} has invalid value "${value}"; did you mean "${suggestion}"?`);
+    }
+
+    throw new Error(`${label} must be one of ${candidates.map((candidate) => `"${candidate}"`).join(", ")}.`);
+  }
+
+  private assertKnownKeys(toolName: ToolName, value: ToolInput, allowedKeys: readonly string[], parentLabel?: string): void {
+    const allowed = new Set(allowedKeys);
+    const unknownKey = Object.keys(value).find((key) => !allowed.has(key));
+    if (!unknownKey) {
+      return;
+    }
+
+    const suggestion = this.closestMatch(unknownKey, allowedKeys);
+    if (suggestion) {
+      this.failValidation(
+        toolName,
+        `Unknown key "${unknownKey}"${parentLabel ? ` in ${parentLabel}` : ""}; expected "${suggestion}".`,
+      );
+    }
+
+    this.failValidation(
+      toolName,
+      `Unknown key "${unknownKey}"${parentLabel ? ` in ${parentLabel}` : ""}. Allowed keys: ${allowedKeys.join(", ") || "(none)"}.`,
+    );
   }
 
   private unknownPositionKeyMessage(key: string): string {
-    const specialCases: Record<string, string> = {
-      after: "after_cell_id",
-      before: "before_cell_id",
-      index: "before_index",
-    };
-    const suggestion = specialCases[key] ?? this.closestMatch(key, ["before_index", "before_cell_id", "after_cell_id", "at_end"]);
+    const suggestion = ({ after: "after_cell_id", before: "before_cell_id", index: "before_index" } as const)[
+      key as "after" | "before" | "index"
+    ] ?? this.closestMatch(key, ["before_index", "before_cell_id", "after_cell_id", "at_end"]);
+
     if (suggestion) {
       return `Unknown key "${key}"; expected "${suggestion}".`;
     }
 
-    return `Unknown key "${key}" in position. Expected one of "before_index", "before_cell_id", "after_cell_id", or "at_end".`;
+    return 'Unknown key in position. Expected one of "before_index", "before_cell_id", "after_cell_id", or "at_end".';
   }
 
   private closestMatch(value: string, candidates: readonly string[]): string | undefined {
@@ -533,8 +839,8 @@ export class NotebookTools {
     return matrix[left.length][right.length];
   }
 
-  private failInsertCellValidation(message: string): never {
-    throw new Error(`Invalid arguments for tool insert_cell: ${message}`);
+  private failValidation(toolName: ToolName, message: string): never {
+    throw new Error(`Invalid arguments for tool ${toolName}: ${message}`);
   }
 
   private toToolResult(result: unknown): CallToolResult {
