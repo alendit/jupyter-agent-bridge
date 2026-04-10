@@ -16,6 +16,7 @@ import {
   PatchCellSourceRequest,
   ReadCellOutputsRequest,
   ReadNotebookRequest,
+  RevealNotebookCellsRequest,
   ReplaceCellSourceRequest,
   RestartKernelRequest,
   SearchNotebookRequest,
@@ -53,6 +54,7 @@ const TOOL_NAMES = [
   "restart_kernel",
   "wait_for_kernel_ready",
   "read_cell_outputs",
+  "reveal_notebook_cells",
   "get_kernel_info",
   "select_kernel",
   "select_jupyter_interpreter",
@@ -312,6 +314,22 @@ const readCellOutputsInputSchema = z
   })
   .passthrough();
 
+const revealNotebookCellsInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    range: z
+      .object({
+        start: optionalNumberSchema,
+        end: optionalNumberSchema,
+      })
+      .passthrough()
+      .optional(),
+    cell_ids: z.array(z.unknown()).optional(),
+    select: optionalBooleanSchema,
+    reveal_type: optionalStringSchema,
+  })
+  .passthrough();
+
 const singleNotebookInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
@@ -348,7 +366,8 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   list_notebook_cells: {
     title: "List Notebook Cells",
-    summary: "Cheap per-cell previews for navigation, especially for code-heavy notebooks without useful headings. Returns no full source, no outputs, and includes source_sha256 for stale-safe patching.",
+    summary:
+      "Cheap per-cell previews for navigation, especially for code-heavy notebooks without useful headings. Returns no full source, no outputs, and includes notebook_line_start/end plus a short source fingerprint for stale-safe patching.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":50},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -408,7 +427,7 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   read_notebook: {
     title: "Read Notebook",
     summary:
-      "Read live notebook cells. Outputs are excluded by default and cells include source_sha256. Rich rendered HTML/JS/widget output text is also omitted by default when outputs are included; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
+      "Read live notebook cells. Outputs are excluded by default and cells include notebook_line_start/end plus a short source fingerprint. Rich rendered HTML/JS/widget output text is also omitted by default when outputs are included; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/notebook.json","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -434,7 +453,7 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   patch_cell_source: {
     title: "Patch Cell Source",
-    summary: "Apply a patch to one cell without resending full source. Prefer expected_cell_source_sha256 from a recent read or preview to guard against stale cell state.",
+    summary: "Apply a patch to one cell without resending full source. Prefer the current source fingerprint from a recent read or preview to guard against stale cell state.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"...","format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_sha256"?: "<sha256>"}',
     examples: [
@@ -507,6 +526,17 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","output_file_path":"/tmp/cell-output.json"}',
     ],
   },
+  reveal_notebook_cells: {
+    title: "Reveal Notebook Cells",
+    summary:
+      "Reveal cells in the live notebook editor and optionally select them. Use this to make code and outputs visible without reading raw .ipynb JSON.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1"],"select"?:boolean,"reveal_type"?:"default"|"center"|"center_if_outside_viewport"|"top"}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"],"select":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":15},"reveal_type":"center"}',
+    ],
+  },
   get_kernel_info: {
     title: "Get Kernel Info",
     summary: "Read best-effort kernel information for the notebook.",
@@ -546,6 +576,7 @@ const NOTEBOOK_RULES = [
   "For code-heavy notebooks: list_notebook_cells first.",
   "Use search_notebook or find_symbols before broad reads.",
   "Read only needed ranges or cell_ids, not whole notebooks.",
+  "Do not read raw .ipynb JSON when notebook tools are available.",
   "Use read_cell_outputs for one cell instead of full outputs.",
   "Rich rendered HTML/JS/widget outputs are omitted by default.",
   "Only request include_rich_output_text when raw rendered payload is necessary.",
@@ -671,6 +702,10 @@ export class NotebookTools {
       const result = await (await this.getClient()).readCellOutputs(request);
       return this.routeResultToFileIfRequested("read_cell_outputs", result, request.output_file_path);
     });
+
+    register("reveal_notebook_cells", revealNotebookCellsInputSchema, async (input) =>
+      (await this.getClient()).revealCells(this.parseRevealNotebookCellsRequest(input)),
+    );
 
     register("get_kernel_info", singleNotebookInputSchema, async (input) =>
       (await this.getClient()).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
@@ -1127,6 +1162,34 @@ export class NotebookTools {
           ? undefined
           : this.requiredString(params.output_file_path, `${toolName}.output_file_path`),
     };
+  }
+
+  private parseRevealNotebookCellsRequest(input: unknown): RevealNotebookCellsRequest {
+    const toolName = "reveal_notebook_cells";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "range", "cell_ids", "select", "reveal_type"]);
+
+    const request: RevealNotebookCellsRequest = {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
+      cell_ids: params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+      select: params.select === undefined ? undefined : this.requiredBoolean(params.select, `${toolName}.select`),
+      reveal_type:
+        params.reveal_type === undefined
+          ? undefined
+          : this.parseEnum(params.reveal_type, `${toolName}.reveal_type`, [
+              "default",
+              "center",
+              "center_if_outside_viewport",
+              "top",
+            ]),
+    };
+
+    if (!request.range && (!request.cell_ids || request.cell_ids.length === 0)) {
+      this.failValidation(toolName, "Provide range or cell_ids.");
+    }
+
+    return request;
   }
 
   private parseNotebookUriOnlyInput(

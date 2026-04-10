@@ -40,11 +40,17 @@ export class NotebookReadService {
 
   public readNotebook(document: vscode.NotebookDocument, request: ReadNotebookRequest): ReadNotebookResult {
     const cells = this.selectCells(document, request.range, request.cell_ids);
+    const lineSpans = this.computeNotebookLineSpans(document);
 
     return {
       notebook: this.toNotebookSummary(document),
       cells: cells.map((cell) =>
-        this.toCellSnapshot(cell, request.include_outputs ?? false, request.include_rich_output_text ?? false),
+        this.toCellSnapshot(
+          cell,
+          request.include_outputs ?? false,
+          request.include_rich_output_text ?? false,
+          lineSpans.get(getStoredCellId(cell) ?? ""),
+        ),
       ),
     };
   }
@@ -52,6 +58,7 @@ export class NotebookReadService {
   public listNotebookCells(document: vscode.NotebookDocument, request: ListNotebookCellsRequest): ListNotebookCellsResult {
     const selectedCells = this.selectCells(document, request.range, request.cell_ids);
     const outline = this.getNotebookOutline(document).headings;
+    const lineSpans = this.computeNotebookLineSpans(document);
 
     return {
       notebook_uri: document.uri.toString(),
@@ -71,6 +78,8 @@ export class NotebookReadService {
               index: cell.index,
               kind: notebookCellKindToProtocol(cell.kind),
               language: cell.kind === vscode.NotebookCellKind.Code ? cell.document.languageId : null,
+              notebook_line_start: lineSpans.get(cellId)?.start ?? 1,
+              notebook_line_end: lineSpans.get(cellId)?.end ?? 1,
               source: cell.document.getText(),
               source_sha256: computeSourceSha256(cell.document.getText()),
               execution_status: execution?.status ?? null,
@@ -205,9 +214,14 @@ export class NotebookReadService {
     includeOutputs = true,
     includeRichOutputText = false,
   ): NotebookSnapshot {
+    const lineSpans = this.computeNotebookLineSpans(document);
     return {
       notebook: this.toNotebookSummary(document),
-      cells: document.getCells().map((cell) => this.toCellSnapshot(cell, includeOutputs, includeRichOutputText)),
+      cells: document
+        .getCells()
+        .map((cell) =>
+          this.toCellSnapshot(cell, includeOutputs, includeRichOutputText, lineSpans.get(getStoredCellId(cell) ?? "")),
+        ),
     };
   }
 
@@ -245,7 +259,12 @@ export class NotebookReadService {
     };
   }
 
-  public toCellSnapshot(cell: vscode.NotebookCell, includeOutputs: boolean, includeRichOutputText = false): CellSnapshot {
+  public toCellSnapshot(
+    cell: vscode.NotebookCell,
+    includeOutputs: boolean,
+    includeRichOutputText = false,
+    lineSpan?: { start: number; end: number },
+  ): CellSnapshot {
     const cellId = getStoredCellId(cell);
     if (!cellId) {
       fail({
@@ -259,6 +278,8 @@ export class NotebookReadService {
       index: cell.index,
       kind: notebookCellKindToProtocol(cell.kind),
       language: cell.kind === vscode.NotebookCellKind.Code ? cell.document.languageId : null,
+      notebook_line_start: lineSpan?.start ?? 1,
+      notebook_line_end: lineSpan?.end ?? Math.max(1, cell.document.lineCount),
       source: cell.document.getText(),
       source_sha256: computeSourceSha256(cell.document.getText()),
       metadata: cloneMetadata(cell.metadata),
@@ -285,4 +306,28 @@ export class NotebookReadService {
   public getKernelInfoValue(document: vscode.NotebookDocument): KernelInfo {
     return this.kernelInspectionService.getKernelInfo(document);
   }
+
+  private computeNotebookLineSpans(
+    document: vscode.NotebookDocument,
+  ): Map<string, { start: number; end: number }> {
+    const spans = new Map<string, { start: number; end: number }>();
+    let nextLine = 1;
+
+    for (const cell of document.getCells()) {
+      const cellId = getStoredCellId(cell);
+      if (!cellId) {
+        continue;
+      }
+
+      const lineCount = Math.max(1, cell.document.lineCount);
+      spans.set(cellId, {
+        start: nextLine,
+        end: nextLine + lineCount - 1,
+      });
+      nextLine += lineCount + 1;
+    }
+
+    return spans;
+  }
+
 }

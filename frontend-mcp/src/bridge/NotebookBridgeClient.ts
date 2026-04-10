@@ -29,6 +29,8 @@ import {
   ReadCellOutputsResult,
   ReadNotebookRequest,
   ReadNotebookResult,
+  RevealNotebookCellsRequest,
+  RevealNotebookCellsResult,
   ReplaceCellSourceRequest,
   RestartKernelRequest,
   SearchNotebookRequest,
@@ -79,6 +81,7 @@ export interface NotebookBridgeClient {
   restartKernel(request: RestartKernelRequest): Promise<KernelCommandResult>;
   waitForKernelReady(request: WaitForKernelReadyRequest): Promise<WaitForKernelReadyResult>;
   readCellOutputs(request: ReadCellOutputsRequest): Promise<ReadCellOutputsResult>;
+  revealCells(request: RevealNotebookCellsRequest): Promise<RevealNotebookCellsResult>;
   getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult>;
   selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult>;
   selectJupyterInterpreter(request: SelectJupyterInterpreterRequest): Promise<KernelCommandResult>;

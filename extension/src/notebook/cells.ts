@@ -40,7 +40,7 @@ export function createGeneratedCellId(): string {
 }
 
 export function computeSourceSha256(source: string): string {
-  return createHash("sha256").update(source, "utf8").digest("hex");
+  return createHash("sha256").update(source, "utf8").digest("hex").slice(0, 12);
 }
 
 export function notebookCellKindToProtocol(kind: vscode.NotebookCellKind): "markdown" | "code" {

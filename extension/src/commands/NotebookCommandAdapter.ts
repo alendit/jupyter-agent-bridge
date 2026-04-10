@@ -37,4 +37,28 @@ export class NotebookCommandAdapter {
       ranges: executeRanges,
     });
   }
+
+  public async revealCells(
+    document: vscode.NotebookDocument,
+    ranges: readonly vscode.NotebookRange[],
+    options?: {
+      select?: boolean;
+      revealType?: vscode.NotebookEditorRevealType;
+    },
+  ): Promise<vscode.NotebookEditor> {
+    const editor = await this.ensureEditor(document, { preserveFocus: false });
+    if (options?.select ?? true) {
+      editor.selections = [...ranges];
+    }
+
+    const revealRange =
+      ranges.length === 0
+        ? new vscode.NotebookRange(0, 0)
+        : new vscode.NotebookRange(ranges[0].start, ranges[ranges.length - 1].end);
+    editor.revealRange(revealRange, options?.revealType ?? vscode.NotebookEditorRevealType.InCenterIfOutsideViewport);
+    this.log?.(
+      `reveal_cells.command notebook_uri=${JSON.stringify(document.uri.toString())} active_editor_uri=${JSON.stringify(vscode.window.activeNotebookEditor?.notebook.uri.toString() ?? null)} target_editor_uri=${JSON.stringify(editor.notebook.uri.toString())} visible_editor_uris=${JSON.stringify(vscode.window.visibleNotebookEditors.map((candidate) => candidate.notebook.uri.toString()))} ranges=${JSON.stringify(ranges.map((range) => ({ start: range.start, end: range.end })))} select=${options?.select ?? true}`,
+    );
+    return editor;
+  }
 }

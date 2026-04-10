@@ -380,6 +380,54 @@ test("parseReadCellOutputsRequest accepts include_rich_output_text", () => {
   assert.equal(request.output_file_path, "tmp/cell-output.json");
 });
 
+test("parseRevealNotebookCellsRequest accepts range and reveal options", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseRevealNotebookCellsRequest: (value: unknown) => {
+        notebook_uri: string;
+        range?: { start: number; end: number };
+        cell_ids?: string[];
+        select?: boolean;
+        reveal_type?: string;
+      };
+    }
+  ).parseRevealNotebookCellsRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    range: { start: 10, end: 12 },
+    cell_ids: ["cell-10"],
+    select: true,
+    reveal_type: "center",
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual(request.range, { start: 10, end: 12 });
+  assert.deepEqual(request.cell_ids, ["cell-10"]);
+  assert.equal(request.select, true);
+  assert.equal(request.reveal_type, "center");
+});
+
+test("parseRevealNotebookCellsRequest requires a target", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseRevealNotebookCellsRequest: (value: unknown) => unknown;
+        }
+      ).parseRevealNotebookCellsRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+      }),
+    /Provide range or cell_ids\./,
+  );
+});
+
 test("routeResultToFileIfRequested writes a compact receipt instead of returning the payload", async () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
@@ -496,6 +544,7 @@ test("describeTool includes notebook rules and the preview tool", () => {
   assert.ok(Array.isArray(description.notebook_rules));
   assert.match(JSON.stringify(description.tools), /list_notebook_cells/);
   assert.match(JSON.stringify(description.tools), /wait_for_kernel_ready/);
+  assert.match(JSON.stringify(description.tools), /reveal_notebook_cells/);
 });
 
 test("parseSearchNotebookRequest accepts targeted search options", () => {

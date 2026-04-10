@@ -77,6 +77,8 @@ export interface CellSnapshot {
   index: number;
   kind: NotebookCellKind;
   language: string | null;
+  notebook_line_start: number;
+  notebook_line_end: number;
   source: string;
   source_sha256: string;
   metadata: Record<string, unknown>;
@@ -103,6 +105,8 @@ export interface NotebookCellPreview {
   index: number;
   kind: NotebookCellKind;
   language: string | null;
+  notebook_line_start: number;
+  notebook_line_end: number;
   source_preview: string;
   source_line_count: number;
   source_sha256: string;
@@ -204,6 +208,14 @@ export interface ReadCellOutputsRequest {
   include_rich_output_text?: boolean;
 }
 
+export interface RevealNotebookCellsRequest {
+  notebook_uri: string;
+  range?: { start: number; end: number };
+  cell_ids?: string[];
+  select?: boolean;
+  reveal_type?: "default" | "center" | "center_if_outside_viewport" | "top";
+}
+
 export interface ExecuteCellsRequest {
   notebook_uri: string;
   cell_ids: string[];
@@ -284,6 +296,14 @@ export interface ReadCellOutputsResult {
   notebook_version: number;
   cell_id: string;
   outputs: NormalizedOutput[];
+}
+
+export interface RevealNotebookCellsResult {
+  notebook_uri: string;
+  notebook_version: number;
+  revealed_cell_ids: string[];
+  selected: boolean;
+  visible_ranges: Array<{ start: number; end: number }>;
 }
 
 export interface NotebookOutlineResult {

@@ -30,6 +30,8 @@ import {
   ReadCellOutputsResult,
   ReadNotebookRequest,
   ReadNotebookResult,
+  RevealNotebookCellsRequest,
+  RevealNotebookCellsResult,
   ReplaceCellSourceRequest,
   RestartKernelRequest,
   SearchNotebookRequest,
@@ -49,10 +51,11 @@ import { NotebookExecutionService } from "./NotebookExecutionService";
 import { NotebookKernelCommandService } from "./NotebookKernelCommandService";
 import { NotebookSearchService } from "./NotebookSearchService";
 import { CellPatchService } from "./CellPatchService";
-import { computeSourceSha256 } from "./cells";
+import { computeSourceSha256, getStoredCellId } from "./cells";
 import { NotebookLanguageService } from "./NotebookLanguageService";
 import { NotebookVariableService } from "./NotebookVariableService";
 import { HostKernelObservationService } from "./HostKernelObservationService";
+import { NotebookCommandAdapter } from "../commands/NotebookCommandAdapter";
 
 export class NotebookBridgeService {
   public constructor(
@@ -60,6 +63,7 @@ export class NotebookBridgeService {
     private readonly readService: NotebookReadService,
     private readonly mutationService: NotebookMutationService,
     private readonly executionService: NotebookExecutionService,
+    private readonly commandAdapter: NotebookCommandAdapter,
     private readonly kernelCommandService: NotebookKernelCommandService,
     private readonly searchService: NotebookSearchService,
     private readonly cellPatchService: CellPatchService,
@@ -295,6 +299,31 @@ export class NotebookBridgeService {
     return this.readService.readCellOutputs(document, cell, request.include_rich_output_text ?? false);
   }
 
+  public async revealCells(request: RevealNotebookCellsRequest): Promise<RevealNotebookCellsResult> {
+    const document = await this.requireDocument(request.notebook_uri);
+    await this.mutationService.ensureStableCellIds(document);
+    const cells = this.selectCells(document, request.range, request.cell_ids);
+    if (cells.length === 0) {
+      fail({
+        code: "CellNotFound",
+        message: "No notebook cells matched the reveal request.",
+        recoverable: true,
+      });
+    }
+    const ranges = cells.map((cell) => new vscode.NotebookRange(cell.index, cell.index + 1));
+    const editor = await this.commandAdapter.revealCells(document, ranges, {
+      select: request.select ?? true,
+      revealType: toRevealType(request.reveal_type),
+    });
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      revealed_cell_ids: cells.map((cell) => getStoredCellId(cell) ?? "").filter((cellId) => cellId.length > 0),
+      selected: request.select ?? true,
+      visible_ranges: editor.visibleRanges.map((range) => ({ start: range.start, end: range.end })),
+    };
+  }
+
   public async getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult> {
     const document = await this.requireDocument(notebookUri);
     await this.mutationService.ensureStableCellIds(document);
@@ -428,8 +457,44 @@ export class NotebookBridgeService {
       });
     }
   }
+
+  private selectCells(
+    document: vscode.NotebookDocument,
+    range?: { start: number; end: number },
+    cellIds?: readonly string[],
+  ): vscode.NotebookCell[] {
+    let cells = document.getCells();
+
+    if (cellIds && cellIds.length > 0) {
+      const wanted = new Set(cellIds);
+      cells = cells.filter((cell) => {
+        const cellId = getStoredCellId(cell);
+        return cellId !== null && wanted.has(cellId);
+      });
+    } else if (range) {
+      cells = cells.slice(range.start, range.end);
+    }
+
+    return cells;
+  }
 }
 
 function pathIsAbsolute(filePath: string): boolean {
   return filePath.startsWith("/");
+}
+
+function toRevealType(
+  value: RevealNotebookCellsRequest["reveal_type"],
+): vscode.NotebookEditorRevealType {
+  switch (value) {
+    case "center":
+      return vscode.NotebookEditorRevealType.InCenter;
+    case "center_if_outside_viewport":
+      return vscode.NotebookEditorRevealType.InCenterIfOutsideViewport;
+    case "top":
+      return vscode.NotebookEditorRevealType.AtTop;
+    case "default":
+    case undefined:
+      return vscode.NotebookEditorRevealType.Default;
+  }
 }

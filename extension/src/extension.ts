@@ -68,6 +68,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     readService,
     mutationService,
     executionService,
+    commandAdapter,
     kernelCommandService,
     searchService,
     cellPatchService,
@@ -147,6 +148,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
         wait_for_kernel_ready: true,
         select_kernel: true,
         select_jupyter_interpreter: true,
+        reveal_cells: true,
       },
     });
 

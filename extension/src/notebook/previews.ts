@@ -13,6 +13,8 @@ export interface PreviewSourceCell {
   index: number;
   kind: NotebookCellKind;
   language: string | null;
+  notebook_line_start: number;
+  notebook_line_end: number;
   source: string;
   source_sha256: string;
   execution_status: ExecutionStatus | null;
@@ -35,6 +37,8 @@ export function buildNotebookCellPreviews(
       index: cell.index,
       kind: cell.kind,
       language: cell.language,
+      notebook_line_start: cell.notebook_line_start,
+      notebook_line_end: cell.notebook_line_end,
       source_preview: buildSourcePreview(cell.kind, cell.source),
       source_line_count: countSourceLines(cell.source),
       source_sha256: cell.source_sha256,
