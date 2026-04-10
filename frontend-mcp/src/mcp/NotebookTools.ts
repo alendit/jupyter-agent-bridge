@@ -1304,6 +1304,17 @@ export class NotebookTools {
       return value;
     }
 
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true") {
+        return true;
+      }
+      if (normalized === "false") {
+        return false;
+      }
+      throw new Error(`${label} must be a boolean. Use true or false, not ${JSON.stringify(value)}.`);
+    }
+
     throw new Error(`${label} must be a boolean.`);
   }
 
@@ -1312,20 +1323,30 @@ export class NotebookTools {
       return value;
     }
 
+    if (typeof value === "string" && /^-?\d+$/u.test(value.trim())) {
+      return Number.parseInt(value.trim(), 10);
+    }
+
+    if (typeof value === "string") {
+      throw new Error(`${label} must be an integer. Use a number like 2, not ${JSON.stringify(value)}.`);
+    }
+
     throw new Error(`${label} must be an integer.`);
   }
 
   private requiredNonNegativeInteger(value: unknown, label: string): number {
-    if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
-      return value;
+    const parsed = this.requiredInteger(value, label);
+    if (parsed >= 0) {
+      return parsed;
     }
 
     throw new Error(`${label} must be a non-negative integer.`);
   }
 
   private requiredPositiveInteger(value: unknown, label: string): number {
-    if (typeof value === "number" && Number.isInteger(value) && value > 0) {
-      return value;
+    const parsed = this.requiredInteger(value, label);
+    if (parsed > 0) {
+      return parsed;
     }
 
     throw new Error(`${label} must be a positive integer.`);
