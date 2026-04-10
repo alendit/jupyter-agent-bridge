@@ -16,8 +16,12 @@ export const BRIDGE_METHODS = {
   deleteCell: "notebook.delete_cell",
   moveCell: "notebook.move_cell",
   executeCells: "notebook.execute_cells",
+  interruptExecution: "notebook.interrupt_execution",
+  restartKernel: "notebook.restart_kernel",
   readCellOutputs: "notebook.read_cell_outputs",
   getKernelInfo: "notebook.get_kernel_info",
+  selectKernel: "notebook.select_kernel",
+  selectJupyterInterpreter: "notebook.select_jupyter_interpreter",
   summarizeState: "notebook.summarize_state",
 } as const;
 
@@ -25,6 +29,8 @@ export interface SessionCapabilities {
   execute_cells: boolean;
   interrupt_execution: boolean;
   restart_kernel: boolean;
+  select_kernel: boolean;
+  select_jupyter_interpreter: boolean;
 }
 
 export interface BridgeSessionInfo {

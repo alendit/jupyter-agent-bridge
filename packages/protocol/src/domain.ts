@@ -181,7 +181,27 @@ export interface ExecuteCellsRequest {
   cell_ids: string[];
   expected_notebook_version?: number;
   timeout_ms?: number;
+  stop_on_error?: boolean;
   wait_for_completion?: true;
+}
+
+export interface InterruptExecutionRequest {
+  notebook_uri: string;
+}
+
+export interface RestartKernelRequest {
+  notebook_uri: string;
+}
+
+export interface SelectJupyterInterpreterRequest {
+  notebook_uri: string;
+}
+
+export interface SelectKernelRequest {
+  notebook_uri: string;
+  kernel_id?: string;
+  extension_id?: string;
+  skip_if_already_selected?: boolean;
 }
 
 export interface PatchCellSourceRequest {
@@ -338,6 +358,15 @@ export interface GetKernelInfoResult {
   notebook_uri: string;
   notebook_version: number;
   kernel: KernelInfo | null;
+}
+
+export interface KernelCommandResult {
+  notebook_uri: string;
+  notebook_version: number;
+  kernel: KernelInfo | null;
+  status: "requested" | "prompted" | "selected";
+  requires_user_interaction: boolean;
+  message: string;
 }
 
 export interface ExecuteCellResult {

@@ -767,6 +767,8 @@ Return:
 - error details if any
 - kernel identity summary
 
+If `stop_on_error` is `true`, cells after the first failed cell may be returned as cancelled/skipped when VS Code or the selected kernel stops further execution.
+
 ### `interrupt_execution`
 Input:
 - notebook URI
@@ -803,9 +805,15 @@ Input:
 - notebook URI
 - kernel selector
 
-This is optional for MVP.
+If direct programmatic selection is not possible, the implementation may open the VS Code kernel picker and return a result that explicitly says user interaction is required.
 
 Read-only kernel inspection is higher priority than programmatic kernel switching.
+
+### `select_jupyter_interpreter`
+Input:
+- notebook URI
+
+Open the VS Code Jupyter interpreter picker for the active notebook. This may trigger the Jupyter/Python extensions to offer `ipykernel` installation for the chosen environment.
 
 ---
 
@@ -1309,7 +1317,7 @@ Specific MVP rules:
 - `open_notebook` accepts an absolute notebook URI only
 - `execute_cells` supports code cells only; markdown cells in the request cause `InvalidRequest`
 - `wait_for_completion=false` is not part of the MVP; reject it with `InvalidRequest`
-- `interrupt_execution`, `restart_kernel`, and `select_kernel` are explicitly deferred even if placeholders exist in the protocol
+- `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` are supported through VS Code and Jupyter command surfaces, and some of them may require user interaction
 - if `vscode.cursor.mcp.registerServer` is available, use it to register the bundled MCP server instead of requiring manual Cursor MCP config
 - the Cursor registration must use stdio transport and launch the bundled `frontend-mcp` entrypoint, not a second embedded notebook implementation
 

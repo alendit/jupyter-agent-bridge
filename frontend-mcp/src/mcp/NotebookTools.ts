@@ -1,9 +1,11 @@
 import {
+  asBridgeError,
   DeleteCellRequest,
   ExecuteCellsRequest,
   FindSymbolsRequest,
   FormatCellRequest,
   GoToDefinitionRequest,
+  InterruptExecutionRequest,
   InsertCellRequest,
   ListNotebookCellsRequest,
   MoveCellRequest,
@@ -14,7 +16,10 @@ import {
   ReadCellOutputsRequest,
   ReadNotebookRequest,
   ReplaceCellSourceRequest,
+  RestartKernelRequest,
   SearchNotebookRequest,
+  SelectJupyterInterpreterRequest,
+  SelectKernelRequest,
 } from "../../../packages/protocol/src";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult, ImageContent } from "@modelcontextprotocol/sdk/types.js";
@@ -39,8 +44,12 @@ const TOOL_NAMES = [
   "delete_cell",
   "move_cell",
   "execute_cells",
+  "interrupt_execution",
+  "restart_kernel",
   "read_cell_outputs",
   "get_kernel_info",
+  "select_kernel",
+  "select_jupyter_interpreter",
   "summarize_notebook_state",
 ] as const;
 
@@ -247,7 +256,17 @@ const executeCellsInputSchema = z
     cell_ids: z.array(z.unknown()).optional(),
     expected_notebook_version: notebookVersionSchema,
     timeout_ms: optionalNumberSchema,
+    stop_on_error: optionalBooleanSchema,
     wait_for_completion: optionalBooleanSchema,
+  })
+  .passthrough();
+
+const selectKernelInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    kernel_id: optionalStringSchema,
+    extension_id: optionalStringSchema,
+    skip_if_already_selected: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -400,13 +419,25 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   execute_cells: {
     title: "Execute Cells",
-    summary: "Execute code cells. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents.",
+    summary: "Execute code cells. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"timeout_ms"?:30000,"wait_for_completion"?:true}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"timeout_ms"?:30000,"stop_on_error"?:true,"wait_for_completion"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"timeout_ms":45000,"wait_for_completion":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"timeout_ms":45000,"stop_on_error":true,"wait_for_completion":true}',
     ],
+  },
+  interrupt_execution: {
+    title: "Interrupt Execution",
+    summary: "Ask VS Code/Jupyter to interrupt the active notebook kernel.",
+    schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
+    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
+  },
+  restart_kernel: {
+    title: "Restart Kernel",
+    summary: "Ask VS Code/Jupyter to restart the active notebook kernel.",
+    schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
+    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   read_cell_outputs: {
     title: "Read Cell Outputs",
@@ -417,6 +448,22 @@ const TOOL_HELP: Record<ToolName, ToolHelp> = {
   get_kernel_info: {
     title: "Get Kernel Info",
     summary: "Read best-effort kernel information for the notebook.",
+    schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
+    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
+  },
+  select_kernel: {
+    title: "Select Kernel",
+    summary: "Open the VS Code kernel picker or directly select a known kernel controller by id and extension id.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","kernel_id"?: "controller-id","extension_id"?: "publisher.extension","skip_if_already_selected"?: true}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","kernel_id":"python-env","extension_id":"ms-toolsai.jupyter"}',
+    ],
+  },
+  select_jupyter_interpreter: {
+    title: "Select Jupyter Interpreter",
+    summary: "Open the VS Code Jupyter interpreter picker for the active notebook. VS Code may prompt to install ipykernel for the chosen environment.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
@@ -435,6 +482,7 @@ const NOTEBOOK_RULES = [
   "For code-heavy notebooks: list_notebook_cells first.",
   "Use search_notebook for text, find_symbols for semantic names.",
   "Use get_diagnostics for editor errors. Runtime errors are in outputs.",
+  "Use select_kernel or select_jupyter_interpreter when the notebook kernel or Python environment needs user-driven setup.",
   "Then use targeted read_notebook, go_to_definition, or read_cell_outputs.",
   "Notebook data may change between turns because the user can edit cells.",
   "Use notebook versions and source_sha256 values to avoid stale edits.",
@@ -444,227 +492,117 @@ export class NotebookTools {
   public constructor(private readonly getClient: () => Promise<NotebookBridgeClient>) {}
 
   public register(server: McpServer): void {
-    server.registerTool(
-      "list_open_notebooks",
-      {
-        title: TOOL_HELP.list_open_notebooks.title,
-        description: this.buildToolDescription("list_open_notebooks"),
-        inputSchema: permissiveObjectSchema,
-      },
-      async (input) => {
-        this.parseEmptyInput("list_open_notebooks", input);
-        return this.toToolResult(await (await this.getClient()).listOpenNotebooks());
-      },
+    const register = (toolName: ToolName, inputSchema: z.ZodTypeAny, handler: (input: unknown) => Promise<unknown>): void => {
+      server.registerTool(
+        toolName,
+        {
+          title: TOOL_HELP[toolName].title,
+          description: this.buildToolDescription(toolName),
+          inputSchema,
+        },
+        async (input) => this.runTool(() => handler(input)),
+      );
+    };
+
+    register("list_open_notebooks", permissiveObjectSchema, async (input) => {
+      this.parseEmptyInput("list_open_notebooks", input);
+      return (await this.getClient()).listOpenNotebooks();
+    });
+
+    register("describe_tool", z.object({ tool_name: toolNameSchema }).passthrough(), async (input) =>
+      this.describeTool(this.parseDescribeToolInput(input).tool_name),
     );
 
-    server.registerTool(
-      "describe_tool",
-      {
-        title: TOOL_HELP.describe_tool.title,
-        description: this.buildToolDescription("describe_tool"),
-        inputSchema: z.object({ tool_name: toolNameSchema }).passthrough(),
-      },
-      async (input) => this.toToolResult(this.describeTool(this.parseDescribeToolInput(input).tool_name)),
+    register("open_notebook", openNotebookInputSchema, async (input) =>
+      (await this.getClient()).openNotebook(this.parseOpenNotebookRequest(input)),
     );
 
-    server.registerTool(
-      "open_notebook",
-      {
-        title: TOOL_HELP.open_notebook.title,
-        description: this.buildToolDescription("open_notebook"),
-        inputSchema: openNotebookInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).openNotebook(this.parseOpenNotebookRequest(input))),
+    register("get_notebook_outline", singleNotebookInputSchema, async (input) =>
+      (await this.getClient()).getNotebookOutline(this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri),
     );
 
-    server.registerTool(
-      "get_notebook_outline",
-      {
-        title: TOOL_HELP.get_notebook_outline.title,
-        description: this.buildToolDescription("get_notebook_outline"),
-        inputSchema: singleNotebookInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(
-          await (await this.getClient()).getNotebookOutline(
-            this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri,
-          ),
-        ),
+    register("list_notebook_cells", listNotebookCellsInputSchema, async (input) =>
+      (await this.getClient()).listNotebookCells(this.parseListNotebookCellsRequest(input)),
     );
 
-    server.registerTool(
-      "list_notebook_cells",
-      {
-        title: TOOL_HELP.list_notebook_cells.title,
-        description: this.buildToolDescription("list_notebook_cells"),
-        inputSchema: listNotebookCellsInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).listNotebookCells(this.parseListNotebookCellsRequest(input))),
+    register("search_notebook", searchNotebookInputSchema, async (input) =>
+      (await this.getClient()).searchNotebook(this.parseSearchNotebookRequest(input)),
     );
 
-    server.registerTool(
-      "search_notebook",
-      {
-        title: TOOL_HELP.search_notebook.title,
-        description: this.buildToolDescription("search_notebook"),
-        inputSchema: searchNotebookInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).searchNotebook(this.parseSearchNotebookRequest(input))),
+    register("find_symbols", findSymbolsInputSchema, async (input) =>
+      (await this.getClient()).findSymbols(this.parseFindSymbolsRequest(input)),
     );
 
-    server.registerTool(
-      "find_symbols",
-      {
-        title: TOOL_HELP.find_symbols.title,
-        description: this.buildToolDescription("find_symbols"),
-        inputSchema: findSymbolsInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).findSymbols(this.parseFindSymbolsRequest(input))),
+    register("get_diagnostics", getDiagnosticsInputSchema, async (input) =>
+      (await this.getClient()).getDiagnostics(this.parseGetDiagnosticsRequest(input)),
     );
 
-    server.registerTool(
-      "get_diagnostics",
-      {
-        title: TOOL_HELP.get_diagnostics.title,
-        description: this.buildToolDescription("get_diagnostics"),
-        inputSchema: getDiagnosticsInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).getDiagnostics(this.parseGetDiagnosticsRequest(input))),
+    register("go_to_definition", goToDefinitionInputSchema, async (input) =>
+      (await this.getClient()).goToDefinition(this.parseGoToDefinitionRequest(input)),
     );
 
-    server.registerTool(
-      "go_to_definition",
-      {
-        title: TOOL_HELP.go_to_definition.title,
-        description: this.buildToolDescription("go_to_definition"),
-        inputSchema: goToDefinitionInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).goToDefinition(this.parseGoToDefinitionRequest(input))),
+    register("read_notebook", readNotebookInputSchema, async (input) =>
+      (await this.getClient()).readNotebook(this.parseReadNotebookRequest(input)),
     );
 
-    server.registerTool(
-      "read_notebook",
-      {
-        title: TOOL_HELP.read_notebook.title,
-        description: this.buildToolDescription("read_notebook"),
-        inputSchema: readNotebookInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).readNotebook(this.parseReadNotebookRequest(input))),
+    register("insert_cell", insertCellInputSchema, async (input) =>
+      (await this.getClient()).insertCell(this.normalizeInsertCellRequest(input)),
     );
 
-    server.registerTool(
-      "insert_cell",
-      {
-        title: TOOL_HELP.insert_cell.title,
-        description: this.buildToolDescription("insert_cell"),
-        inputSchema: insertCellInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).insertCell(this.normalizeInsertCellRequest(input))),
+    register("replace_cell_source", replaceCellSourceInputSchema, async (input) =>
+      (await this.getClient()).replaceCellSource(this.parseReplaceCellSourceRequest(input)),
     );
 
-    server.registerTool(
-      "replace_cell_source",
-      {
-        title: TOOL_HELP.replace_cell_source.title,
-        description: this.buildToolDescription("replace_cell_source"),
-        inputSchema: replaceCellSourceInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).replaceCellSource(this.parseReplaceCellSourceRequest(input))),
+    register("patch_cell_source", patchCellSourceInputSchema, async (input) =>
+      (await this.getClient()).patchCellSource(this.parsePatchCellSourceRequest(input)),
     );
 
-    server.registerTool(
-      "patch_cell_source",
-      {
-        title: TOOL_HELP.patch_cell_source.title,
-        description: this.buildToolDescription("patch_cell_source"),
-        inputSchema: patchCellSourceInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).patchCellSource(this.parsePatchCellSourceRequest(input))),
+    register("format_cell", formatCellInputSchema, async (input) =>
+      (await this.getClient()).formatCell(this.parseFormatCellRequest(input)),
     );
 
-    server.registerTool(
-      "format_cell",
-      {
-        title: TOOL_HELP.format_cell.title,
-        description: this.buildToolDescription("format_cell"),
-        inputSchema: formatCellInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).formatCell(this.parseFormatCellRequest(input))),
+    register("delete_cell", deleteCellInputSchema, async (input) =>
+      (await this.getClient()).deleteCell(this.parseDeleteCellRequest(input)),
     );
 
-    server.registerTool(
-      "delete_cell",
-      {
-        title: TOOL_HELP.delete_cell.title,
-        description: this.buildToolDescription("delete_cell"),
-        inputSchema: deleteCellInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).deleteCell(this.parseDeleteCellRequest(input))),
+    register("move_cell", moveCellInputSchema, async (input) =>
+      (await this.getClient()).moveCell(this.parseMoveCellRequest(input)),
     );
 
-    server.registerTool(
-      "move_cell",
-      {
-        title: TOOL_HELP.move_cell.title,
-        description: this.buildToolDescription("move_cell"),
-        inputSchema: moveCellInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).moveCell(this.parseMoveCellRequest(input))),
+    register("execute_cells", executeCellsInputSchema, async (input) =>
+      (await this.getClient()).executeCells(this.parseExecuteCellsRequest(input)),
     );
 
-    server.registerTool(
-      "execute_cells",
-      {
-        title: TOOL_HELP.execute_cells.title,
-        description: this.buildToolDescription("execute_cells"),
-        inputSchema: executeCellsInputSchema,
-      },
-      async (input) => this.toToolResult(await (await this.getClient()).executeCells(this.parseExecuteCellsRequest(input))),
+    register("interrupt_execution", singleNotebookInputSchema, async (input) =>
+      (await this.getClient()).interruptExecution(this.parseNotebookUriOnlyInput("interrupt_execution", input)),
     );
 
-    server.registerTool(
-      "read_cell_outputs",
-      {
-        title: TOOL_HELP.read_cell_outputs.title,
-        description: this.buildToolDescription("read_cell_outputs"),
-        inputSchema: readCellOutputsInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(await (await this.getClient()).readCellOutputs(this.parseReadCellOutputsRequest(input))),
+    register("restart_kernel", singleNotebookInputSchema, async (input) =>
+      (await this.getClient()).restartKernel(this.parseNotebookUriOnlyInput("restart_kernel", input)),
     );
 
-    server.registerTool(
-      "get_kernel_info",
-      {
-        title: TOOL_HELP.get_kernel_info.title,
-        description: this.buildToolDescription("get_kernel_info"),
-        inputSchema: singleNotebookInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(
-          await (await this.getClient()).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
-        ),
+    register("read_cell_outputs", readCellOutputsInputSchema, async (input) =>
+      (await this.getClient()).readCellOutputs(this.parseReadCellOutputsRequest(input)),
     );
 
-    server.registerTool(
-      "summarize_notebook_state",
-      {
-        title: TOOL_HELP.summarize_notebook_state.title,
-        description: this.buildToolDescription("summarize_notebook_state"),
-        inputSchema: singleNotebookInputSchema,
-      },
-      async (input) =>
-        this.toToolResult(
-          await (await this.getClient()).summarizeNotebookState(
-            this.parseNotebookUriOnlyInput("summarize_notebook_state", input).notebook_uri,
-          ),
-        ),
+    register("get_kernel_info", singleNotebookInputSchema, async (input) =>
+      (await this.getClient()).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
+    );
+
+    register("select_kernel", selectKernelInputSchema, async (input) =>
+      (await this.getClient()).selectKernel(this.parseSelectKernelRequest(input)),
+    );
+
+    register("select_jupyter_interpreter", singleNotebookInputSchema, async (input) =>
+      (await this.getClient()).selectJupyterInterpreter(
+        this.parseNotebookUriOnlyInput("select_jupyter_interpreter", input),
+      ),
+    );
+
+    register("summarize_notebook_state", singleNotebookInputSchema, async (input) =>
+      (await this.getClient()).summarizeNotebookState(
+        this.parseNotebookUriOnlyInput("summarize_notebook_state", input).notebook_uri,
+      ),
     );
   }
 
@@ -980,6 +918,7 @@ export class NotebookTools {
       "cell_ids",
       "expected_notebook_version",
       "timeout_ms",
+      "stop_on_error",
       "wait_for_completion",
     ]);
 
@@ -1000,7 +939,34 @@ export class NotebookTools {
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
       timeout_ms:
         params.timeout_ms === undefined ? undefined : this.requiredPositiveInteger(params.timeout_ms, `${toolName}.timeout_ms`),
+      stop_on_error:
+        params.stop_on_error === undefined ? undefined : this.requiredBoolean(params.stop_on_error, `${toolName}.stop_on_error`),
       wait_for_completion: waitForCompletion ? true : undefined,
+    };
+  }
+
+  private parseSelectKernelRequest(input: unknown): SelectKernelRequest {
+    const toolName = "select_kernel";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "kernel_id", "extension_id", "skip_if_already_selected"]);
+
+    const kernelId =
+      params.kernel_id === undefined ? undefined : this.requiredString(params.kernel_id, `${toolName}.kernel_id`);
+    const extensionId =
+      params.extension_id === undefined ? undefined : this.requiredString(params.extension_id, `${toolName}.extension_id`);
+
+    if ((kernelId && !extensionId) || (!kernelId && extensionId)) {
+      this.failValidation(toolName, "kernel_id and extension_id must be provided together for direct kernel selection.");
+    }
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      kernel_id: kernelId,
+      extension_id: extensionId,
+      skip_if_already_selected:
+        params.skip_if_already_selected === undefined
+          ? undefined
+          : this.requiredBoolean(params.skip_if_already_selected, `${toolName}.skip_if_already_selected`),
     };
   }
 
@@ -1016,7 +982,15 @@ export class NotebookTools {
   }
 
   private parseNotebookUriOnlyInput(
-    toolName: Extract<ToolName, "get_notebook_outline" | "get_kernel_info" | "summarize_notebook_state">,
+    toolName: Extract<
+      ToolName,
+      | "get_notebook_outline"
+      | "interrupt_execution"
+      | "restart_kernel"
+      | "get_kernel_info"
+      | "select_jupyter_interpreter"
+      | "summarize_notebook_state"
+    >,
     input: unknown,
   ): {
     notebook_uri: string;
@@ -1310,6 +1284,14 @@ export class NotebookTools {
     throw new Error(`Invalid arguments for tool ${toolName}: ${message}`);
   }
 
+  private async runTool<T>(operation: () => Promise<T>): Promise<CallToolResult> {
+    try {
+      return this.toToolResult(await operation());
+    } catch (error) {
+      return this.toErrorToolResult(error);
+    }
+  }
+
   private toToolResult(result: unknown): CallToolResult {
     const images: ImageContent[] = [];
     const textResult = this.serializeForTextContent(result, images);
@@ -1321,6 +1303,27 @@ export class NotebookTools {
           text: JSON.stringify(textResult, null, 2),
         },
         ...images,
+      ],
+    };
+  }
+
+  private toErrorToolResult(error: unknown): CallToolResult {
+    const bridgeError =
+      error instanceof Error && error.message.startsWith("Invalid arguments for tool")
+        ? {
+            code: "InvalidRequest",
+            message: error.message,
+            recoverable: true,
+          }
+        : asBridgeError(error);
+
+    return {
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ error: bridgeError }, null, 2),
+        },
       ],
     };
   }

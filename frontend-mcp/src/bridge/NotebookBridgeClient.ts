@@ -9,7 +9,9 @@ import {
   GetKernelInfoResult,
   GoToDefinitionRequest,
   GoToDefinitionResult,
+  InterruptExecutionRequest,
   InsertCellRequest,
+  KernelCommandResult,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
   ListOpenNotebooksResult,
@@ -26,8 +28,11 @@ import {
   ReadNotebookRequest,
   ReadNotebookResult,
   ReplaceCellSourceRequest,
+  RestartKernelRequest,
   SearchNotebookRequest,
   SearchNotebookResult,
+  SelectJupyterInterpreterRequest,
+  SelectKernelRequest,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -43,6 +48,8 @@ export interface NotebookBridgeClient {
       execute_cells: boolean;
       interrupt_execution: boolean;
       restart_kernel: boolean;
+      select_kernel: boolean;
+      select_jupyter_interpreter: boolean;
     };
   }>;
   listOpenNotebooks(): Promise<ListOpenNotebooksResult>;
@@ -61,7 +68,11 @@ export interface NotebookBridgeClient {
   deleteCell(request: DeleteCellRequest): Promise<MutationResult>;
   moveCell(request: MoveCellRequest): Promise<MutationResult>;
   executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult>;
+  interruptExecution(request: InterruptExecutionRequest): Promise<KernelCommandResult>;
+  restartKernel(request: RestartKernelRequest): Promise<KernelCommandResult>;
   readCellOutputs(request: ReadCellOutputsRequest): Promise<ReadCellOutputsResult>;
   getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult>;
+  selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult>;
+  selectJupyterInterpreter(request: SelectJupyterInterpreterRequest): Promise<KernelCommandResult>;
   summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult>;
 }

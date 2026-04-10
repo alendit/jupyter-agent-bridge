@@ -13,8 +13,10 @@ import {
   GetKernelInfoResult,
   GoToDefinitionRequest,
   GoToDefinitionResult,
+  InterruptExecutionRequest,
   InsertCellRequest,
   JSON_RPC_ERRORS,
+  KernelCommandResult,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
   ListOpenNotebooksResult,
@@ -31,8 +33,11 @@ import {
   ReadNotebookRequest,
   ReadNotebookResult,
   ReplaceCellSourceRequest,
+  RestartKernelRequest,
   SearchNotebookRequest,
   SearchNotebookResult,
+  SelectJupyterInterpreterRequest,
+  SelectKernelRequest,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -137,12 +142,28 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
     return this.call(BRIDGE_METHODS.executeCells, request);
   }
 
+  public interruptExecution(request: InterruptExecutionRequest): Promise<KernelCommandResult> {
+    return this.call(BRIDGE_METHODS.interruptExecution, request);
+  }
+
+  public restartKernel(request: RestartKernelRequest): Promise<KernelCommandResult> {
+    return this.call(BRIDGE_METHODS.restartKernel, request);
+  }
+
   public readCellOutputs(request: ReadCellOutputsRequest): Promise<ReadCellOutputsResult> {
     return this.call(BRIDGE_METHODS.readCellOutputs, request);
   }
 
   public getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult> {
     return this.call(BRIDGE_METHODS.getKernelInfo, { notebook_uri: notebookUri });
+  }
+
+  public selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult> {
+    return this.call(BRIDGE_METHODS.selectKernel, request);
+  }
+
+  public selectJupyterInterpreter(request: SelectJupyterInterpreterRequest): Promise<KernelCommandResult> {
+    return this.call(BRIDGE_METHODS.selectJupyterInterpreter, request);
   }
 
   public summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult> {

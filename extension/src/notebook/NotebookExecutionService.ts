@@ -2,9 +2,16 @@ import * as vscode from "vscode";
 import { ExecuteCellResult, ExecuteCellsRequest, ExecuteCellsResult } from "../../../packages/protocol/src";
 import { fail } from "../../../packages/protocol/src";
 import { getStoredCellId } from "./cells";
+import { deriveExecutionProgressState } from "./executionCompletionPolicy";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookCommandAdapter } from "../commands/NotebookCommandAdapter";
+
+interface ExecutionWaitState {
+  completed: boolean;
+  pendingCellIds: Set<string>;
+  skippedCellIds: Set<string>;
+}
 
 export class NotebookExecutionService {
   public constructor(
@@ -39,26 +46,41 @@ export class NotebookExecutionService {
 
     const notebookUri = document.uri.toString();
     const timeoutMs = request.timeout_ms ?? 60_000;
-    const completion = this.waitForExecutionCompletion(notebookUri, request.cell_ids, baselineSignatures, timeoutMs);
+    const stopOnError = request.stop_on_error ?? true;
+    const completion = this.waitForExecutionCompletion(
+      notebookUri,
+      request.cell_ids,
+      baselineSignatures,
+      timeoutMs,
+      stopOnError,
+    );
 
     await this.commandAdapter.executeCells(
       document,
       cells.map((cell) => new vscode.NotebookRange(cell.index, cell.index + 1)),
     );
 
-    const timedOut = !(await completion);
+    const completionState = await completion;
+    const timedOut = !completionState.completed;
     const refreshedDocument = this.registry.getDocument(notebookUri) ?? document;
     this.registry.setLastExecuted(notebookUri, request.cell_ids);
 
     const results: ExecuteCellResult[] = request.cell_ids.map((cellId) => {
       const cell = this.readService.requireCell(refreshedDocument, cellId);
       const execution = this.readService.toExecutionSummary(cell);
-      const outputs = this.readService.normalizeCellOutputs(cell);
+      const skipped = completionState.skippedCellIds.has(cellId);
+      const pendingWithoutChange = completionState.pendingCellIds.has(cellId);
 
       return {
         cell_id: cellId,
-        execution:
-          timedOut && execution === null
+        execution: skipped
+          ? {
+              status: "cancelled",
+              execution_order: null,
+              started_at: null,
+              ended_at: null,
+            }
+          : timedOut && execution === null
             ? {
                 status: "timed_out",
                 execution_order: null,
@@ -66,7 +88,7 @@ export class NotebookExecutionService {
                 ended_at: null,
               }
             : execution,
-        outputs,
+        outputs: skipped || pendingWithoutChange ? [] : this.readService.normalizeCellOutputs(cell),
       };
     });
 
@@ -95,38 +117,55 @@ export class NotebookExecutionService {
     cellIds: readonly string[],
     baselineSignatures: Map<string, string>,
     timeoutMs: number,
-  ): Promise<boolean> {
-    const pending = new Set(cellIds);
+    stopOnError: boolean,
+  ): Promise<ExecutionWaitState> {
+    const emptyState = (): ExecutionWaitState => ({
+      completed: false,
+      pendingCellIds: new Set(cellIds),
+      skippedCellIds: new Set<string>(),
+    });
 
-    const check = (): boolean => {
+    const check = (): ExecutionWaitState => {
       const document = this.registry.getDocument(notebookUri);
       if (!document) {
-        return false;
+        return emptyState();
       }
 
-      for (const cellId of [...pending]) {
+      const observations = cellIds.map((cellId) => {
         const cell = document.getCells().find((candidate) => getStoredCellId(candidate) === cellId);
         if (!cell) {
-          continue;
+          return {
+            cell_id: cellId,
+            changed_from_baseline: false,
+            failed: false,
+          };
         }
 
         const baseline = baselineSignatures.get(cellId);
-        if (baseline !== undefined && this.executionSignature(cell) !== baseline) {
-          pending.delete(cellId);
-        }
-      }
+        return {
+          cell_id: cellId,
+          changed_from_baseline: baseline !== undefined && this.executionSignature(cell) !== baseline,
+          failed: this.readService.toExecutionSummary(cell)?.status === "failed",
+        };
+      });
 
-      return pending.size === 0;
+      const progress = deriveExecutionProgressState(observations, stopOnError);
+      return {
+        completed: progress.pending_cell_ids.length === 0,
+        pendingCellIds: new Set(progress.pending_cell_ids),
+        skippedCellIds: new Set(progress.skipped_cell_ids),
+      };
     };
 
-    if (check()) {
-      return true;
+    const initialState = check();
+    if (initialState.completed) {
+      return initialState;
     }
 
-    return new Promise<boolean>((resolve) => {
+    return new Promise<ExecutionWaitState>((resolve) => {
       const timeout = setTimeout(() => {
         subscription.dispose();
-        resolve(false);
+        resolve(check());
       }, timeoutMs);
 
       const subscription = this.registry.onDidChangeNotebook((event) => {
@@ -134,13 +173,14 @@ export class NotebookExecutionService {
           return;
         }
 
-        if (!check()) {
+        const currentState = check();
+        if (!currentState.completed) {
           return;
         }
 
         clearTimeout(timeout);
         subscription.dispose();
-        resolve(true);
+        resolve(currentState);
       });
     });
   }

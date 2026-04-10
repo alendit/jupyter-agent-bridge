@@ -13,6 +13,7 @@ import { KernelInspectionService } from "./notebook/KernelInspectionService";
 import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
 import { CellPatchService } from "./notebook/CellPatchService";
 import { NotebookExecutionService } from "./notebook/NotebookExecutionService";
+import { NotebookKernelCommandService } from "./notebook/NotebookKernelCommandService";
 import { NotebookLanguageService } from "./notebook/NotebookLanguageService";
 import { NotebookMutationService } from "./notebook/NotebookMutationService";
 import { NotebookReadService } from "./notebook/NotebookReadService";
@@ -47,12 +48,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const cellPatchService = new CellPatchService();
   const commandAdapter = new NotebookCommandAdapter();
   const executionService = new NotebookExecutionService(registry, readService, commandAdapter);
+  const kernelCommandService = new NotebookKernelCommandService(registry, readService, commandAdapter);
   const languageService = new NotebookLanguageService(registry, readService, mutationService);
   const notebookBridgeService = new NotebookBridgeService(
     registry,
     readService,
     mutationService,
     executionService,
+    kernelCommandService,
     searchService,
     cellPatchService,
     languageService,
@@ -127,8 +130,10 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       extension_version: EXTENSION_VERSION,
       capabilities: {
         execute_cells: true,
-        interrupt_execution: false,
-        restart_kernel: false,
+        interrupt_execution: true,
+        restart_kernel: true,
+        select_kernel: true,
+        select_jupyter_interpreter: true,
       },
     });
 

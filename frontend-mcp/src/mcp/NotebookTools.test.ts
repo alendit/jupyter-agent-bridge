@@ -174,6 +174,69 @@ test("parseExecuteCellsRequest rejects false wait_for_completion with a clear me
   );
 });
 
+test("parseExecuteCellsRequest accepts stop_on_error", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseExecuteCellsRequest: (value: unknown) => {
+        notebook_uri: string;
+        cell_ids: string[];
+        stop_on_error?: boolean;
+      };
+    }
+  ).parseExecuteCellsRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_ids: ["cell-1"],
+    stop_on_error: false,
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual(request.cell_ids, ["cell-1"]);
+  assert.equal(request.stop_on_error, false);
+});
+
+test("parseSelectKernelRequest requires kernel_id and extension_id together", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseSelectKernelRequest: (value: unknown) => unknown;
+        }
+      ).parseSelectKernelRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        kernel_id: "python-env",
+      }),
+    /kernel_id and extension_id must be provided together/,
+  );
+});
+
+test("toErrorToolResult returns structured invalid request details", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const result = (
+    tools as unknown as {
+      toErrorToolResult: (error: unknown) => { isError?: boolean; content: Array<Record<string, unknown>> };
+    }
+  ).toErrorToolResult(new Error("Invalid arguments for tool execute_cells: notebook_uri must be a non-empty string."));
+
+  assert.equal(result.isError, true);
+  const payload = JSON.parse(String(result.content[0]?.text)) as {
+    error: { code: string; message: string; recoverable?: boolean };
+  };
+  assert.equal(payload.error.code, "InvalidRequest");
+  assert.equal(payload.error.recoverable, true);
+  assert.match(payload.error.message, /Invalid arguments for tool execute_cells/);
+});
+
 test("parseReadNotebookRequest accepts range and cell_ids with clear shapes", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");

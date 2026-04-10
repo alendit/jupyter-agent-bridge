@@ -72,10 +72,18 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.moveCell(object(params) as never);
       case BRIDGE_METHODS.executeCells:
         return this.notebookBridgeService.executeCells(object(params) as never);
+      case BRIDGE_METHODS.interruptExecution:
+        return this.notebookBridgeService.interruptExecution(object(params) as never);
+      case BRIDGE_METHODS.restartKernel:
+        return this.notebookBridgeService.restartKernel(object(params) as never);
       case BRIDGE_METHODS.readCellOutputs:
         return this.notebookBridgeService.readCellOutputs(object(params) as never);
       case BRIDGE_METHODS.getKernelInfo:
         return this.notebookBridgeService.getKernelInfo(requiredString(params, "notebook_uri"));
+      case BRIDGE_METHODS.selectKernel:
+        return this.notebookBridgeService.selectKernel(object(params) as never);
+      case BRIDGE_METHODS.selectJupyterInterpreter:
+        return this.notebookBridgeService.selectJupyterInterpreter(object(params) as never);
       case BRIDGE_METHODS.summarizeState:
         return this.notebookBridgeService.summarizeNotebookState(requiredString(params, "notebook_uri"));
       default:

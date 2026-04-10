@@ -10,7 +10,9 @@ import {
   GetKernelInfoResult,
   GoToDefinitionRequest,
   GoToDefinitionResult,
+  InterruptExecutionRequest,
   InsertCellRequest,
+  KernelCommandResult,
   ListNotebookCellsRequest,
   ListNotebookCellsResult,
   ListOpenNotebooksResult,
@@ -27,8 +29,11 @@ import {
   ReadNotebookRequest,
   ReadNotebookResult,
   ReplaceCellSourceRequest,
+  RestartKernelRequest,
   SearchNotebookRequest,
   SearchNotebookResult,
+  SelectJupyterInterpreterRequest,
+  SelectKernelRequest,
   MoveCellRequest,
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
@@ -37,6 +42,7 @@ import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookMutationService } from "./NotebookMutationService";
 import { NotebookExecutionService } from "./NotebookExecutionService";
+import { NotebookKernelCommandService } from "./NotebookKernelCommandService";
 import { NotebookSearchService } from "./NotebookSearchService";
 import { CellPatchService } from "./CellPatchService";
 import { computeSourceSha256 } from "./cells";
@@ -48,6 +54,7 @@ export class NotebookBridgeService {
     private readonly readService: NotebookReadService,
     private readonly mutationService: NotebookMutationService,
     private readonly executionService: NotebookExecutionService,
+    private readonly kernelCommandService: NotebookKernelCommandService,
     private readonly searchService: NotebookSearchService,
     private readonly cellPatchService: CellPatchService,
     private readonly languageService: NotebookLanguageService,
@@ -278,6 +285,38 @@ export class NotebookBridgeService {
     const document = await this.requireDocument(notebookUri);
     await this.mutationService.ensureStableCellIds(document);
     return this.readService.getKernelInfo(document);
+  }
+
+  public async selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult> {
+    return this.registry.runExclusive(request.notebook_uri, async () => {
+      const document = await this.requireDocument(request.notebook_uri);
+      await this.mutationService.ensureStableCellIds(document);
+      return this.kernelCommandService.selectKernel(document, request);
+    });
+  }
+
+  public async selectJupyterInterpreter(request: SelectJupyterInterpreterRequest): Promise<KernelCommandResult> {
+    return this.registry.runExclusive(request.notebook_uri, async () => {
+      const document = await this.requireDocument(request.notebook_uri);
+      await this.mutationService.ensureStableCellIds(document);
+      return this.kernelCommandService.selectJupyterInterpreter(document);
+    });
+  }
+
+  public async restartKernel(request: RestartKernelRequest): Promise<KernelCommandResult> {
+    return this.registry.runExclusive(request.notebook_uri, async () => {
+      const document = await this.requireDocument(request.notebook_uri);
+      await this.mutationService.ensureStableCellIds(document);
+      return this.kernelCommandService.restartKernel(document);
+    });
+  }
+
+  public async interruptExecution(request: InterruptExecutionRequest): Promise<KernelCommandResult> {
+    return this.registry.runExclusive(request.notebook_uri, async () => {
+      const document = await this.requireDocument(request.notebook_uri);
+      await this.mutationService.ensureStableCellIds(document);
+      return this.kernelCommandService.interruptExecution(document);
+    });
   }
 
   public async summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult> {
