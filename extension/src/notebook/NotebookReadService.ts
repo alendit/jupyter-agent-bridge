@@ -21,7 +21,7 @@ import {
   SummarizeNotebookStateResult,
 } from "../../../packages/protocol/src";
 import { fail } from "../../../packages/protocol/src";
-import { computeSourceSha256, getStoredCellId, notebookCellKindToProtocol, cloneMetadata } from "./cells";
+import { cloneMetadata, computeSourceFingerprint, getStoredCellId, notebookCellKindToProtocol } from "./cells";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { OutputNormalizationService } from "./OutputNormalizationService";
 import { KernelInspectionService } from "./KernelInspectionService";
@@ -88,7 +88,7 @@ export class NotebookReadService {
               notebook_line_start: lineSpans.get(cellId)?.start ?? 1,
               notebook_line_end: lineSpans.get(cellId)?.end ?? 1,
               source: cell.document.getText(),
-              source_sha256: computeSourceSha256(cell.document.getText()),
+              source_fingerprint: computeSourceFingerprint(cell.document.getText()),
               execution_status: execution?.status ?? null,
               execution_order: execution?.execution_order ?? null,
               started_at: execution?.started_at ?? null,
@@ -198,10 +198,10 @@ export class NotebookReadService {
 
   public assertExpectedCellSources(
     document: vscode.NotebookDocument,
-    expectedCellSourceSha256ById: Record<string, string> | undefined,
+    expectedCellSourceFingerprintById: Record<string, string> | undefined,
     requestedCellIds?: readonly string[],
   ): void {
-    if (!expectedCellSourceSha256ById) {
+    if (!expectedCellSourceFingerprintById) {
       return;
     }
 
@@ -209,7 +209,7 @@ export class NotebookReadService {
     const staleCellIds: string[] = [];
     const mismatchSummaries: string[] = [];
 
-    for (const [cellId, expectedSha256] of Object.entries(expectedCellSourceSha256ById)) {
+    for (const [cellId, expectedFingerprint] of Object.entries(expectedCellSourceFingerprintById)) {
       if (requestedCellIdSet && !requestedCellIdSet.has(cellId)) {
         fail({
           code: "InvalidRequest",
@@ -219,13 +219,13 @@ export class NotebookReadService {
       }
 
       const cell = this.requireCell(document, cellId);
-      const currentSha256 = computeSourceSha256(cell.document.getText());
-      if (currentSha256 === expectedSha256) {
+      const currentFingerprint = computeSourceFingerprint(cell.document.getText());
+      if (currentFingerprint === expectedFingerprint) {
         continue;
       }
 
       staleCellIds.push(cellId);
-      mismatchSummaries.push(`${cellId}: expected ${expectedSha256}, got ${currentSha256}`);
+      mismatchSummaries.push(`${cellId}: expected ${expectedFingerprint}, got ${currentFingerprint}`);
     }
 
     if (staleCellIds.length === 0) {
@@ -323,7 +323,7 @@ export class NotebookReadService {
       notebook_line_start: lineSpan?.start ?? 1,
       notebook_line_end: lineSpan?.end ?? Math.max(1, cell.document.lineCount),
       source: cell.document.getText(),
-      source_sha256: computeSourceSha256(cell.document.getText()),
+      source_fingerprint: computeSourceFingerprint(cell.document.getText()),
       metadata: cloneMetadata(cell.metadata),
       execution: this.toExecutionSummary(cell),
     };

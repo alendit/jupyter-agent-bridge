@@ -16,7 +16,7 @@ export interface PreviewSourceCell {
   notebook_line_start: number;
   notebook_line_end: number;
   source: string;
-  source_sha256: string;
+  source_fingerprint: string;
   execution_status: ExecutionStatus | null;
   execution_order: number | null;
   started_at: string | null;
@@ -41,7 +41,7 @@ export function buildNotebookCellPreviews(
       notebook_line_end: cell.notebook_line_end,
       source_preview: buildSourcePreview(cell.kind, cell.source),
       source_line_count: countSourceLines(cell.source),
-      source_sha256: cell.source_sha256,
+      source_fingerprint: cell.source_fingerprint,
       execution_status: cell.execution_status,
       execution_order: cell.execution_order,
       started_at: cell.started_at,
@@ -105,6 +105,14 @@ function findSectionPath(cellIndex: number, outline: readonly NotebookOutlineHea
 function classifyOutputKind(mime: string): OutputKind {
   if (mime.startsWith("image/")) {
     return "image";
+  }
+
+  if (mime === "application/vnd.code.notebook.stdout") {
+    return "stdout";
+  }
+
+  if (mime === "application/vnd.code.notebook.stderr") {
+    return "stderr";
   }
 
   if (mime === "text/markdown") {

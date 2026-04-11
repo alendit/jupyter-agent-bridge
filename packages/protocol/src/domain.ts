@@ -1,7 +1,7 @@
 import type { BridgeError } from "./errors";
 
 export type NotebookCellKind = "markdown" | "code";
-export type OutputKind = "text" | "markdown" | "json" | "html" | "image" | "error" | "unknown";
+export type OutputKind = "text" | "markdown" | "json" | "html" | "image" | "stdout" | "stderr" | "error" | "unknown";
 export type ExecutionStatus =
   | "idle"
   | "queued"
@@ -82,7 +82,7 @@ export interface CellSnapshot {
   notebook_line_start: number;
   notebook_line_end: number;
   source: string;
-  source_sha256: string;
+  source_fingerprint: string;
   metadata: Record<string, unknown>;
   execution: CellExecutionSummary | null;
   outputs?: NormalizedOutput[];
@@ -111,7 +111,7 @@ export interface NotebookCellPreview {
   notebook_line_end: number;
   source_preview: string;
   source_line_count: number;
-  source_sha256: string;
+  source_fingerprint: string;
   execution_status: ExecutionStatus | null;
   execution_order: number | null;
   started_at: string | null;
@@ -188,7 +188,7 @@ export interface ReplaceCellSourceRequest {
   notebook_uri: string;
   cell_id: string;
   expected_notebook_version?: number;
-  expected_cell_source_sha256?: string;
+  expected_cell_source_fingerprint?: string;
   source: string;
 }
 
@@ -223,17 +223,16 @@ export interface ExecuteCellsRequest {
   notebook_uri: string;
   cell_ids: string[];
   expected_notebook_version?: number;
-  expected_cell_source_sha256_by_id?: Record<string, string>;
+  expected_cell_source_fingerprint_by_id?: Record<string, string>;
   timeout_ms?: number;
   stop_on_error?: boolean;
-  wait_for_completion?: true;
 }
 
 export interface ExecuteCellsAsyncRequest {
   notebook_uri: string;
   cell_ids: string[];
   expected_notebook_version?: number;
-  expected_cell_source_sha256_by_id?: Record<string, string>;
+  expected_cell_source_fingerprint_by_id?: Record<string, string>;
   timeout_ms?: number;
   stop_on_error?: boolean;
 }
@@ -285,7 +284,7 @@ export interface PatchCellSourceRequest {
   patch: string;
   format?: "auto" | "unified_diff" | "codex_apply_patch" | "search_replace_json";
   expected_notebook_version?: number;
-  expected_cell_source_sha256?: string;
+  expected_cell_source_fingerprint?: string;
 }
 
 export interface GoToDefinitionRequest {
@@ -293,14 +292,14 @@ export interface GoToDefinitionRequest {
   cell_id: string;
   line: number;
   column: number;
-  expected_cell_source_sha256?: string;
+  expected_cell_source_fingerprint?: string;
 }
 
 export interface FormatCellRequest {
   notebook_uri: string;
   cell_id: string;
   expected_notebook_version?: number;
-  expected_cell_source_sha256?: string;
+  expected_cell_source_fingerprint?: string;
 }
 
 export interface NotebookStateSummary {
@@ -377,7 +376,7 @@ export interface SearchNotebookMatch {
   match_text: string;
   line_text: string;
   section_path: string[];
-  source_sha256: string;
+  source_fingerprint: string;
 }
 
 export interface SearchNotebookResult {
@@ -403,7 +402,7 @@ export interface NotebookDiagnostic {
   start_column: number;
   end_line: number;
   end_column: number;
-  source_sha256: string;
+  source_fingerprint: string;
 }
 
 export interface NotebookDiagnosticsResult {
@@ -428,7 +427,7 @@ export interface NotebookSymbol {
   selection_start_column: number;
   selection_end_line: number;
   selection_end_column: number;
-  source_sha256: string;
+  source_fingerprint: string;
 }
 
 export interface FindSymbolsResult {
@@ -460,7 +459,7 @@ export interface GoToDefinitionResult {
   cell_id: string;
   line: number;
   column: number;
-  source_sha256: string;
+  source_fingerprint: string;
   definitions: DefinitionTarget[];
 }
 
@@ -541,8 +540,8 @@ export interface MutationResult {
 export interface PatchCellSourceResult extends MutationResult {
   operation: "patch_cell_source";
   applied_patch_format: "unified_diff" | "codex_apply_patch" | "search_replace_json";
-  before_source_sha256: string;
-  after_source_sha256: string;
+  before_source_fingerprint: string;
+  after_source_fingerprint: string;
 }
 
 export interface FormatCellResult extends MutationResult {
@@ -550,8 +549,8 @@ export interface FormatCellResult extends MutationResult {
   formatter_found: boolean;
   formatted: boolean;
   applied_edit_count: number;
-  before_source_sha256: string;
-  after_source_sha256: string;
+  before_source_fingerprint: string;
+  after_source_fingerprint: string;
 }
 
 export type ListOpenNotebooksResult = NotebookSummary[];

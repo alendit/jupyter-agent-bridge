@@ -234,10 +234,10 @@ Cells use stable `cell_id` values. These are identity handles, not content hashe
 
 Indices are returned for convenience but are not the primary mutation handle.
 
-Cell reads also expose `source_sha256`, which is a short fingerprint of the current cell source. Agents should treat the pair as:
+Cell reads also expose `source_fingerprint`, which is a short fingerprint of the current cell source. Agents should treat the pair as:
 
 - `cell_id`: stable identity across source edits and moves
-- `source_sha256`: optimistic state fingerprint for stale-safe reads, edits, definition lookups, and execution requests
+- `source_fingerprint`: optimistic state fingerprint for stale-safe reads, edits, definition lookups, and execution requests
 
 ### Notebook Versioning
 
@@ -246,7 +246,7 @@ Each open notebook gets an in-memory monotonic `notebook_version`.
 - It increments when the editor reports notebook document changes.
 - Reads, mutations, and execution responses return the current version.
 - Mutating requests may supply `expected_notebook_version`.
-- Some cell-targeted requests may also supply expected source hashes for optimistic stale checks without a fresh `list_cells` call.
+- Some cell-targeted requests may also supply expected source fingerprints for optimistic stale checks without a fresh `list_cells` call.
 - Version or source-hash mismatches fail with `NotebookChanged`.
 - `NotebookChanged.detail` returns fresh `CellSnapshot` values for the mismatched target cells so an agent can retry from current state.
 
@@ -270,6 +270,8 @@ Outputs are normalized into transport-safe items with these kinds:
 - `json`
 - `html`
 - `image`
+- `stdout`
+- `stderr`
 - `error`
 - `unknown`
 
@@ -281,6 +283,8 @@ Normalization keeps MIME types, ordering, and truncation metadata. The current t
 - up to 1 MiB raw bytes per image item before base64 encoding
 
 If truncation occurs, the output item carries `truncated`, `original_bytes`, and `returned_bytes`.
+
+Notebook-native stdout, stderr, and structured error payloads are normalized and returned by default. `include_rich_output_text` only gates raw rendered HTML/JS/widget payloads and similar rich vendor bundles.
 
 ### Execution Rules
 

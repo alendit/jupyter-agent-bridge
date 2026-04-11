@@ -14,7 +14,7 @@ import {
 import { NotebookMutationService } from "./NotebookMutationService";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookRegistry } from "./NotebookRegistry";
-import { computeSourceSha256, getStoredCellId } from "./cells";
+import { computeSourceFingerprint, getStoredCellId } from "./cells";
 import {
   applyTextEdits,
   diagnosticCodeToString,
@@ -70,7 +70,7 @@ export class NotebookLanguageService {
         continue;
       }
 
-      const sourceSha256 = computeSourceSha256(cell.document.getText());
+      const sourceFingerprint = computeSourceFingerprint(cell.document.getText());
       for (const diagnostic of vscode.languages.getDiagnostics(cell.document.uri)) {
         const severity = diagnosticSeverityToProtocol(diagnostic.severity);
         if (allowedSeverities && !allowedSeverities.has(severity)) {
@@ -94,7 +94,7 @@ export class NotebookLanguageService {
           start_column: range.start_column,
           end_line: range.end_line,
           end_column: range.end_column,
-          source_sha256: sourceSha256,
+          source_fingerprint: sourceFingerprint,
         });
       }
     }
@@ -155,7 +155,7 @@ export class NotebookLanguageService {
           selection_start_column: symbol.selection_start_column,
           selection_end_line: symbol.selection_end_line,
           selection_end_column: symbol.selection_end_column,
-          source_sha256: computeSourceSha256(cell.document.getText()),
+          source_fingerprint: computeSourceFingerprint(cell.document.getText()),
         })),
       );
       if (flattened.truncated) {
@@ -178,12 +178,12 @@ export class NotebookLanguageService {
     request: GoToDefinitionRequest,
   ): Promise<GoToDefinitionResult> {
     const cell = this.readService.requireCell(document, request.cell_id);
-    const currentSourceSha256 = computeSourceSha256(cell.document.getText());
+    const currentSourceFingerprint = computeSourceFingerprint(cell.document.getText());
     this.readService.assertExpectedCellSources(
       document,
-      request.expected_cell_source_sha256
+      request.expected_cell_source_fingerprint
         ? {
-            [request.cell_id]: request.expected_cell_source_sha256,
+            [request.cell_id]: request.expected_cell_source_fingerprint,
           }
         : undefined,
       [request.cell_id],
@@ -206,7 +206,7 @@ export class NotebookLanguageService {
       cell_id: request.cell_id,
       line: request.line,
       column: request.column,
-      source_sha256: currentSourceSha256,
+      source_fingerprint: currentSourceFingerprint,
       definitions: mapped,
     };
   }
@@ -215,12 +215,12 @@ export class NotebookLanguageService {
     const currentVersion = this.registry.getVersion(request.notebook_uri);
     const cell = this.readService.requireCell(document, request.cell_id);
     const currentSource = cell.document.getText();
-    const currentSourceSha256 = computeSourceSha256(currentSource);
+    const currentSourceFingerprint = computeSourceFingerprint(currentSource);
     this.readService.assertExpectedCellSources(
       document,
-      request.expected_cell_source_sha256
+      request.expected_cell_source_fingerprint
         ? {
-            [request.cell_id]: request.expected_cell_source_sha256,
+            [request.cell_id]: request.expected_cell_source_fingerprint,
           }
         : undefined,
       [request.cell_id],
@@ -229,7 +229,7 @@ export class NotebookLanguageService {
     if (
       request.expected_notebook_version !== undefined &&
       currentVersion !== request.expected_notebook_version &&
-      !request.expected_cell_source_sha256
+      !request.expected_cell_source_fingerprint
     ) {
       this.mutationService.assertExpectedVersion(currentVersion, request.expected_notebook_version);
     }
@@ -248,8 +248,8 @@ export class NotebookLanguageService {
         formatter_found: false,
         formatted: false,
         applied_edit_count: 0,
-        before_source_sha256: currentSourceSha256,
-        after_source_sha256: currentSourceSha256,
+        before_source_fingerprint: currentSourceFingerprint,
+        after_source_fingerprint: currentSourceFingerprint,
       };
     }
 
@@ -263,8 +263,8 @@ export class NotebookLanguageService {
         formatter_found: true,
         formatted: false,
         applied_edit_count: appliedEditCount,
-        before_source_sha256: currentSourceSha256,
-        after_source_sha256: currentSourceSha256,
+        before_source_fingerprint: currentSourceFingerprint,
+        after_source_fingerprint: currentSourceFingerprint,
       };
     }
 
@@ -287,8 +287,8 @@ export class NotebookLanguageService {
       formatter_found: true,
       formatted: true,
       applied_edit_count: appliedEditCount,
-      before_source_sha256: currentSourceSha256,
-      after_source_sha256: computeSourceSha256(updatedSource),
+      before_source_fingerprint: currentSourceFingerprint,
+      after_source_fingerprint: computeSourceFingerprint(updatedSource),
     };
   }
 

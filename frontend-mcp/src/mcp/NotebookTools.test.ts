@@ -99,7 +99,7 @@ test("normalizeInsertCellRequest accepts the simpler position.mode shape", () =>
   assert.deepEqual(request.cell, { kind: "markdown", source: "## Notes" });
 });
 
-test("normalizeInsertCellRequest reports a did-you-mean suggestion for bad position keys", () => {
+test("normalizeInsertCellRequest rejects legacy one-key position objects", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
   });
@@ -113,14 +113,14 @@ test("normalizeInsertCellRequest reports a did-you-mean suggestion for bad posit
       ).normalizeInsertCellRequest({
         notebook_uri: "file:///workspace/demo.ipynb",
         position: {
-          after: "cell-1",
+          after_cell_id: "cell-1",
         },
         cell: {
           kind: "markdown",
           source: "## Notes",
         },
       }),
-    /Unknown key "after"; expected "after_cell_id"\./,
+    /position must use the mode form/,
   );
 });
 
@@ -163,26 +163,6 @@ test("parseOpenNotebookRequest suggests the expected key name", () => {
         notebook: "file:///workspace/demo.ipynb",
       }),
     /Unknown key "notebook"; expected "notebook_uri"\./,
-  );
-});
-
-test("parseExecuteCellsRequest rejects false wait_for_completion with a clear message", () => {
-  const tools = new NotebookTools(async () => {
-    throw new Error("client should not be called in this unit test");
-  });
-
-  assert.throws(
-    () =>
-      (
-        tools as unknown as {
-          parseExecuteCellsRequest: (value: unknown) => unknown;
-        }
-      ).parseExecuteCellsRequest({
-        notebook_uri: "file:///workspace/demo.ipynb",
-        cell_ids: ["cell-1"],
-        wait_for_completion: false,
-      }),
-    /Use execute_cells_async for non-blocking execution\./,
   );
 });
 
@@ -232,26 +212,6 @@ test("parseExecuteCellsAsyncRequest accepts stop_on_error", () => {
   assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
   assert.deepEqual(request.cell_ids, ["cell-1"]);
   assert.equal(request.stop_on_error, false);
-});
-
-test("parseExecuteCellsRequest rejects quoted wait_for_completion booleans with a type hint", () => {
-  const tools = new NotebookTools(async () => {
-    throw new Error("client should not be called in this unit test");
-  });
-
-  assert.throws(
-    () =>
-      (
-        tools as unknown as {
-          parseExecuteCellsRequest: (value: unknown) => unknown;
-        }
-      ).parseExecuteCellsRequest({
-        notebook_uri: "file:///workspace/demo.ipynb",
-        cell_ids: ["cell-1"],
-        wait_for_completion: "true",
-      }),
-    /Use true or false without quotes\./,
-  );
 });
 
 test("parseSelectKernelRequest requires kernel_id and extension_id together", () => {
@@ -679,7 +639,7 @@ test("parseListNotebookCellsRequest rejects quoted integer range values with a t
   );
 });
 
-test("parseExecuteCellsRequest reports a helpful boolean hint for invalid strings", () => {
+test("parseExecuteCellsRequest reports a helpful boolean hint for stop_on_error strings", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
   });
@@ -693,7 +653,7 @@ test("parseExecuteCellsRequest reports a helpful boolean hint for invalid string
       ).parseExecuteCellsRequest({
         notebook_uri: "file:///workspace/demo.ipynb",
         cell_ids: ["cell-1"],
-        wait_for_completion: "yes",
+        stop_on_error: "yes",
       }),
     /Use true or false without quotes\./,
   );
@@ -816,7 +776,7 @@ test("parseGoToDefinitionRequest requires an exact cell position", () => {
         cell_id: string;
         line: number;
         column: number;
-        expected_cell_source_sha256?: string;
+        expected_cell_source_fingerprint?: string;
       };
     }
   ).parseGoToDefinitionRequest({
@@ -824,16 +784,16 @@ test("parseGoToDefinitionRequest requires an exact cell position", () => {
     cell_id: "cell-4",
     line: 12,
     column: 9,
-    expected_cell_source_sha256: "sha",
+    expected_cell_source_fingerprint: "sha",
   });
 
   assert.equal(request.cell_id, "cell-4");
   assert.equal(request.line, 12);
   assert.equal(request.column, 9);
-  assert.equal(request.expected_cell_source_sha256, "sha");
+  assert.equal(request.expected_cell_source_fingerprint, "sha");
 });
 
-test("parsePatchCellSourceRequest accepts source hash guarded patch edits", () => {
+test("parsePatchCellSourceRequest accepts source fingerprint guarded patch edits", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
   });
@@ -845,7 +805,7 @@ test("parsePatchCellSourceRequest accepts source hash guarded patch edits", () =
         cell_id: string;
         patch: string;
         format?: string;
-        expected_cell_source_sha256?: string;
+        expected_cell_source_fingerprint?: string;
       };
     }
   ).parsePatchCellSourceRequest({
@@ -853,15 +813,15 @@ test("parsePatchCellSourceRequest accepts source hash guarded patch edits", () =
     cell_id: "cell-1",
     patch: "@@\n-print(x)\n+print(x + 1)",
     format: "unified_diff",
-    expected_cell_source_sha256: "abc123",
+    expected_cell_source_fingerprint: "abc123",
   });
 
   assert.equal(request.cell_id, "cell-1");
   assert.equal(request.format, "unified_diff");
-  assert.equal(request.expected_cell_source_sha256, "abc123");
+  assert.equal(request.expected_cell_source_fingerprint, "abc123");
 });
 
-test("parseReplaceCellSourceRequest accepts source hash guarded replacements", () => {
+test("parseReplaceCellSourceRequest accepts source fingerprint guarded replacements", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
   });
@@ -872,19 +832,19 @@ test("parseReplaceCellSourceRequest accepts source hash guarded replacements", (
         notebook_uri: string;
         cell_id: string;
         source: string;
-        expected_cell_source_sha256?: string;
+        expected_cell_source_fingerprint?: string;
       };
     }
   ).parseReplaceCellSourceRequest({
     notebook_uri: "file:///workspace/demo.ipynb",
     cell_id: "cell-2",
     source: "print(2)",
-    expected_cell_source_sha256: "sha-2",
+    expected_cell_source_fingerprint: "sha-2",
   });
 
   assert.equal(request.cell_id, "cell-2");
   assert.equal(request.source, "print(2)");
-  assert.equal(request.expected_cell_source_sha256, "sha-2");
+  assert.equal(request.expected_cell_source_fingerprint, "sha-2");
 });
 
 test("parseFormatCellRequest accepts stale-safe formatter requests", () => {
@@ -898,19 +858,19 @@ test("parseFormatCellRequest accepts stale-safe formatter requests", () => {
         notebook_uri: string;
         cell_id: string;
         expected_notebook_version?: number;
-        expected_cell_source_sha256?: string;
+        expected_cell_source_fingerprint?: string;
       };
     }
   ).parseFormatCellRequest({
     notebook_uri: "file:///workspace/demo.ipynb",
     cell_id: "cell-3",
     expected_notebook_version: 11,
-    expected_cell_source_sha256: "sha-3",
+    expected_cell_source_fingerprint: "sha-3",
   });
 
   assert.equal(request.cell_id, "cell-3");
   assert.equal(request.expected_notebook_version, 11);
-  assert.equal(request.expected_cell_source_sha256, "sha-3");
+  assert.equal(request.expected_cell_source_fingerprint, "sha-3");
 });
 
 test("parseExecuteCellsRequest accepts per-cell source guards", () => {
@@ -923,20 +883,20 @@ test("parseExecuteCellsRequest accepts per-cell source guards", () => {
       parseExecuteCellsRequest: (value: unknown) => {
         notebook_uri: string;
         cell_ids: string[];
-        expected_cell_source_sha256_by_id?: Record<string, string>;
+        expected_cell_source_fingerprint_by_id?: Record<string, string>;
       };
     }
   ).parseExecuteCellsRequest({
     notebook_uri: "file:///workspace/demo.ipynb",
     cell_ids: ["cell-1", "cell-2"],
-    expected_cell_source_sha256_by_id: {
+    expected_cell_source_fingerprint_by_id: {
       "cell-1": "sha-1",
       "cell-2": "sha-2",
     },
   });
 
   assert.deepEqual(request.cell_ids, ["cell-1", "cell-2"]);
-  assert.deepEqual(request.expected_cell_source_sha256_by_id, {
+  assert.deepEqual(request.expected_cell_source_fingerprint_by_id, {
     "cell-1": "sha-1",
     "cell-2": "sha-2",
   });
@@ -952,19 +912,19 @@ test("parseExecuteCellsAsyncRequest accepts per-cell source guards", () => {
       parseExecuteCellsAsyncRequest: (value: unknown) => {
         notebook_uri: string;
         cell_ids: string[];
-        expected_cell_source_sha256_by_id?: Record<string, string>;
+        expected_cell_source_fingerprint_by_id?: Record<string, string>;
       };
     }
   ).parseExecuteCellsAsyncRequest({
     notebook_uri: "file:///workspace/demo.ipynb",
     cell_ids: ["cell-4"],
-    expected_cell_source_sha256_by_id: {
+    expected_cell_source_fingerprint_by_id: {
       "cell-4": "sha-4",
     },
   });
 
   assert.deepEqual(request.cell_ids, ["cell-4"]);
-  assert.deepEqual(request.expected_cell_source_sha256_by_id, {
+  assert.deepEqual(request.expected_cell_source_fingerprint_by_id, {
     "cell-4": "sha-4",
   });
 });

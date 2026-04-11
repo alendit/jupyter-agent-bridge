@@ -172,7 +172,7 @@ const goToDefinitionInputSchema = z
     cell_id: optionalStringSchema,
     line: optionalNumberSchema,
     column: optionalNumberSchema,
-    expected_cell_source_sha256: optionalStringSchema,
+    expected_cell_source_fingerprint: optionalStringSchema,
   })
   .passthrough();
 
@@ -185,15 +185,11 @@ const insertCellInputSchema = z
         mode: optionalStringSchema,
         index: optionalNumberSchema,
         cell_id: optionalStringSchema,
-        before_index: optionalNumberSchema,
-        before_cell_id: optionalStringSchema,
-        after_cell_id: optionalStringSchema,
-        at_end: optionalBooleanSchema,
       })
       .passthrough()
       .optional()
       .describe(
-        'Preferred shape: {"mode":"before_index","index":0} | {"mode":"before_cell_id","cell_id":"..."} | {"mode":"after_cell_id","cell_id":"..."} | {"mode":"at_end"}. Legacy one-key shapes are also accepted.',
+        'Required shape: {"mode":"before_index","index":0} | {"mode":"before_cell_id","cell_id":"..."} | {"mode":"after_cell_id","cell_id":"..."} | {"mode":"at_end"}.',
       ),
     cell: z
       .object({
@@ -212,7 +208,7 @@ const replaceCellSourceInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
-    expected_cell_source_sha256: optionalStringSchema,
+    expected_cell_source_fingerprint: optionalStringSchema,
     source: optionalStringSchema,
   })
   .passthrough();
@@ -224,7 +220,7 @@ const patchCellSourceInputSchema = z
     patch: optionalStringSchema,
     format: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
-    expected_cell_source_sha256: optionalStringSchema,
+    expected_cell_source_fingerprint: optionalStringSchema,
   })
   .passthrough();
 
@@ -233,7 +229,7 @@ const formatCellInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
-    expected_cell_source_sha256: optionalStringSchema,
+    expected_cell_source_fingerprint: optionalStringSchema,
   })
   .passthrough();
 
@@ -259,10 +255,9 @@ const executeCellsInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_ids: z.array(z.unknown()).optional(),
     expected_notebook_version: notebookVersionSchema,
-    expected_cell_source_sha256_by_id: z.record(z.string()).optional(),
+    expected_cell_source_fingerprint_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
-    wait_for_completion: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -271,7 +266,7 @@ const executeCellsAsyncInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_ids: z.array(z.unknown()).optional(),
     expected_notebook_version: notebookVersionSchema,
-    expected_cell_source_sha256_by_id: z.record(z.string()).optional(),
+    expected_cell_source_fingerprint_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
   })
@@ -421,15 +416,15 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
     title: "Go To Definition",
     summary: "Resolve one symbol reference from an exact cell position. Use this after a targeted read when you need the defining cell or external file location.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","line":12,"column":9,"expected_cell_source_sha256"?: "<sha256>"}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","line":12,"column":9,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
     examples: [
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-4","line":12,"column":9,"expected_cell_source_sha256":"<sha256>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-4","line":12,"column":9,"expected_cell_source_fingerprint":"<fingerprint>"}',
     ],
   },
   read_notebook: {
     title: "Read Notebook",
     summary:
-      "Read live notebook cells. Outputs are excluded by default and cells include notebook_line_start/end plus a short source fingerprint. Rich rendered HTML/JS/widget output text is also omitted by default when outputs are included; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
+      "Read live notebook cells. Outputs are excluded by default and cells include notebook_line_start/end plus a short source fingerprint. Plain notebook stdout, stderr, and error payloads are normalized and returned automatically when outputs are included. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/notebook.json","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -439,7 +434,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   insert_cell: {
     title: "Insert Cell",
-    summary: "Insert a new cell. Prefer the position.mode form. Returns only a compact mutation receipt, not the whole notebook.",
+    summary: "Insert a new cell. position must use the mode form. Returns only a compact mutation receipt, not the whole notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","expected_notebook_version"?:7,"position":{"mode":"before_index","index":0}|{"mode":"before_cell_id","cell_id":"cell-1"}|{"mode":"after_cell_id","cell_id":"cell-1"}|{"mode":"at_end"},"cell":{"kind":"markdown"|"code","source":"...","language"?:string|null,"metadata"?:object}}',
     examples: [
@@ -449,30 +444,30 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   replace_cell_source: {
     title: "Replace Cell Source",
-    summary: "Replace one cell source. Editing source does not change kernel state until code cells are executed. Prefer the last seen source_sha256 to stay stale-safe. Returns a compact mutation receipt.",
+    summary: "Replace one cell source. Prefer this for medium or large rewrites where resending full source is simpler than constructing a patch. Editing source does not change kernel state until code cells are executed. Prefer the last seen source_fingerprint to stay stale-safe. Returns a compact mutation receipt.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_sha256"?: "<sha256>","source":"..."}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","source":"..."}',
     examples: [
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)","expected_cell_source_sha256":"<sha256>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)","expected_cell_source_fingerprint":"<fingerprint>"}',
     ],
   },
   patch_cell_source: {
     title: "Patch Cell Source",
-    summary: "Apply a patch to one cell without resending full source. Prefer the current source fingerprint from a recent read or preview to guard against stale cell state.",
+    summary: "Apply a patch to one cell without resending full source. Prefer this for small, local edits where minimizing text churn matters. Use format=search_replace_json when you want the least brittle patch shape. Prefer the current source_fingerprint from a recent read or preview to guard against stale cell state.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"...","format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_sha256"?: "<sha256>"}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"...","format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
     examples: [
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"unified_diff","patch":"@@\\n-print(x)\\n+print(x + 1)","expected_cell_source_sha256":"<sha256>"}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"search_replace_json","patch":"[{\\"old\\":\\"epochs=10\\",\\"new\\":\\"epochs=20\\"}]","expected_cell_source_sha256":"<sha256>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"unified_diff","patch":"@@\\n-print(x)\\n+print(x + 1)","expected_cell_source_fingerprint":"<fingerprint>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"search_replace_json","patch":"[{\\"old\\":\\"epochs=10\\",\\"new\\":\\"epochs=20\\"}]","expected_cell_source_fingerprint":"<fingerprint>"}',
     ],
   },
   format_cell: {
     title: "Format Cell",
     summary: "Run the editor formatter on one cell if available. Use this after code edits. Formatting changes source only and clears stale outputs when source changes.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_sha256"?: "<sha256>"}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
     examples: [
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","expected_cell_source_sha256":"<sha256>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","expected_cell_source_fingerprint":"<fingerprint>"}',
     ],
   },
   delete_cell: {
@@ -489,22 +484,22 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   execute_cells: {
     title: "Execute Cells",
-    summary: "Execute code cells and wait for completion before returning. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. Carry source_sha256 values when you want an optimistic stale check before execution. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
+    summary: "Execute code cells and wait for completion before returning. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. Carry source_fingerprint values when you want an optimistic stale check before execution. Use execute_cells_async for non-blocking execution. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_sha256_by_id"?:{"cell-1":"<sha256>"},"timeout_ms"?:30000,"stop_on_error"?:true,"wait_for_completion"?:true}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_sha256_by_id":{"cell-1":"<sha256-1>","cell-2":"<sha256-2>"},"timeout_ms":45000,"stop_on_error":true,"wait_for_completion":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_fingerprint_by_id":{"cell-1":"<fingerprint-1>","cell-2":"<fingerprint-2>"},"timeout_ms":45000,"stop_on_error":true}',
     ],
   },
   execute_cells_async: {
     title: "Execute Cells Async",
-    summary: "Queue code cell execution and return an execution handle immediately. Use get_execution_status or wait_for_execution to observe the terminal result. Carry source_sha256 values when you want an optimistic stale check before the request is accepted.",
+    summary: "Queue code cell execution and return an execution handle immediately. Use get_execution_status or wait_for_execution to observe the terminal result. Carry source_fingerprint values when you want an optimistic stale check before the request is accepted.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_sha256_by_id"?:{"cell-1":"<sha256>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_sha256_by_id":{"cell-1":"<sha256-1>","cell-2":"<sha256-2>"},"timeout_ms":45000,"stop_on_error":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_fingerprint_by_id":{"cell-1":"<fingerprint-1>","cell-2":"<fingerprint-2>"},"timeout_ms":45000,"stop_on_error":true}',
     ],
   },
   get_execution_status: {
@@ -547,7 +542,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   read_cell_outputs: {
     title: "Read Cell Outputs",
     summary:
-      "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
+      "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs. Plain notebook stdout, stderr, and error payloads are returned by default. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/cell-output.json"}',
     examples: [
@@ -608,6 +603,7 @@ export const NOTEBOOK_RULES = [
   "Read only needed ranges or cell_ids, not whole notebooks.",
   "Do not read raw .ipynb JSON when notebook tools are available.",
   "Use read_cell_outputs for one cell instead of full outputs.",
+  "Plain notebook stdout, stderr, and error payloads are returned by default.",
   "Rich rendered HTML/JS/widget outputs are omitted by default.",
   "Only request include_rich_output_text when raw rendered payload is necessary.",
   "Use output_file_path to route heavy results to disk instead of context.",
@@ -619,8 +615,8 @@ export const NOTEBOOK_RULES = [
   "Use execute_cells_async with get_execution_status or wait_for_execution for long-running executions.",
   "Then use targeted read_notebook, go_to_definition, or read_cell_outputs.",
   "Notebook data may change between turns because the user can edit cells.",
-  "Use notebook versions and source_sha256 values to avoid stale edits or executions.",
-  "Treat cell_id as stable identity and source_sha256 as mutable cell state.",
+  "Use notebook versions and source_fingerprint values to avoid stale edits or executions.",
+  "Treat cell_id as stable identity and source_fingerprint as mutable cell state.",
 ];
 
 export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {

@@ -39,7 +39,7 @@ export function createGeneratedCellId(): string {
   return `c_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
-export function computeSourceSha256(source: string): string {
+export function computeSourceFingerprint(source: string): string {
   return createHash("sha256").update(source, "utf8").digest("hex").slice(0, 12);
 }
 

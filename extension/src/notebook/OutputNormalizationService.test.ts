@@ -63,3 +63,61 @@ test("normalizeOutputs returns raw rich rendered output when explicitly requeste
   assert.equal(outputs[0]?.html, payload);
   assert.equal(outputs[0]?.omitted, undefined);
 });
+
+test("normalizeOutputs returns notebook stdout text by default", () => {
+  const service = new OutputNormalizationService();
+
+  const outputs = service.normalizeOutputs([
+    output([outputItem("application/vnd.code.notebook.stdout", "hello\n")]),
+  ]);
+
+  assert.equal(outputs.length, 1);
+  assert.deepEqual(outputs[0], {
+    kind: "stdout",
+    mime: "application/vnd.code.notebook.stdout",
+    text: "hello\n",
+    truncated: false,
+    original_bytes: Buffer.byteLength("hello\n"),
+    returned_bytes: Buffer.byteLength("hello\n"),
+  });
+});
+
+test("normalizeOutputs returns notebook stderr text by default", () => {
+  const service = new OutputNormalizationService();
+
+  const outputs = service.normalizeOutputs([
+    output([outputItem("application/vnd.code.notebook.stderr", "warning\n")]),
+  ]);
+
+  assert.equal(outputs.length, 1);
+  assert.deepEqual(outputs[0], {
+    kind: "stderr",
+    mime: "application/vnd.code.notebook.stderr",
+    text: "warning\n",
+    truncated: false,
+    original_bytes: Buffer.byteLength("warning\n"),
+    returned_bytes: Buffer.byteLength("warning\n"),
+  });
+});
+
+test("normalizeOutputs returns notebook error payloads by default", () => {
+  const service = new OutputNormalizationService();
+
+  const payload = JSON.stringify({
+    name: "ValueError",
+    message: "bad input",
+    stack: ["line 1", "line 2"],
+  });
+  const outputs = service.normalizeOutputs([
+    output([outputItem("application/vnd.code.notebook.error", payload)]),
+  ]);
+
+  assert.equal(outputs.length, 1);
+  assert.deepEqual(outputs[0], {
+    kind: "error",
+    mime: "application/vnd.code.notebook.error",
+    ename: "ValueError",
+    evalue: "bad input",
+    traceback: ["line 1", "line 2"],
+  });
+});

@@ -59,7 +59,7 @@ export class NotebookAsyncExecutionService {
       this.registry.getVersion(request.notebook_uri),
       request.expected_notebook_version,
     );
-    this.readService.assertExpectedCellSources(document, request.expected_cell_source_sha256_by_id, request.cell_ids);
+    this.readService.assertExpectedCellSources(document, request.expected_cell_source_fingerprint_by_id, request.cell_ids);
 
     const execution_id = this.createExecutionId();
     const snapshot: ExecutionStatusResult = {

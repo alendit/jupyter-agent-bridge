@@ -40,6 +40,18 @@ export class OutputNormalizationService {
       return this.normalizeImage(mime, rawBuffer);
     }
 
+    if (mime === "application/vnd.code.notebook.stdout") {
+      return this.normalizeText("stdout", mime, rawBuffer, TEXT_LIMIT_BYTES);
+    }
+
+    if (mime === "application/vnd.code.notebook.stderr") {
+      return this.normalizeText("stderr", mime, rawBuffer, TEXT_LIMIT_BYTES);
+    }
+
+    if (mime === "application/vnd.code.notebook.error") {
+      return this.normalizeError(mime, rawBuffer);
+    }
+
     if (!options.includeRichOutputText && this.isRichRenderedMime(mime)) {
       return this.normalizeOmittedRenderedOutput(mime, rawBuffer);
     }
@@ -87,7 +99,7 @@ export class OutputNormalizationService {
   }
 
   private normalizeText(
-    kind: "text" | "markdown" | "html",
+    kind: "text" | "markdown" | "html" | "stdout" | "stderr",
     mime: string,
     rawBuffer: Buffer,
     limit: number,

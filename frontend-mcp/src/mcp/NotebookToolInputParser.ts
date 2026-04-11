@@ -212,17 +212,26 @@ export class NotebookToolInputParser {
   public parseGoToDefinitionRequest(input: unknown): GoToDefinitionRequest {
     const toolName = "go_to_definition";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "line", "column", "expected_cell_source_sha256"]);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "cell_id",
+      "line",
+      "column",
+      "expected_cell_source_fingerprint",
+    ]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
       cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
       line: this.requiredPositiveInteger(params.line, `${toolName}.line`),
       column: this.requiredPositiveInteger(params.column, `${toolName}.column`),
-      expected_cell_source_sha256:
-        params.expected_cell_source_sha256 === undefined
+      expected_cell_source_fingerprint:
+        params.expected_cell_source_fingerprint === undefined
           ? undefined
-          : this.requiredString(params.expected_cell_source_sha256, `${toolName}.expected_cell_source_sha256`),
+          : this.requiredString(
+              params.expected_cell_source_fingerprint,
+              `${toolName}.expected_cell_source_fingerprint`,
+            ),
     };
   }
 
@@ -249,7 +258,7 @@ export class NotebookToolInputParser {
       "notebook_uri",
       "cell_id",
       "expected_notebook_version",
-      "expected_cell_source_sha256",
+      "expected_cell_source_fingerprint",
       "source",
     ]);
 
@@ -260,10 +269,13 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
-      expected_cell_source_sha256:
-        params.expected_cell_source_sha256 === undefined
+      expected_cell_source_fingerprint:
+        params.expected_cell_source_fingerprint === undefined
           ? undefined
-          : this.requiredString(params.expected_cell_source_sha256, `${toolName}.expected_cell_source_sha256`),
+          : this.requiredString(
+              params.expected_cell_source_fingerprint,
+              `${toolName}.expected_cell_source_fingerprint`,
+            ),
       source: this.requiredString(params.source, `${toolName}.source`),
     };
   }
@@ -277,7 +289,7 @@ export class NotebookToolInputParser {
       "patch",
       "format",
       "expected_notebook_version",
-      "expected_cell_source_sha256",
+      "expected_cell_source_fingerprint",
     ]);
 
     return {
@@ -297,10 +309,13 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
-      expected_cell_source_sha256:
-        params.expected_cell_source_sha256 === undefined
+      expected_cell_source_fingerprint:
+        params.expected_cell_source_fingerprint === undefined
           ? undefined
-          : this.requiredString(params.expected_cell_source_sha256, `${toolName}.expected_cell_source_sha256`),
+          : this.requiredString(
+              params.expected_cell_source_fingerprint,
+              `${toolName}.expected_cell_source_fingerprint`,
+            ),
     };
   }
 
@@ -311,7 +326,7 @@ export class NotebookToolInputParser {
       "notebook_uri",
       "cell_id",
       "expected_notebook_version",
-      "expected_cell_source_sha256",
+      "expected_cell_source_fingerprint",
     ]);
 
     return {
@@ -321,10 +336,13 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
-      expected_cell_source_sha256:
-        params.expected_cell_source_sha256 === undefined
+      expected_cell_source_fingerprint:
+        params.expected_cell_source_fingerprint === undefined
           ? undefined
-          : this.requiredString(params.expected_cell_source_sha256, `${toolName}.expected_cell_source_sha256`),
+          : this.requiredString(
+              params.expected_cell_source_fingerprint,
+              `${toolName}.expected_cell_source_fingerprint`,
+            ),
     };
   }
 
@@ -366,22 +384,10 @@ export class NotebookToolInputParser {
       "notebook_uri",
       "cell_ids",
       "expected_notebook_version",
-      "expected_cell_source_sha256_by_id",
+      "expected_cell_source_fingerprint_by_id",
       "timeout_ms",
       "stop_on_error",
-      "wait_for_completion",
     ]);
-
-    const waitForCompletion =
-      params.wait_for_completion === undefined
-        ? undefined
-        : this.requiredBoolean(params.wait_for_completion, `${toolName}.wait_for_completion`);
-    if (waitForCompletion === false) {
-      this.failValidation(
-        toolName,
-        "wait_for_completion=false is not supported. Use execute_cells_async for non-blocking execution.",
-      );
-    }
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -390,12 +396,12 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
-      expected_cell_source_sha256_by_id:
-        params.expected_cell_source_sha256_by_id === undefined
+      expected_cell_source_fingerprint_by_id:
+        params.expected_cell_source_fingerprint_by_id === undefined
           ? undefined
           : this.requiredStringRecord(
-              params.expected_cell_source_sha256_by_id,
-              `${toolName}.expected_cell_source_sha256_by_id`,
+              params.expected_cell_source_fingerprint_by_id,
+              `${toolName}.expected_cell_source_fingerprint_by_id`,
             ),
       timeout_ms:
         params.timeout_ms === undefined
@@ -405,7 +411,6 @@ export class NotebookToolInputParser {
         params.stop_on_error === undefined
           ? undefined
           : this.requiredBoolean(params.stop_on_error, `${toolName}.stop_on_error`),
-      wait_for_completion: waitForCompletion ? true : undefined,
     };
   }
 
@@ -416,7 +421,7 @@ export class NotebookToolInputParser {
       "notebook_uri",
       "cell_ids",
       "expected_notebook_version",
-      "expected_cell_source_sha256_by_id",
+      "expected_cell_source_fingerprint_by_id",
       "timeout_ms",
       "stop_on_error",
     ]);
@@ -428,12 +433,12 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
-      expected_cell_source_sha256_by_id:
-        params.expected_cell_source_sha256_by_id === undefined
+      expected_cell_source_fingerprint_by_id:
+        params.expected_cell_source_fingerprint_by_id === undefined
           ? undefined
           : this.requiredStringRecord(
-              params.expected_cell_source_sha256_by_id,
-              `${toolName}.expected_cell_source_sha256_by_id`,
+              params.expected_cell_source_fingerprint_by_id,
+              `${toolName}.expected_cell_source_fingerprint_by_id`,
             ),
       timeout_ms:
         params.timeout_ms === undefined
@@ -619,35 +624,14 @@ export class NotebookToolInputParser {
 
   private normalizeInsertCellPosition(position: Record<string, unknown>): InsertCellRequest["position"] {
     const toolName = "insert_cell";
-    if ("mode" in position) {
-      return this.normalizeModeInsertPosition(position);
-    }
-
-    const keys = Object.keys(position);
-    if (keys.length !== 1) {
+    if (!("mode" in position)) {
       this.failValidation(
         toolName,
-        'position must be exactly one preferred shape like {"mode":"after_cell_id","cell_id":"cell-1"} or one legacy one-key object like {"after_cell_id":"cell-1"}.',
+        'position must use the mode form like {"mode":"after_cell_id","cell_id":"cell-1"}.',
       );
     }
 
-    const key = keys[0] as string;
-    const value = position[key];
-    switch (key) {
-      case "before_index":
-        return { before_index: this.requiredNonNegativeInteger(value, "insert_cell.position.before_index") };
-      case "before_cell_id":
-        return { before_cell_id: this.requiredString(value, "insert_cell.position.before_cell_id") };
-      case "after_cell_id":
-        return { after_cell_id: this.requiredString(value, "insert_cell.position.after_cell_id") };
-      case "at_end":
-        if (value !== true) {
-          this.failValidation(toolName, 'Legacy position {"at_end":true} requires the boolean value true.');
-        }
-        return { at_end: true };
-      default:
-        this.failValidation(toolName, this.unknownPositionKeyMessage(key));
-    }
+    return this.normalizeModeInsertPosition(position);
   }
 
   private normalizeModeInsertPosition(position: Record<string, unknown>): InsertCellRequest["position"] {
@@ -823,18 +807,6 @@ export class NotebookToolInputParser {
       toolName,
       `Unknown key "${unknownKey}"${parentLabel ? ` in ${parentLabel}` : ""}. Allowed keys: ${allowedKeys.join(", ") || "(none)"}.`,
     );
-  }
-
-  private unknownPositionKeyMessage(key: string): string {
-    const suggestion = ({ after: "after_cell_id", before: "before_cell_id", index: "before_index" } as const)[
-      key as "after" | "before" | "index"
-    ] ?? this.closestMatch(key, ["before_index", "before_cell_id", "after_cell_id", "at_end"]);
-
-    if (suggestion) {
-      return `Unknown key "${key}"; expected "${suggestion}".`;
-    }
-
-    return 'Unknown key in position. Expected one of "before_index", "before_cell_id", "after_cell_id", or "at_end".';
   }
 
   private closestMatch(value: string, candidates: readonly string[]): string | undefined {

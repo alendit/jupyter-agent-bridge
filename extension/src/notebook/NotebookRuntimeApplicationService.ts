@@ -14,7 +14,6 @@ import {
   WaitForExecutionResult,
   WaitForKernelReadyRequest,
   WaitForKernelReadyResult,
-  fail,
 } from "../../../packages/protocol/src";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookDocumentService } from "./NotebookDocumentService";
@@ -34,14 +33,6 @@ export class NotebookRuntimeApplicationService {
   ) {}
 
   public async executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult> {
-    if ((request as { wait_for_completion?: boolean }).wait_for_completion === false) {
-      fail({
-        code: "InvalidRequest",
-        message: "wait_for_completion=false is not supported. Use execute_cells_async for non-blocking execution.",
-        recoverable: true,
-      });
-    }
-
     return this.registry.runExclusive(request.notebook_uri, async () => {
       const document = await this.documentService.requireReadyDocument(request.notebook_uri);
       this.mutationService.assertExpectedVersion(

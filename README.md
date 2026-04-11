@@ -56,8 +56,8 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 
 - **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context.
 - **Targeted reading and search**: use `search_notebook`, `find_symbols`, `go_to_definition`, `get_diagnostics`, and targeted `read_notebook` calls to keep context small and stale-safe.
-- **Safe live editing**: use `insert_cell`, `replace_cell_source`, `patch_cell_source`, `format_cell`, `move_cell`, and `delete_cell`. Most edit calls accept `expected_notebook_version`, and source edits can also carry `expected_cell_source_sha256` so agents can reuse cached cell metadata instead of re-listing cells before every change.
-- **Execution and kernel control**: use `execute_cells` when you want a blocking result, or `execute_cells_async` with `get_execution_status` or `wait_for_execution` when you want a handle-first flow. Execution requests can also carry `expected_cell_source_sha256_by_id` for stale-safe execution targeting. Use `read_cell_outputs`, `get_kernel_info`, `wait_for_kernel_ready`, `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` to keep runtime state explicit.
+- **Safe live editing**: use `insert_cell`, `replace_cell_source`, `patch_cell_source`, `format_cell`, `move_cell`, and `delete_cell`. Most edit calls accept `expected_notebook_version`, and source edits can also carry `expected_cell_source_fingerprint` so agents can reuse cached cell metadata instead of re-listing cells before every change. Prefer `replace_cell_source` for medium or large rewrites; prefer `patch_cell_source` for small, local edits.
+- **Execution and kernel control**: use `execute_cells` when you want a blocking result, or `execute_cells_async` with `get_execution_status` or `wait_for_execution` when you want a handle-first flow. Execution requests can also carry `expected_cell_source_fingerprint_by_id` for stale-safe execution targeting. Use `read_cell_outputs`, `get_kernel_info`, `wait_for_kernel_ready`, `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` to keep runtime state explicit.
 - **Variable inspection**: use `list_variables` to page through the live kernel variable explorer state instead of reading huge notebook outputs.
 - **Compact summaries and large payload handling**: use `summarize_notebook_state` when you want a machine-readable status snapshot, and use `output_file_path` on `read_notebook` or `read_cell_outputs` when the result is too large for prompt context.
 - **Tool self-discovery**: use `describe_tool` to ask the MCP server for the exact schema and examples of any tool before invoking it.
@@ -124,7 +124,7 @@ The MCP surface is the primary interface for agents. The bridge surface is the l
 
 All bridge calls use JSON-RPC 2.0 over `POST /rpc` on `127.0.0.1` with bearer-token authentication. The request and result types live in [`packages/protocol/src/domain.ts`](packages/protocol/src/domain.ts), and method names are defined in [`packages/protocol/src/rpc.ts`](packages/protocol/src/rpc.ts).
 
-For stale-safe agent flows, treat `cell_id` as stable identity and `source_sha256` as mutable cell state. When a guarded request fails with `NotebookChanged`, the error `detail` includes fresh cell snapshots for the mismatched target cells so the agent can retry without an extra `list_notebook_cells` round trip.
+For stale-safe agent flows, treat `cell_id` as stable identity and `source_fingerprint` as mutable cell state. When a guarded request fails with `NotebookChanged`, the error `detail` includes fresh cell snapshots for the mismatched target cells so the agent can retry without an extra `list_notebook_cells` round trip.
 
 | Method | What it does | Key params | Returns |
 | --- | --- | --- | --- |

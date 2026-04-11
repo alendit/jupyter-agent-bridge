@@ -12,8 +12,14 @@ test("buildSourcePreview trims markdown headings and truncates long lines", () =
 
 test("summarizeOutputKinds maps mime types without decoding payloads", () => {
   assert.deepEqual(
-    summarizeOutputKinds(["image/png", "application/json", "text/plain", "text/plain"]),
-    ["image", "json", "text"],
+    summarizeOutputKinds([
+      "image/png",
+      "application/json",
+      "application/vnd.code.notebook.stdout",
+      "application/vnd.code.notebook.stderr",
+      "text/plain",
+    ]),
+    ["image", "json", "stdout", "stderr", "text"],
   );
 });
 
@@ -28,7 +34,7 @@ test("buildNotebookCellPreviews adds section paths and cheap cell summaries", ()
         notebook_line_start: 1,
         notebook_line_end: 1,
         source: "# Intro",
-        source_sha256: "sha-c1",
+        source_fingerprint: "sha-c1",
         execution_status: null,
         execution_order: null,
         started_at: null,
@@ -43,7 +49,7 @@ test("buildNotebookCellPreviews adds section paths and cheap cell summaries", ()
         notebook_line_start: 3,
         notebook_line_end: 4,
         source: "x = 1\nprint(x)",
-        source_sha256: "sha-c2",
+        source_fingerprint: "sha-c2",
         execution_status: "succeeded",
         execution_order: 7,
         started_at: "2026-04-10T10:00:00.000Z",
@@ -58,7 +64,7 @@ test("buildNotebookCellPreviews adds section paths and cheap cell summaries", ()
         notebook_line_start: 6,
         notebook_line_end: 6,
         source: "y = x + 1",
-        source_sha256: "sha-c3",
+        source_fingerprint: "sha-c3",
         execution_status: null,
         execution_order: null,
         started_at: null,
@@ -88,7 +94,7 @@ test("buildNotebookCellPreviews adds section paths and cheap cell summaries", ()
       notebook_line_end: 1,
       source_preview: "Intro",
       source_line_count: 1,
-      source_sha256: "sha-c1",
+      source_fingerprint: "sha-c1",
       execution_status: null,
       execution_order: null,
       started_at: null,
@@ -106,7 +112,7 @@ test("buildNotebookCellPreviews adds section paths and cheap cell summaries", ()
       notebook_line_end: 4,
       source_preview: "x = 1",
       source_line_count: 2,
-      source_sha256: "sha-c2",
+      source_fingerprint: "sha-c2",
       execution_status: "succeeded",
       execution_order: 7,
       started_at: "2026-04-10T10:00:00.000Z",
@@ -124,7 +130,7 @@ test("buildNotebookCellPreviews adds section paths and cheap cell summaries", ()
       notebook_line_end: 6,
       source_preview: "y = x + 1",
       source_line_count: 1,
-      source_sha256: "sha-c3",
+      source_fingerprint: "sha-c3",
       execution_status: null,
       execution_order: null,
       started_at: null,

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { PreparedSearchCell, prepareSearchQuery, searchPreparedCells } from "@jupyter-agent-bridge/notebook-domain";
 import { SearchNotebookRequest, SearchNotebookResult } from "../../../packages/protocol/src";
-import { computeSourceSha256, getStoredCellId, notebookCellKindToProtocol } from "./cells";
+import { computeSourceFingerprint, getStoredCellId, notebookCellKindToProtocol } from "./cells";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookReadService } from "./NotebookReadService";
 
@@ -68,7 +68,7 @@ export class NotebookSearchService {
             cell_index: cell.index,
             kind: notebookCellKindToProtocol(cell.kind),
             section_path: sectionPathByCellId.get(cellId) ?? [],
-            source_sha256: computeSourceSha256(source),
+            source_fingerprint: computeSourceFingerprint(source),
             lines: source.split(/\r?\n/u),
             lines_lowercase: source.split(/\r?\n/u).map((line) => line.toLowerCase()),
           },

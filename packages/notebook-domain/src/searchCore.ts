@@ -12,7 +12,7 @@ export interface PreparedSearchCell {
   cell_index: number;
   kind: NotebookCellKind;
   section_path: string[];
-  source_sha256: string;
+  source_fingerprint: string;
   lines: string[];
   lines_lowercase: string[];
 }
@@ -109,7 +109,7 @@ export function searchPreparedCells(
           match_text: lineMatch.match_text,
           line_text: line,
           section_path: cell.section_path,
-          source_sha256: cell.source_sha256,
+          source_fingerprint: cell.source_fingerprint,
         });
 
         if (matches.length >= query.max_results) {

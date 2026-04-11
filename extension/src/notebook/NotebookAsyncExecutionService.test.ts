@@ -117,7 +117,7 @@ test("executeCellsAsync rejects stale cell guards before accepting work", async 
   const registry = createRegistry(document);
   let validatedRequest:
     | {
-        expected_cell_source_sha256_by_id?: Record<string, string>;
+        expected_cell_source_fingerprint_by_id?: Record<string, string>;
         cell_ids: string[];
       }
     | undefined;
@@ -135,11 +135,11 @@ test("executeCellsAsync rejects stale cell guards before accepting work", async 
     {
       assertExpectedCellSources: (
         _document: unknown,
-        expectedCellSourceSha256ById: Record<string, string> | undefined,
+        expectedCellSourceFingerprintById: Record<string, string> | undefined,
         cellIds: readonly string[],
       ) => {
         validatedRequest = {
-          expected_cell_source_sha256_by_id: expectedCellSourceSha256ById,
+          expected_cell_source_fingerprint_by_id: expectedCellSourceFingerprintById,
           cell_ids: [...cellIds],
         };
         throw new BridgeErrorException({
@@ -157,7 +157,7 @@ test("executeCellsAsync rejects stale cell guards before accepting work", async 
                 notebook_line_start: 1,
                 notebook_line_end: 1,
                 source: "print(2)\n",
-                source_sha256: "sha-new",
+                source_fingerprint: "sha-new",
                 metadata: {},
                 execution: null,
               },
@@ -178,7 +178,7 @@ test("executeCellsAsync rejects stale cell guards before accepting work", async 
       service.executeCellsAsync({
         notebook_uri: "file:///workspace/demo.ipynb",
         cell_ids: ["cell-1"],
-        expected_cell_source_sha256_by_id: {
+        expected_cell_source_fingerprint_by_id: {
           "cell-1": "sha-old",
         },
       }),
@@ -186,7 +186,7 @@ test("executeCellsAsync rejects stale cell guards before accepting work", async 
   );
 
   assert.deepEqual(validatedRequest, {
-    expected_cell_source_sha256_by_id: {
+    expected_cell_source_fingerprint_by_id: {
       "cell-1": "sha-old",
     },
     cell_ids: ["cell-1"],

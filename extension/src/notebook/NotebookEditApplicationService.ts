@@ -16,7 +16,7 @@ import { NotebookReadService } from "./NotebookReadService";
 import { NotebookMutationService } from "./NotebookMutationService";
 import { CellPatchService } from "./CellPatchService";
 import { NotebookLanguageService } from "./NotebookLanguageService";
-import { computeSourceSha256 } from "./cells";
+import { computeSourceFingerprint } from "./cells";
 
 export class NotebookEditApplicationService {
   public constructor(
@@ -47,9 +47,9 @@ export class NotebookEditApplicationService {
       );
       this.readService.assertExpectedCellSources(
         document,
-        request.expected_cell_source_sha256
+        request.expected_cell_source_fingerprint
           ? {
-              [request.cell_id]: request.expected_cell_source_sha256,
+              [request.cell_id]: request.expected_cell_source_fingerprint,
             }
           : undefined,
         [request.cell_id],
@@ -64,12 +64,12 @@ export class NotebookEditApplicationService {
       const currentVersion = this.registry.getVersion(request.notebook_uri);
       const cell = this.readService.requireCell(document, request.cell_id);
       const currentSource = cell.document.getText();
-      const currentSourceSha256 = computeSourceSha256(currentSource);
+      const currentSourceFingerprint = computeSourceFingerprint(currentSource);
       this.readService.assertExpectedCellSources(
         document,
-        request.expected_cell_source_sha256
+        request.expected_cell_source_fingerprint
           ? {
-              [request.cell_id]: request.expected_cell_source_sha256,
+              [request.cell_id]: request.expected_cell_source_fingerprint,
             }
           : undefined,
         [request.cell_id],
@@ -78,7 +78,7 @@ export class NotebookEditApplicationService {
       if (
         request.expected_notebook_version !== undefined &&
         currentVersion !== request.expected_notebook_version &&
-        !request.expected_cell_source_sha256
+        !request.expected_cell_source_fingerprint
       ) {
         this.mutationService.assertExpectedVersion(currentVersion, request.expected_notebook_version);
       }
@@ -101,8 +101,8 @@ export class NotebookEditApplicationService {
         ...mutation,
         operation: "patch_cell_source",
         applied_patch_format: patchResult.format,
-        before_source_sha256: currentSourceSha256,
-        after_source_sha256: computeSourceSha256(patchResult.updatedSource),
+        before_source_fingerprint: currentSourceFingerprint,
+        after_source_fingerprint: computeSourceFingerprint(patchResult.updatedSource),
       };
     });
   }
