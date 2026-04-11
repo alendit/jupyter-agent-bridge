@@ -9,7 +9,6 @@ import {
   PatchCellSourceRequest,
   PatchCellSourceResult,
   ReplaceCellSourceRequest,
-  fail,
 } from "../../../packages/protocol/src";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookDocumentService } from "./NotebookDocumentService";
@@ -46,6 +45,15 @@ export class NotebookEditApplicationService {
         this.registry.getVersion(request.notebook_uri),
         request.expected_notebook_version,
       );
+      this.readService.assertExpectedCellSources(
+        document,
+        request.expected_cell_source_sha256
+          ? {
+              [request.cell_id]: request.expected_cell_source_sha256,
+            }
+          : undefined,
+        [request.cell_id],
+      );
       const outcome = await this.mutationService.replaceCellSource(document, request);
       return this.toMutationResult(request.notebook_uri, outcome);
     });
@@ -57,14 +65,15 @@ export class NotebookEditApplicationService {
       const cell = this.readService.requireCell(document, request.cell_id);
       const currentSource = cell.document.getText();
       const currentSourceSha256 = computeSourceSha256(currentSource);
-
-      if (request.expected_cell_source_sha256 && request.expected_cell_source_sha256 !== currentSourceSha256) {
-        fail({
-          code: "NotebookChanged",
-          message: `Cell source changed since last read. Expected sha256 ${request.expected_cell_source_sha256}, got ${currentSourceSha256}.`,
-          recoverable: true,
-        });
-      }
+      this.readService.assertExpectedCellSources(
+        document,
+        request.expected_cell_source_sha256
+          ? {
+              [request.cell_id]: request.expected_cell_source_sha256,
+            }
+          : undefined,
+        [request.cell_id],
+      );
 
       if (
         request.expected_notebook_version !== undefined &&

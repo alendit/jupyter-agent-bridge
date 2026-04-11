@@ -188,6 +188,7 @@ export interface ReplaceCellSourceRequest {
   notebook_uri: string;
   cell_id: string;
   expected_notebook_version?: number;
+  expected_cell_source_sha256?: string;
   source: string;
 }
 
@@ -222,6 +223,7 @@ export interface ExecuteCellsRequest {
   notebook_uri: string;
   cell_ids: string[];
   expected_notebook_version?: number;
+  expected_cell_source_sha256_by_id?: Record<string, string>;
   timeout_ms?: number;
   stop_on_error?: boolean;
   wait_for_completion?: true;
@@ -231,6 +233,7 @@ export interface ExecuteCellsAsyncRequest {
   notebook_uri: string;
   cell_ids: string[];
   expected_notebook_version?: number;
+  expected_cell_source_sha256_by_id?: Record<string, string>;
   timeout_ms?: number;
   stop_on_error?: boolean;
 }
@@ -308,6 +311,12 @@ export interface NotebookStateSummary {
   cells_with_errors: string[];
   cells_with_images: string[];
   active_cell_id?: string;
+}
+
+export interface NotebookChangedDetail {
+  notebook_uri: string;
+  notebook_version: number;
+  cells: CellSnapshot[];
 }
 
 export interface ReadCellOutputsResult {

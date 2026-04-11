@@ -245,7 +245,13 @@ export class NotebookToolInputParser {
   public parseReplaceCellSourceRequest(input: unknown): ReplaceCellSourceRequest {
     const toolName = "replace_cell_source";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "source"]);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "cell_id",
+      "expected_notebook_version",
+      "expected_cell_source_sha256",
+      "source",
+    ]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -254,6 +260,10 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      expected_cell_source_sha256:
+        params.expected_cell_source_sha256 === undefined
+          ? undefined
+          : this.requiredString(params.expected_cell_source_sha256, `${toolName}.expected_cell_source_sha256`),
       source: this.requiredString(params.source, `${toolName}.source`),
     };
   }
@@ -356,6 +366,7 @@ export class NotebookToolInputParser {
       "notebook_uri",
       "cell_ids",
       "expected_notebook_version",
+      "expected_cell_source_sha256_by_id",
       "timeout_ms",
       "stop_on_error",
       "wait_for_completion",
@@ -379,6 +390,13 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      expected_cell_source_sha256_by_id:
+        params.expected_cell_source_sha256_by_id === undefined
+          ? undefined
+          : this.requiredStringRecord(
+              params.expected_cell_source_sha256_by_id,
+              `${toolName}.expected_cell_source_sha256_by_id`,
+            ),
       timeout_ms:
         params.timeout_ms === undefined
           ? undefined
@@ -398,6 +416,7 @@ export class NotebookToolInputParser {
       "notebook_uri",
       "cell_ids",
       "expected_notebook_version",
+      "expected_cell_source_sha256_by_id",
       "timeout_ms",
       "stop_on_error",
     ]);
@@ -409,6 +428,13 @@ export class NotebookToolInputParser {
         params.expected_notebook_version === undefined
           ? undefined
           : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      expected_cell_source_sha256_by_id:
+        params.expected_cell_source_sha256_by_id === undefined
+          ? undefined
+          : this.requiredStringRecord(
+              params.expected_cell_source_sha256_by_id,
+              `${toolName}.expected_cell_source_sha256_by_id`,
+            ),
       timeout_ms:
         params.timeout_ms === undefined
           ? undefined
@@ -731,6 +757,21 @@ export class NotebookToolInputParser {
     }
 
     throw new Error(`${label} must be an array of non-empty strings.`);
+  }
+
+  private requiredStringRecord(value: unknown, label: string): Record<string, string> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`${label} must be an object whose values are non-empty strings.`);
+    }
+
+    const record = value as Record<string, unknown>;
+    for (const [key, entry] of Object.entries(record)) {
+      if (typeof key !== "string" || key.length === 0 || typeof entry !== "string" || entry.length === 0) {
+        throw new Error(`${label} must be an object whose values are non-empty strings.`);
+      }
+    }
+
+    return record as Record<string, string>;
   }
 
   private requiredEnumArray<const TValue extends readonly string[]>(

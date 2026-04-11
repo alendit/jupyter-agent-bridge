@@ -83,6 +83,7 @@ test("executeCellsAsync tracks queued, running, and completed states", async () 
       executeCells: async () => execution.promise,
     } as never,
     {
+      assertExpectedCellSources: () => undefined,
       getKernelInfoValue: () => null,
     } as never,
     undefined,
@@ -111,6 +112,87 @@ test("executeCellsAsync tracks queued, running, and completed states", async () 
   assert.ok(completed.result);
 });
 
+test("executeCellsAsync rejects stale cell guards before accepting work", async () => {
+  const document = { uri: { toString: () => "file:///workspace/demo.ipynb" } };
+  const registry = createRegistry(document);
+  let validatedRequest:
+    | {
+        expected_cell_source_sha256_by_id?: Record<string, string>;
+        cell_ids: string[];
+      }
+    | undefined;
+  const service = new NotebookAsyncExecutionService(
+    registry as never,
+    {
+      requireReadyDocument: async () => document as never,
+    } as never,
+    {
+      assertExpectedVersion: () => undefined,
+    } as never,
+    {
+      executeCells: async () => createResult(),
+    } as never,
+    {
+      assertExpectedCellSources: (
+        _document: unknown,
+        expectedCellSourceSha256ById: Record<string, string> | undefined,
+        cellIds: readonly string[],
+      ) => {
+        validatedRequest = {
+          expected_cell_source_sha256_by_id: expectedCellSourceSha256ById,
+          cell_ids: [...cellIds],
+        };
+        throw new BridgeErrorException({
+          code: "NotebookChanged",
+          message: "Cell source changed since last read.",
+          detail: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+            notebook_version: 9,
+            cells: [
+              {
+                cell_id: "cell-1",
+                index: 0,
+                kind: "code",
+                language: "python",
+                notebook_line_start: 1,
+                notebook_line_end: 1,
+                source: "print(2)\n",
+                source_sha256: "sha-new",
+                metadata: {},
+                execution: null,
+              },
+            ],
+          },
+          recoverable: true,
+        });
+      },
+      getKernelInfoValue: () => null,
+    } as never,
+    undefined,
+    () => Date.parse("2024-03-09T16:00:00.000Z"),
+    () => "00000000-0000-0000-0000-000000000010",
+  );
+
+  await assert.rejects(
+    () =>
+      service.executeCellsAsync({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        cell_ids: ["cell-1"],
+        expected_cell_source_sha256_by_id: {
+          "cell-1": "sha-old",
+        },
+      }),
+    (error) => error instanceof BridgeErrorException && error.code === "NotebookChanged",
+  );
+
+  assert.deepEqual(validatedRequest, {
+    expected_cell_source_sha256_by_id: {
+      "cell-1": "sha-old",
+    },
+    cell_ids: ["cell-1"],
+  });
+});
+
 test("async executions retain notebook serialization with later exclusive work", async () => {
   const execution = createDeferred<ExecuteCellsResult>();
   const order: string[] = [];
@@ -133,6 +215,7 @@ test("async executions retain notebook serialization with later exclusive work",
       },
     } as never,
     {
+      assertExpectedCellSources: () => undefined,
       getKernelInfoValue: () => null,
     } as never,
     undefined,
@@ -174,6 +257,7 @@ test("waitForExecution can time out without cancelling the underlying execution"
       executeCells: async () => execution.promise,
     } as never,
     {
+      assertExpectedCellSources: () => undefined,
       getKernelInfoValue: () => null,
     } as never,
     undefined,
@@ -235,6 +319,7 @@ test("timed out executions are tracked as terminal snapshots with result details
       },
     } as never,
     {
+      assertExpectedCellSources: () => undefined,
       getKernelInfoValue: () => null,
     } as never,
     undefined,
@@ -271,6 +356,7 @@ test("expired execution handles are evicted lazily and unknown handles fail clea
       executeCells: async () => createResult(),
     } as never,
     {
+      assertExpectedCellSources: () => undefined,
       getKernelInfoValue: () => null,
     } as never,
     undefined,

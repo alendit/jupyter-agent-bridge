@@ -27,6 +27,7 @@ export class NotebookExecutionService {
     document: vscode.NotebookDocument,
     request: ExecuteCellsRequest,
   ): Promise<ExecuteCellsResult> {
+    this.readService.assertExpectedCellSources(document, request.expected_cell_source_sha256_by_id, request.cell_ids);
     const cells = request.cell_ids.map((cellId) => this.readService.requireCell(document, cellId));
 
     for (const cell of cells) {

@@ -212,6 +212,7 @@ const replaceCellSourceInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
+    expected_cell_source_sha256: optionalStringSchema,
     source: optionalStringSchema,
   })
   .passthrough();
@@ -258,6 +259,7 @@ const executeCellsInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_ids: z.array(z.unknown()).optional(),
     expected_notebook_version: notebookVersionSchema,
+    expected_cell_source_sha256_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
     wait_for_completion: optionalBooleanSchema,
@@ -269,6 +271,7 @@ const executeCellsAsyncInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_ids: z.array(z.unknown()).optional(),
     expected_notebook_version: notebookVersionSchema,
+    expected_cell_source_sha256_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
   })
@@ -446,9 +449,12 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   replace_cell_source: {
     title: "Replace Cell Source",
-    summary: "Replace one cell source. Editing source does not change kernel state until code cells are executed. Returns a compact mutation receipt.",
-    schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"source":"..."}',
-    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)"}'],
+    summary: "Replace one cell source. Editing source does not change kernel state until code cells are executed. Prefer the last seen source_sha256 to stay stale-safe. Returns a compact mutation receipt.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_sha256"?: "<sha256>","source":"..."}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)","expected_cell_source_sha256":"<sha256>"}',
+    ],
   },
   patch_cell_source: {
     title: "Patch Cell Source",
@@ -483,22 +489,22 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   execute_cells: {
     title: "Execute Cells",
-    summary: "Execute code cells and wait for completion before returning. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
+    summary: "Execute code cells and wait for completion before returning. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. Carry source_sha256 values when you want an optimistic stale check before execution. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"timeout_ms"?:30000,"stop_on_error"?:true,"wait_for_completion"?:true}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_sha256_by_id"?:{"cell-1":"<sha256>"},"timeout_ms"?:30000,"stop_on_error"?:true,"wait_for_completion"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"timeout_ms":45000,"stop_on_error":true,"wait_for_completion":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_sha256_by_id":{"cell-1":"<sha256-1>","cell-2":"<sha256-2>"},"timeout_ms":45000,"stop_on_error":true,"wait_for_completion":true}',
     ],
   },
   execute_cells_async: {
     title: "Execute Cells Async",
-    summary: "Queue code cell execution and return an execution handle immediately. Use get_execution_status or wait_for_execution to observe the terminal result.",
+    summary: "Queue code cell execution and return an execution handle immediately. Use get_execution_status or wait_for_execution to observe the terminal result. Carry source_sha256 values when you want an optimistic stale check before the request is accepted.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"timeout_ms"?:30000,"stop_on_error"?:true}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_sha256_by_id"?:{"cell-1":"<sha256>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"timeout_ms":45000,"stop_on_error":true}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_sha256_by_id":{"cell-1":"<sha256-1>","cell-2":"<sha256-2>"},"timeout_ms":45000,"stop_on_error":true}',
     ],
   },
   get_execution_status: {
@@ -613,7 +619,8 @@ export const NOTEBOOK_RULES = [
   "Use execute_cells_async with get_execution_status or wait_for_execution for long-running executions.",
   "Then use targeted read_notebook, go_to_definition, or read_cell_outputs.",
   "Notebook data may change between turns because the user can edit cells.",
-  "Use notebook versions and source_sha256 values to avoid stale edits.",
+  "Use notebook versions and source_sha256 values to avoid stale edits or executions.",
+  "Treat cell_id as stable identity and source_sha256 as mutable cell state.",
 ];
 
 export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {

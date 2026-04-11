@@ -11,7 +11,6 @@ import {
   NotebookDiagnosticsRequest,
   NotebookDiagnosticsResult,
 } from "../../../packages/protocol/src";
-import { fail } from "../../../packages/protocol/src";
 import { NotebookMutationService } from "./NotebookMutationService";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookRegistry } from "./NotebookRegistry";
@@ -180,13 +179,15 @@ export class NotebookLanguageService {
   ): Promise<GoToDefinitionResult> {
     const cell = this.readService.requireCell(document, request.cell_id);
     const currentSourceSha256 = computeSourceSha256(cell.document.getText());
-    if (request.expected_cell_source_sha256 && request.expected_cell_source_sha256 !== currentSourceSha256) {
-      fail({
-        code: "NotebookChanged",
-        message: `Cell source changed since last read. Expected sha256 ${request.expected_cell_source_sha256}, got ${currentSourceSha256}.`,
-        recoverable: true,
-      });
-    }
+    this.readService.assertExpectedCellSources(
+      document,
+      request.expected_cell_source_sha256
+        ? {
+            [request.cell_id]: request.expected_cell_source_sha256,
+          }
+        : undefined,
+      [request.cell_id],
+    );
 
     const position = new vscode.Position(request.line - 1, request.column - 1);
     const rawDefinitions = await vscode.commands.executeCommand<unknown>(
@@ -215,14 +216,15 @@ export class NotebookLanguageService {
     const cell = this.readService.requireCell(document, request.cell_id);
     const currentSource = cell.document.getText();
     const currentSourceSha256 = computeSourceSha256(currentSource);
-
-    if (request.expected_cell_source_sha256 && request.expected_cell_source_sha256 !== currentSourceSha256) {
-      fail({
-        code: "NotebookChanged",
-        message: `Cell source changed since last read. Expected sha256 ${request.expected_cell_source_sha256}, got ${currentSourceSha256}.`,
-        recoverable: true,
-      });
-    }
+    this.readService.assertExpectedCellSources(
+      document,
+      request.expected_cell_source_sha256
+        ? {
+            [request.cell_id]: request.expected_cell_source_sha256,
+          }
+        : undefined,
+      [request.cell_id],
+    );
 
     if (
       request.expected_notebook_version !== undefined &&

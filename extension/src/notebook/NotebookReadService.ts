@@ -9,6 +9,7 @@ import {
   ListNotebookCellsResult,
   ListOpenNotebooksResult,
   MutationResult,
+  NotebookChangedDetail,
   NotebookOutlineResult,
   NotebookSnapshot,
   NotebookStateSummary,
@@ -193,6 +194,61 @@ export class NotebookReadService {
     }
 
     return cell as vscode.NotebookCell;
+  }
+
+  public assertExpectedCellSources(
+    document: vscode.NotebookDocument,
+    expectedCellSourceSha256ById: Record<string, string> | undefined,
+    requestedCellIds?: readonly string[],
+  ): void {
+    if (!expectedCellSourceSha256ById) {
+      return;
+    }
+
+    const requestedCellIdSet = requestedCellIds ? new Set(requestedCellIds) : undefined;
+    const staleCellIds: string[] = [];
+    const mismatchSummaries: string[] = [];
+
+    for (const [cellId, expectedSha256] of Object.entries(expectedCellSourceSha256ById)) {
+      if (requestedCellIdSet && !requestedCellIdSet.has(cellId)) {
+        fail({
+          code: "InvalidRequest",
+          message: `Unexpected source guard for non-targeted cell ${cellId}.`,
+          recoverable: true,
+        });
+      }
+
+      const cell = this.requireCell(document, cellId);
+      const currentSha256 = computeSourceSha256(cell.document.getText());
+      if (currentSha256 === expectedSha256) {
+        continue;
+      }
+
+      staleCellIds.push(cellId);
+      mismatchSummaries.push(`${cellId}: expected ${expectedSha256}, got ${currentSha256}`);
+    }
+
+    if (staleCellIds.length === 0) {
+      return;
+    }
+
+    fail({
+      code: "NotebookChanged",
+      message: `Cell source changed since last read. ${mismatchSummaries.join("; ")}.`,
+      detail: this.toNotebookChangedDetail(document, staleCellIds),
+      recoverable: true,
+    });
+  }
+
+  public toNotebookChangedDetail(
+    document: vscode.NotebookDocument,
+    cellIds: readonly string[],
+  ): NotebookChangedDetail {
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      cells: cellIds.map((cellId) => this.toCellSnapshot(this.requireCell(document, cellId), false)),
+    };
   }
 
   public toNotebookSnapshot(

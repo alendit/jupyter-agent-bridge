@@ -222,7 +222,7 @@ The project assumes a local-machine trust boundary, but still treats the bridge 
 
 ### Cell Identity
 
-Cells use stable `cell_id` values. When the notebook format does not already provide a stable ID, the extension persists one under the extension-owned metadata namespace:
+Cells use stable `cell_id` values. These are identity handles, not content hashes. When the notebook format does not already provide a stable ID, the extension persists one under the extension-owned metadata namespace:
 
 ```json
 {
@@ -234,6 +234,11 @@ Cells use stable `cell_id` values. When the notebook format does not already pro
 
 Indices are returned for convenience but are not the primary mutation handle.
 
+Cell reads also expose `source_sha256`, which is a short fingerprint of the current cell source. Agents should treat the pair as:
+
+- `cell_id`: stable identity across source edits and moves
+- `source_sha256`: optimistic state fingerprint for stale-safe reads, edits, definition lookups, and execution requests
+
 ### Notebook Versioning
 
 Each open notebook gets an in-memory monotonic `notebook_version`.
@@ -241,7 +246,9 @@ Each open notebook gets an in-memory monotonic `notebook_version`.
 - It increments when the editor reports notebook document changes.
 - Reads, mutations, and execution responses return the current version.
 - Mutating requests may supply `expected_notebook_version`.
-- Version mismatches fail with `NotebookChanged`.
+- Some cell-targeted requests may also supply expected source hashes for optimistic stale checks without a fresh `list_cells` call.
+- Version or source-hash mismatches fail with `NotebookChanged`.
+- `NotebookChanged.detail` returns fresh `CellSnapshot` values for the mismatched target cells so an agent can retry from current state.
 
 ### Mutation Serialization
 
