@@ -28,6 +28,11 @@ import { NotebookVariableService } from "./notebook/NotebookVariableService";
 import { OutputNormalizationService } from "./notebook/OutputNormalizationService";
 
 const EXTENSION_VERSION = "0.1.0";
+const PRODUCT_NAME = "Jupyter Agent Bridge";
+const START_BRIDGE_COMMAND = "jupyterAgentBridge.startBridge";
+const STOP_BRIDGE_COMMAND = "jupyterAgentBridge.stopBridge";
+const SHOW_STATUS_COMMAND = "jupyterAgentBridge.showStatus";
+const COPY_MCP_DEFINITION_COMMAND = "jupyterAgentBridge.copyMcpDefinition";
 
 interface RuntimeState {
   bridgeUrl: string;
@@ -43,7 +48,7 @@ interface RuntimeState {
 let runtimeState: RuntimeState | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const outputChannel = vscode.window.createOutputChannel("Jupyter MCP", { log: true });
+  const outputChannel = vscode.window.createOutputChannel(PRODUCT_NAME, { log: true });
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   const log = (message: string): void => {
     outputChannel.appendLine(message);
@@ -104,16 +109,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tooltip.isTrusted = true;
 
     if (!runtimeState) {
-      tooltip.appendMarkdown("**Jupyter MCP Bridge**\n\n");
+      tooltip.appendMarkdown(`**${PRODUCT_NAME}**\n\n`);
       tooltip.appendMarkdown("- Status: stopped\n");
       tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
       tooltip.appendMarkdown(
-        "[Start Bridge](command:jupyterMcp.startBridge) | [Copy MCP Definition](command:jupyterMcp.copyMcpDefinition)",
+        `[Start Bridge](command:${START_BRIDGE_COMMAND}) | [Copy MCP Definition](command:${COPY_MCP_DEFINITION_COMMAND})`,
       );
       return tooltip;
     }
 
-    tooltip.appendMarkdown("**Jupyter MCP Bridge**\n\n");
+    tooltip.appendMarkdown(`**${PRODUCT_NAME}**\n\n`);
     tooltip.appendMarkdown("- Status: running\n");
     tooltip.appendMarkdown(`- Session ID: \`${runtimeState.sessionId}\`\n`);
     tooltip.appendMarkdown(`- Bridge URL: \`${runtimeState.bridgeUrl}\`\n`);
@@ -122,14 +127,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
     tooltip.appendMarkdown(
-      "[Copy MCP Definition](command:jupyterMcp.copyMcpDefinition) | [Stop Bridge](command:jupyterMcp.stopBridge) | [Show Status](command:jupyterMcp.showStatus)",
+      `[Copy MCP Definition](command:${COPY_MCP_DEFINITION_COMMAND}) | [Stop Bridge](command:${STOP_BRIDGE_COMMAND}) | [Show Status](command:${SHOW_STATUS_COMMAND})`,
     );
     return tooltip;
   };
 
   const updateStatusBar = (): void => {
-    statusBarItem.command = "jupyterMcp.showStatus";
-    statusBarItem.text = runtimeState ? "$(plug) Jupyter MCP" : "$(debug-disconnect) Jupyter MCP";
+    statusBarItem.command = SHOW_STATUS_COMMAND;
+    statusBarItem.text = runtimeState ? `$(plug) ${PRODUCT_NAME}` : `$(debug-disconnect) ${PRODUCT_NAME}`;
     statusBarItem.color = runtimeState ? new vscode.ThemeColor("charts.blue") : undefined;
     statusBarItem.tooltip = renderTooltip();
     statusBarItem.show();
@@ -137,10 +142,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const getStatusSummary = (): string => {
     if (!runtimeState) {
-      return "Jupyter MCP bridge is stopped.";
+      return `${PRODUCT_NAME} is stopped.`;
     }
 
-    return `Jupyter MCP bridge is running.
+    return `${PRODUCT_NAME} is running.
 Session ID: ${runtimeState.sessionId}
 Bridge URL: ${runtimeState.bridgeUrl}
 Port file: ${runtimeState.portFilePaths[0] ?? "not available"}
@@ -233,7 +238,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     if (!portFilePath) {
       log("Failed to copy MCP definition because no workspace folder is available for a project port file.");
       await vscode.window.showErrorMessage(
-        "Jupyter MCP needs an open workspace folder to generate a project-local MCP definition.",
+        `${PRODUCT_NAME} needs an open workspace folder to generate a project-local MCP definition.`,
       );
       return;
     }
@@ -243,7 +248,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       log("Failed to copy MCP definition because the bundled MCP server entrypoint was not found.");
       updateStatusBar();
       await vscode.window.showErrorMessage(
-        "Jupyter MCP could not find the bundled MCP server entrypoint. Build the workspace first.",
+        `${PRODUCT_NAME} could not find the bundled MCP server entrypoint. Build the workspace first.`,
       );
       return;
     }
@@ -257,10 +262,10 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     );
   };
 
-  const startBridgeCommand = vscode.commands.registerCommand("jupyterMcp.startBridge", async () => {
+  const startBridgeCommand = vscode.commands.registerCommand(START_BRIDGE_COMMAND, async () => {
     const current = runtimeState ?? (await startRuntime());
     const action = await vscode.window.showInformationMessage(
-      `Jupyter MCP bridge is running at ${current.bridgeUrl}. Session method: ${BRIDGE_METHODS.getSessionInfo}`,
+      `${PRODUCT_NAME} is running at ${current.bridgeUrl}. Session method: ${BRIDGE_METHODS.getSessionInfo}`,
       "Copy MCP Definition",
       "Show Status",
       "Show Output",
@@ -281,15 +286,15 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     }
   });
 
-  const stopBridgeCommand = vscode.commands.registerCommand("jupyterMcp.stopBridge", async () => {
+  const stopBridgeCommand = vscode.commands.registerCommand(STOP_BRIDGE_COMMAND, async () => {
     const wasRunning = runtimeState !== undefined;
     await stopRuntime();
     await vscode.window.showInformationMessage(
-      wasRunning ? "Jupyter MCP bridge stopped." : "Jupyter MCP bridge is already stopped.",
+      wasRunning ? `${PRODUCT_NAME} stopped.` : `${PRODUCT_NAME} is already stopped.`,
     );
   });
 
-  const showStatusCommand = vscode.commands.registerCommand("jupyterMcp.showStatus", async () => {
+  const showStatusCommand = vscode.commands.registerCommand(SHOW_STATUS_COMMAND, async () => {
     const message = getStatusSummary();
     log(`Status requested. ${message.replace(/\n/g, " | ")}`);
     updateStatusBar();
@@ -312,7 +317,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
   });
 
   const copyMcpDefinitionCommand = vscode.commands.registerCommand(
-    "jupyterMcp.copyMcpDefinition",
+    COPY_MCP_DEFINITION_COMMAND,
     copyMcpDefinition,
   );
 

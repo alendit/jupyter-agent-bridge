@@ -21,16 +21,16 @@ export function getDefaultSessionsDirectory(platform: NodeJS.Platform = process.
   const home = os.homedir();
 
   if (platform === "darwin") {
-    return path.join(home, "Library", "Caches", "jupyter-mcp", "sessions");
+    return path.join(home, "Library", "Caches", "jupyter-agent-bridge", "sessions");
   }
 
   if (platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA;
-    return path.join(localAppData ?? path.join(home, "AppData", "Local"), "jupyter-mcp", "sessions");
+    return path.join(localAppData ?? path.join(home, "AppData", "Local"), "jupyter-agent-bridge", "sessions");
   }
 
   const stateHome = process.env.XDG_STATE_HOME ?? path.join(home, ".local", "state");
-  return path.join(stateHome, "jupyter-mcp", "sessions");
+  return path.join(stateHome, "jupyter-agent-bridge", "sessions");
 }
 
 export function isRendezvousRecordFresh(record: RendezvousRecord, now = Date.now()): boolean {
@@ -52,4 +52,3 @@ export function recordMatchesWorkspace(record: RendezvousRecord, cwd: string): b
     }
   });
 }
-

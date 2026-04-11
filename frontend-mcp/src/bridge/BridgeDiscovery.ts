@@ -12,7 +12,7 @@ export class BridgeDiscovery {
   public constructor(
     private readonly cwd = process.cwd(),
     private readonly sessionsDirectory = getDefaultSessionsDirectory(),
-    private readonly portFilePath = process.argv[2] || process.env.JUPYTER_MCP_PORT_FILE || null,
+    private readonly portFilePath = process.argv[2] || process.env.JUPYTER_AGENT_BRIDGE_PORT_FILE || null,
   ) {}
 
   public async selectSession(): Promise<RendezvousRecord> {
@@ -43,7 +43,7 @@ export class BridgeDiscovery {
       return match;
     }
 
-    const explicitSessionId = process.env.JUPYTER_MCP_SESSION_ID;
+    const explicitSessionId = process.env.JUPYTER_AGENT_BRIDGE_SESSION_ID;
     if (explicitSessionId) {
       const session = sessions.find((candidate) => candidate.session_id === explicitSessionId);
       if (!session) {
@@ -76,7 +76,7 @@ export class BridgeDiscovery {
 
     throw new BridgeErrorException({
       code: "AmbiguousSession",
-      message: "More than one active notebook bridge is available. Set JUPYTER_MCP_SESSION_ID.",
+      message: "More than one active notebook bridge is available. Set JUPYTER_AGENT_BRIDGE_SESSION_ID.",
       detail: sessions.map((session) => ({
         session_id: session.session_id,
         workspace_id: session.workspace_id,

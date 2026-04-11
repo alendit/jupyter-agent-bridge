@@ -70,7 +70,7 @@ export class CursorMcpRegistrar implements vscode.Disposable {
     }).cursor?.mcp?.unregisterServer;
 
     if (typeof unregisterServer === "function") {
-      unregisterServer("jupyter-mcp");
+      unregisterServer("jupyter-agent-bridge");
     }
 
     this.registered = false;

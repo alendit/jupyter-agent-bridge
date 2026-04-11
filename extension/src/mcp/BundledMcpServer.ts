@@ -8,7 +8,7 @@ export interface BundledMcpServerConfig {
   env: Record<string, string>;
 }
 
-const SERVER_NAME = "jupyter-mcp";
+const SERVER_NAME = "jupyter-agent-bridge";
 
 export function resolveBundledMcpEntrypoint(extensionPath: string): string | null {
   const candidates = [

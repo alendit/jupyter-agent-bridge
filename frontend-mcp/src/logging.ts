@@ -9,7 +9,7 @@ export interface FrontendLogger {
 }
 
 export function createFrontendLogger(): FrontendLogger {
-  const baseDir = process.env.JUPYTER_MCP_LOG_DIR || path.join(os.tmpdir(), "jupyter-mcp");
+  const baseDir = process.env.JUPYTER_AGENT_BRIDGE_LOG_DIR || path.join(os.tmpdir(), "jupyter-agent-bridge");
   fs.mkdirSync(baseDir, { recursive: true });
   const logPath = path.join(baseDir, `frontend-mcp-${process.pid}.log`);
 

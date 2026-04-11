@@ -1,10 +1,10 @@
 {
-  "name": "@jupyter-mcp/frontend-mcp",
+  "name": "@jupyter-agent-bridge/frontend-mcp",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/frontend-mcp/src/main.js",
   "bin": {
-    "jupyter-mcp-server": "./dist/frontend-mcp/src/main.js"
+    "jupyter-agent-bridge-mcp": "./dist/frontend-mcp/src/main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -12,7 +12,7 @@
     "test": "npm run build && node --test dist/frontend-mcp/src/mcp/NotebookTools.test.js"
   },
   "dependencies": {
-    "@jupyter-mcp/protocol": "file:../packages/protocol",
+    "@jupyter-agent-bridge/protocol": "file:../packages/protocol",
     "@modelcontextprotocol/sdk": "^1.13.0",
     "zod": "^3.25.0"
   },

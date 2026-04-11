@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-const PORT_FILE_RELATIVE_PATH = path.join(".jupyter-mcp", "bridge", "port");
+const PORT_FILE_RELATIVE_PATH = path.join(".jupyter-agent-bridge", "bridge", "port");
 
 export class ProjectPortFileStore implements vscode.Disposable {
   public getPreferredPortFilePath(): string | null {
@@ -50,4 +50,3 @@ export class ProjectPortFileStore implements vscode.Disposable {
     return vscode.workspace.workspaceFolders?.[0];
   }
 }
-

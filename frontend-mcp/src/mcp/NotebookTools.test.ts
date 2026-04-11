@@ -433,7 +433,7 @@ test("routeResultToFileIfRequested writes a compact receipt instead of returning
     throw new Error("client should not be called in this unit test");
   });
 
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "jupyter-mcp-outputs-"));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "jupyter-agent-bridge-outputs-"));
   const targetPath = path.join(tempDir, "cell-output.json");
   const payload = {
     notebook_uri: "file:///workspace/demo.ipynb",

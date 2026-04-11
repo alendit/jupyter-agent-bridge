@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { createHash } from "node:crypto";
 
-export const METADATA_NAMESPACE = "jupyterMcp";
+export const METADATA_NAMESPACE = "jupyterAgentBridge";
 export const CELL_ID_KEY = "cellId";
 
 export function cloneMetadata(metadata: unknown): Record<string, unknown> {

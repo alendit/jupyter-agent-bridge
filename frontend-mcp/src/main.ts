@@ -10,7 +10,7 @@ async function main(): Promise<void> {
   const logger = createFrontendLogger();
   const discovery = new BridgeDiscovery();
   const server = new McpServer({
-    name: "jupyter-mcp",
+    name: "jupyter-agent-bridge",
     version: "0.1.0",
   });
   logger.info(`frontend-mcp starting pid=${process.pid} log_path=${JSON.stringify(logger.logPath)}`);
