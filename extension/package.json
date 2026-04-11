@@ -17,19 +17,19 @@
     "commands": [
       {
         "command": "jupyterAgentBridge.startBridge",
-        "title": "Jupyter Agent Bridge: Start Bridge"
+        "title": "Jupyter Agentic Bridge: Start Bridge"
       },
       {
         "command": "jupyterAgentBridge.stopBridge",
-        "title": "Jupyter Agent Bridge: Stop Bridge"
+        "title": "Jupyter Agentic Bridge: Stop Bridge"
       },
       {
         "command": "jupyterAgentBridge.showStatus",
-        "title": "Jupyter Agent Bridge: Show Status"
+        "title": "Jupyter Agentic Bridge: Show Status"
       },
       {
         "command": "jupyterAgentBridge.copyMcpDefinition",
-        "title": "Jupyter Agent Bridge: Copy MCP Definition"
+        "title": "Jupyter Agentic Bridge: Copy MCP Definition"
       }
     ]
   },

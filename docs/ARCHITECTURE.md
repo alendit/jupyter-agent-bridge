@@ -1,6 +1,6 @@
-# Jupyter Agent Bridge Architecture
+# Jupyter Agentic Bridge Architecture
 
-Jupyter Agent Bridge exposes the live Jupyter notebook open in a VS Code-compatible editor to external agents through MCP, while keeping the editor notebook model as the only source of truth.
+Jupyter Agentic Bridge exposes the live Jupyter notebook open in a VS Code-compatible editor to external agents through MCP, while keeping the editor notebook model as the only source of truth.
 
 This document replaces the old build spec and captures the long-term fundamentals that should remain stable as the project evolves.
 It is written with progressive disclosure: overview first, then a deeper pass over responsibilities and runtime behavior, then the lower-level details that matter for maintenance and compatibility.
@@ -292,10 +292,10 @@ If truncation occurs, the output item carries `truncated`, `original_bytes`, and
 
 The extension currently exposes these user-facing commands:
 
-- `Jupyter Agent Bridge: Start Bridge`
-- `Jupyter Agent Bridge: Stop Bridge`
-- `Jupyter Agent Bridge: Show Status`
-- `Jupyter Agent Bridge: Copy MCP Definition`
+- `Jupyter Agentic Bridge: Start Bridge`
+- `Jupyter Agentic Bridge: Stop Bridge`
+- `Jupyter Agentic Bridge: Show Status`
+- `Jupyter Agentic Bridge: Copy MCP Definition`
 
 ### Bridge Surface
 

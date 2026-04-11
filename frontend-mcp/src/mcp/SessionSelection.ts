@@ -15,7 +15,7 @@ export async function chooseSessionViaElicitation(
         method: "elicitation/create",
         params: {
           mode: "form",
-          message: "Multiple Jupyter Agent Bridge sessions are available. Choose the VS Code window to use for notebook tools.",
+          message: "Multiple Jupyter Agentic Bridge sessions are available. Choose the VS Code window to use for notebook tools.",
           requestedSchema: {
             type: "object",
             properties: {

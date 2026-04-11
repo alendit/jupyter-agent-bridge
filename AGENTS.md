@@ -46,7 +46,7 @@ When notebook execution completion rules change, keep the decision logic in a pu
 When changing install/setup or editor integration behavior, verify at least the following manually when feasible:
 
 - the extension starts the bridge and shows a valid localhost URL
-- `Jupyter Agent Bridge: Copy MCP Definition` produces a working config snippet
+- `Jupyter Agentic Bridge: Copy MCP Definition` produces a working config snippet
 - session discovery still works through both rendezvous records and the project-local port file
 - Cursor auto-registration still works when the Cursor MCP API is available
 

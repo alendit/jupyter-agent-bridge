@@ -29,7 +29,7 @@ import { NotebookVariableService } from "./notebook/NotebookVariableService";
 import { OutputNormalizationService } from "./notebook/OutputNormalizationService";
 
 const EXTENSION_VERSION = "0.1.0";
-const PRODUCT_NAME = "Jupyter Agent Bridge";
+const PRODUCT_NAME = "Jupyter Agentic Bridge";
 const START_BRIDGE_COMMAND = "jupyterAgentBridge.startBridge";
 const STOP_BRIDGE_COMMAND = "jupyterAgentBridge.stopBridge";
 const SHOW_STATUS_COMMAND = "jupyterAgentBridge.showStatus";

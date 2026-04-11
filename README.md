@@ -1,6 +1,6 @@
-# Jupyter Agent Bridge
+# Jupyter Agentic Bridge
 
-Jupyter Agent Bridge exposes the live Jupyter notebook open in your editor as MCP tools, so an agent can read, edit, execute, and inspect the same notebook you see.
+Jupyter Agentic Bridge exposes the live Jupyter notebook open in your editor as MCP tools, so an agent can read, edit, execute, and inspect the same notebook you see.
 
 The project is split into a VS Code-compatible extension, a localhost JSON-RPC bridge, and a standalone MCP server. If you want the architectural view first, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -19,9 +19,9 @@ The project is split into a VS Code-compatible extension, a localhost JSON-RPC b
 
 3. Reload the editor if it does not reload automatically, then open a `.ipynb` notebook.
 
-4. Run `Jupyter Agent Bridge: Start Bridge` if the bridge is not already running.
+4. Run `Jupyter Agentic Bridge: Start Bridge` if the bridge is not already running.
 
-5. Run `Jupyter Agent Bridge: Copy MCP Definition`.
+5. Run `Jupyter Agentic Bridge: Copy MCP Definition`.
 
    This copies a ready-to-paste MCP config snippet that points at the bundled `frontend-mcp` server and the workspace-local port file under `.jupyter-agent-bridge/bridge/port`.
 

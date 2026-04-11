@@ -10,7 +10,7 @@ That command rebuilds the repo, launches an Extension Development Host, and open
 
 Manual checks:
 
-1. Run `Jupyter Agent Bridge: Start Bridge`.
+1. Run `Jupyter Agentic Bridge: Start Bridge`.
 2. Confirm the info message shows a localhost bridge URL.
 3. Confirm a rendezvous record appears under the platform session directory described in `docs/ARCHITECTURE.md`.
 4. In Cursor, confirm the extension registers the bundled MCP server if the Cursor MCP API is available.
