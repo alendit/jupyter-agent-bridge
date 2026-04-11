@@ -136,8 +136,10 @@ The MCP server is an adapter. It must not own notebook state. Its responsibiliti
 - discover a matching editor bridge session
 - authenticate to the bridge
 - convert MCP tool calls into typed bridge calls
+- expose optional MCP resources for passive discovery without changing the underlying notebook model
 - optionally compose several bridge-backed notebook operations into one higher-level MCP workflow tool when the sequence is purely orchestration
-- render bridge results into MCP-friendly responses
+- render bridge results into MCP-friendly responses, including compatibility text/image content and typed structured output
+- keep MCP-specific metadata such as resource URIs, `outputSchema`, and elicitation policy in the frontend shell
 - keep MCP host integration separate from notebook behavior
 
 ### Shared Notebook Domain
@@ -154,6 +156,8 @@ The shared notebook domain package owns the notebook rules that should behave th
 UI-oriented presentation behavior stays in the extension shell. That includes commands such as revealing cells in the viewport, collapsing cell input, and focusing rendered output for demonstration flows.
 
 This keeps Cursor-specific, VS Code-specific, and transport-specific differences in the shell instead of leaking them into notebook policy.
+
+The same shell rule applies to MCP features: progressive-discovery affordances such as MCP resources, typed `outputSchema`, and capability-gated elicitation belong to `frontend-mcp`. They must not migrate into the shared protocol or notebook-domain packages unless the change is transport-neutral data that would still make sense without MCP.
 
 ### Cursor Integration
 
@@ -318,6 +322,14 @@ The bridge method names are defined centrally in [`packages/protocol/src/rpc.ts`
 ### MCP Surface
 
 The MCP tool catalog is defined in [`frontend-mcp/src/mcp/NotebookToolCatalog.ts`](../frontend-mcp/src/mcp/NotebookToolCatalog.ts). `README.md` documents the current tool list and intended use.
+
+The MCP shell now exposes three additive discovery layers:
+
+- notebook tools as the universal interface for all clients
+- typed tool `outputSchema` and `structuredContent` for clients that support structured tool results
+- read-only MCP resources for passive notebook discovery
+
+Tools remain primary. Resources and structured output must never become mandatory for basic notebook use.
 
 ## Testing Expectations
 

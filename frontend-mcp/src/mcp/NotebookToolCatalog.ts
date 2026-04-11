@@ -86,6 +86,7 @@ export interface ReadCellOutputsToolRequest extends ReadCellOutputsRequest {
 
 const toolNameSchema = z.enum(TOOL_NAMES).optional();
 const permissiveObjectSchema = z.object({}).catchall(z.unknown());
+const unknownRecordSchema = z.record(z.unknown());
 const notebookUriSchema = z
   .string()
   .describe("Absolute notebook URI, for example file:///workspace/demo.ipynb")
@@ -398,6 +399,245 @@ const singleNotebookInputSchema = z
   })
   .passthrough();
 
+const kernelInfoOutputSchema = z
+  .object({
+    kernel_label: z.string().nullable(),
+    kernel_id: z.string().nullable(),
+    language: z.string().nullable(),
+    execution_supported: z.boolean(),
+    state: z.enum(["unknown", "idle", "busy", "starting", "restarting", "interrupting", "selecting", "disconnected"]),
+    generation: z.number().int(),
+    last_seen_at: z.string().nullable(),
+    pending_action: z.enum(["restart", "interrupt", "select_kernel", "select_interpreter"]).nullable(),
+    requires_user_interaction: z.boolean(),
+  })
+  .passthrough();
+
+const notebookSummaryOutputSchema = z
+  .object({
+    notebook_uri: z.string(),
+    notebook_type: z.string(),
+    notebook_version: z.number().int(),
+    dirty: z.boolean(),
+    active_editor: z.boolean(),
+    visible_editor_count: z.number().int(),
+    kernel: kernelInfoOutputSchema.nullable(),
+  })
+  .passthrough();
+
+const cellExecutionSummaryOutputSchema = z
+  .object({
+    status: z.enum(["idle", "queued", "running", "succeeded", "failed", "cancelled", "timed_out"]),
+    execution_order: z.number().int().nullable(),
+    started_at: z.string().nullable(),
+    ended_at: z.string().nullable(),
+  })
+  .passthrough();
+
+const normalizedOutputSchema = z
+  .object({
+    kind: z.enum(["text", "markdown", "json", "html", "image", "stdout", "stderr", "error", "unknown"]),
+    mime: z.string().nullable(),
+    text: z.string().optional(),
+    summary: z.string().optional(),
+    json: z.unknown().optional(),
+    html: z.string().optional(),
+    base64: z.string().optional(),
+    ename: z.string().optional(),
+    evalue: z.string().optional(),
+    traceback: z.array(z.string()).optional(),
+    omitted: z.boolean().optional(),
+    truncated: z.boolean().optional(),
+    original_bytes: z.number().int().optional(),
+    returned_bytes: z.number().int().optional(),
+  })
+  .passthrough();
+
+const cellSnapshotOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    index: z.number().int(),
+    kind: z.enum(["markdown", "code"]),
+    language: z.string().nullable(),
+    notebook_line_start: z.number().int(),
+    notebook_line_end: z.number().int(),
+    source: z.string(),
+    source_fingerprint: z.string(),
+    metadata: unknownRecordSchema,
+    execution: cellExecutionSummaryOutputSchema.nullable(),
+    outputs: z.array(normalizedOutputSchema).optional(),
+  })
+  .passthrough();
+
+const notebookOutlineHeadingOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    cell_index: z.number().int(),
+    level: z.number().int(),
+    title: z.string(),
+    path: z.array(z.string()),
+    section_end_cell_index_exclusive: z.number().int(),
+  })
+  .passthrough();
+
+const notebookCellPreviewOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    index: z.number().int(),
+    kind: z.enum(["markdown", "code"]),
+    language: z.string().nullable(),
+    notebook_line_start: z.number().int(),
+    notebook_line_end: z.number().int(),
+    source_preview: z.string(),
+    source_line_count: z.number().int(),
+    source_fingerprint: z.string(),
+    execution_status: z
+      .enum(["idle", "queued", "running", "succeeded", "failed", "cancelled", "timed_out"])
+      .nullable(),
+    execution_order: z.number().int().nullable(),
+    started_at: z.string().nullable(),
+    ended_at: z.string().nullable(),
+    has_outputs: z.boolean(),
+    output_kinds: z.array(z.enum(["text", "markdown", "json", "html", "image", "stdout", "stderr", "error", "unknown"])),
+    section_path: z.array(z.string()),
+  })
+  .passthrough();
+
+const notebookVariableSummaryOutputSchema = z
+  .object({
+    name: z.string(),
+    type: z.string().nullable(),
+    value_preview: z.string().nullable(),
+    summary: z.string().nullable(),
+    size: z.string().nullable(),
+    shape: z.string().nullable(),
+    supports_data_explorer: z.boolean(),
+  })
+  .passthrough();
+
+const searchNotebookMatchOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    cell_index: z.number().int(),
+    kind: z.enum(["markdown", "code"]),
+    line: z.number().int(),
+    column: z.number().int(),
+    match_text: z.string(),
+    line_text: z.string(),
+    section_path: z.array(z.string()),
+    source_fingerprint: z.string(),
+  })
+  .passthrough();
+
+const notebookDiagnosticOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    cell_index: z.number().int(),
+    severity: z.enum(["error", "warning", "information", "hint"]),
+    message: z.string(),
+    source: z.string().optional(),
+    code: z.string().optional(),
+    start_line: z.number().int(),
+    start_column: z.number().int(),
+    end_line: z.number().int(),
+    end_column: z.number().int(),
+    source_fingerprint: z.string(),
+  })
+  .passthrough();
+
+const notebookSymbolOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    cell_index: z.number().int(),
+    name: z.string(),
+    detail: z.string().optional(),
+    kind: z.string(),
+    container_name: z.string().optional(),
+    start_line: z.number().int(),
+    start_column: z.number().int(),
+    end_line: z.number().int(),
+    end_column: z.number().int(),
+    selection_start_line: z.number().int(),
+    selection_start_column: z.number().int(),
+    selection_end_line: z.number().int(),
+    selection_end_column: z.number().int(),
+    source_fingerprint: z.string(),
+  })
+  .passthrough();
+
+const definitionTargetOutputSchema = z
+  .object({
+    target_uri: z.string(),
+    start_line: z.number().int(),
+    start_column: z.number().int(),
+    end_line: z.number().int(),
+    end_column: z.number().int(),
+    target_selection_start_line: z.number().int().optional(),
+    target_selection_start_column: z.number().int().optional(),
+    target_selection_end_line: z.number().int().optional(),
+    target_selection_end_column: z.number().int().optional(),
+    target_notebook_uri: z.string().optional(),
+    target_cell_id: z.string().optional(),
+    target_cell_index: z.number().int().optional(),
+  })
+  .passthrough();
+
+const executeCellResultOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    execution: cellExecutionSummaryOutputSchema.nullable(),
+    outputs: z.array(normalizedOutputSchema),
+  })
+  .passthrough();
+
+const bridgeErrorOutputSchema = z
+  .object({
+    code: z.string(),
+    message: z.string(),
+    detail: z.unknown().optional(),
+    recoverable: z.boolean().optional(),
+  })
+  .passthrough();
+
+const notebookChangedDetailOutputSchema = z
+  .object({
+    notebook_uri: z.string(),
+    notebook_version: z.number().int(),
+    cells: z.array(cellSnapshotOutputSchema),
+  })
+  .passthrough();
+
+const fileReceiptOutputSchema = z
+  .object({
+    written_to_file: z.boolean().optional(),
+    tool: z.enum(["read_notebook", "read_cell_outputs"]).optional(),
+    output_file_path: z.string().optional(),
+    bytes_written: z.number().int().optional(),
+    summary: z.string().optional(),
+  })
+  .passthrough();
+
+const toolSummaryOutputSchema = z
+  .object({
+    name: z.string(),
+    title: z.string(),
+    summary: z.string(),
+    schema: z.string(),
+    examples: z.array(z.string()),
+  })
+  .passthrough();
+
+const notebookWorkflowStepResultOutputSchema = z
+  .object({
+    id: z.string(),
+    tool: z.enum(NOTEBOOK_WORKFLOW_STEP_TOOLS),
+    status: z.enum(["completed", "failed", "skipped"]),
+    depends_on: z.array(z.string()),
+    result: z.unknown().optional(),
+    error: bridgeErrorOutputSchema.optional(),
+  })
+  .passthrough();
+
 export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   list_open_notebooks: {
     title: "List Open Notebooks",
@@ -681,6 +921,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
 
 export const NOTEBOOK_RULES = [
   "Keep context small: use notebook tools before shell or ad-hoc Python.",
+  "Tools remain the universal interface. MCP resources are optional read-only discovery affordances.",
   "Use strict JSON types. Do not quote booleans or numbers.",
   "Kernel state changes only when code cells execute.",
   "Editing source changes notebook text, not runtime state.",
@@ -743,6 +984,366 @@ export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
   summarize_notebook_state: singleNotebookInputSchema,
 };
 
+export const NOTEBOOK_TOOL_OUTPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
+  list_open_notebooks: z
+    .object({
+      notebooks: z.array(notebookSummaryOutputSchema),
+    })
+    .passthrough(),
+  describe_tool: z
+    .object({
+      name: z.string().optional(),
+      title: z.string().optional(),
+      summary: z.string().optional(),
+      type_rules: z.array(z.string()),
+      schema: z.string().optional(),
+      examples: z.array(z.string()).optional(),
+      notebook_rules: z.array(z.string()),
+      tools: z.array(toolSummaryOutputSchema).optional(),
+    })
+    .passthrough(),
+  open_notebook: notebookSummaryOutputSchema,
+  get_notebook_outline: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      headings: z.array(notebookOutlineHeadingOutputSchema),
+    })
+    .passthrough(),
+  list_notebook_cells: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      cells: z.array(notebookCellPreviewOutputSchema),
+    })
+    .passthrough(),
+  list_variables: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      query: z.string().optional(),
+      offset: z.number().int(),
+      max_results: z.number().int(),
+      total_available: z.number().int(),
+      next_offset: z.number().int().nullable(),
+      truncated: z.boolean(),
+      variables: z.array(notebookVariableSummaryOutputSchema),
+    })
+    .passthrough(),
+  search_notebook: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      query: z.string(),
+      regex: z.boolean(),
+      case_sensitive: z.boolean(),
+      whole_word: z.boolean(),
+      max_results: z.number().int(),
+      truncated: z.boolean(),
+      matches: z.array(searchNotebookMatchOutputSchema),
+    })
+    .passthrough(),
+  find_symbols: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      query: z.string().optional(),
+      truncated: z.boolean(),
+      symbols: z.array(notebookSymbolOutputSchema),
+    })
+    .passthrough(),
+  get_diagnostics: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      truncated: z.boolean(),
+      diagnostics: z.array(notebookDiagnosticOutputSchema),
+    })
+    .passthrough(),
+  go_to_definition: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      cell_id: z.string(),
+      line: z.number().int(),
+      column: z.number().int(),
+      source_fingerprint: z.string(),
+      definitions: z.array(definitionTargetOutputSchema),
+    })
+    .passthrough(),
+  read_notebook: z
+    .object({
+      notebook: notebookSummaryOutputSchema.optional(),
+      cells: z.array(cellSnapshotOutputSchema).optional(),
+      written_to_file: fileReceiptOutputSchema.shape.written_to_file,
+      tool: fileReceiptOutputSchema.shape.tool,
+      output_file_path: fileReceiptOutputSchema.shape.output_file_path,
+      bytes_written: fileReceiptOutputSchema.shape.bytes_written,
+      summary: fileReceiptOutputSchema.shape.summary,
+    })
+    .passthrough(),
+  insert_cell: z
+    .object({
+      notebook: notebookSummaryOutputSchema,
+      operation: z.enum(["insert_cell"]),
+      changed_cell_ids: z.array(z.string()),
+      deleted_cell_ids: z.array(z.string()),
+      cells: z.array(cellSnapshotOutputSchema),
+      outline_maybe_changed: z.boolean(),
+    })
+    .passthrough(),
+  replace_cell_source: z
+    .object({
+      notebook: notebookSummaryOutputSchema,
+      operation: z.enum(["replace_cell_source"]),
+      changed_cell_ids: z.array(z.string()),
+      deleted_cell_ids: z.array(z.string()),
+      cells: z.array(cellSnapshotOutputSchema),
+      outline_maybe_changed: z.boolean(),
+    })
+    .passthrough(),
+  patch_cell_source: z
+    .object({
+      notebook: notebookSummaryOutputSchema,
+      operation: z.enum(["patch_cell_source"]),
+      changed_cell_ids: z.array(z.string()),
+      deleted_cell_ids: z.array(z.string()),
+      cells: z.array(cellSnapshotOutputSchema),
+      outline_maybe_changed: z.boolean(),
+      applied_patch_format: z.enum(["unified_diff", "codex_apply_patch", "search_replace_json"]),
+      before_source_fingerprint: z.string(),
+      after_source_fingerprint: z.string(),
+    })
+    .passthrough(),
+  format_cell: z
+    .object({
+      notebook: notebookSummaryOutputSchema,
+      operation: z.enum(["format_cell"]),
+      changed_cell_ids: z.array(z.string()),
+      deleted_cell_ids: z.array(z.string()),
+      cells: z.array(cellSnapshotOutputSchema),
+      outline_maybe_changed: z.boolean(),
+      formatter_found: z.boolean(),
+      formatted: z.boolean(),
+      applied_edit_count: z.number().int(),
+      before_source_fingerprint: z.string(),
+      after_source_fingerprint: z.string(),
+    })
+    .passthrough(),
+  delete_cell: z
+    .object({
+      notebook: notebookSummaryOutputSchema,
+      operation: z.enum(["delete_cell"]),
+      changed_cell_ids: z.array(z.string()),
+      deleted_cell_ids: z.array(z.string()),
+      cells: z.array(cellSnapshotOutputSchema),
+      outline_maybe_changed: z.boolean(),
+    })
+    .passthrough(),
+  move_cell: z
+    .object({
+      notebook: notebookSummaryOutputSchema,
+      operation: z.enum(["move_cell"]),
+      changed_cell_ids: z.array(z.string()),
+      deleted_cell_ids: z.array(z.string()),
+      cells: z.array(cellSnapshotOutputSchema),
+      outline_maybe_changed: z.boolean(),
+    })
+    .passthrough(),
+  execute_cells: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      kernel: kernelInfoOutputSchema.nullable(),
+      results: z.array(executeCellResultOutputSchema),
+    })
+    .passthrough(),
+  execute_cells_async: z
+    .object({
+      execution_id: z.string(),
+      notebook_uri: z.string(),
+      cell_ids: z.array(z.string()),
+      status: z.enum(["queued", "running", "completed", "failed", "timed_out"]),
+      submitted_at: z.string(),
+      started_at: z.string().optional(),
+      completed_at: z.string().optional(),
+      message: z.string(),
+      result: z
+        .object({
+          notebook_uri: z.string(),
+          notebook_version: z.number().int(),
+          kernel: kernelInfoOutputSchema.nullable(),
+          results: z.array(executeCellResultOutputSchema),
+        })
+        .passthrough()
+        .optional(),
+      error: bridgeErrorOutputSchema.optional(),
+    })
+    .passthrough(),
+  get_execution_status: z
+    .object({
+      execution_id: z.string(),
+      notebook_uri: z.string(),
+      cell_ids: z.array(z.string()),
+      status: z.enum(["queued", "running", "completed", "failed", "timed_out"]),
+      submitted_at: z.string(),
+      started_at: z.string().optional(),
+      completed_at: z.string().optional(),
+      message: z.string(),
+      result: z
+        .object({
+          notebook_uri: z.string(),
+          notebook_version: z.number().int(),
+          kernel: kernelInfoOutputSchema.nullable(),
+          results: z.array(executeCellResultOutputSchema),
+        })
+        .passthrough()
+        .optional(),
+      error: bridgeErrorOutputSchema.optional(),
+    })
+    .passthrough(),
+  wait_for_execution: z
+    .object({
+      execution_id: z.string(),
+      notebook_uri: z.string(),
+      cell_ids: z.array(z.string()),
+      status: z.enum(["queued", "running", "completed", "failed", "timed_out"]),
+      submitted_at: z.string(),
+      started_at: z.string().optional(),
+      completed_at: z.string().optional(),
+      message: z.string(),
+      result: z
+        .object({
+          notebook_uri: z.string(),
+          notebook_version: z.number().int(),
+          kernel: kernelInfoOutputSchema.nullable(),
+          results: z.array(executeCellResultOutputSchema),
+        })
+        .passthrough()
+        .optional(),
+      error: bridgeErrorOutputSchema.optional(),
+      wait_timed_out: z.boolean(),
+    })
+    .passthrough(),
+  interrupt_execution: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      kernel: kernelInfoOutputSchema.nullable(),
+      status: z.enum(["requested", "prompted", "selected"]),
+      requires_user_interaction: z.boolean(),
+      message: z.string(),
+    })
+    .passthrough(),
+  restart_kernel: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      kernel: kernelInfoOutputSchema.nullable(),
+      status: z.enum(["requested", "prompted", "selected"]),
+      requires_user_interaction: z.boolean(),
+      message: z.string(),
+    })
+    .passthrough(),
+  wait_for_kernel_ready: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      kernel: kernelInfoOutputSchema.nullable(),
+      ready: z.boolean(),
+      timed_out: z.boolean(),
+      target_generation: z.number().int(),
+      message: z.string(),
+    })
+    .passthrough(),
+  read_cell_outputs: z
+    .object({
+      notebook_uri: z.string().optional(),
+      notebook_version: z.number().int().optional(),
+      cell_id: z.string().optional(),
+      outputs: z.array(normalizedOutputSchema).optional(),
+      written_to_file: fileReceiptOutputSchema.shape.written_to_file,
+      tool: fileReceiptOutputSchema.shape.tool,
+      output_file_path: fileReceiptOutputSchema.shape.output_file_path,
+      bytes_written: fileReceiptOutputSchema.shape.bytes_written,
+      summary: fileReceiptOutputSchema.shape.summary,
+    })
+    .passthrough(),
+  reveal_notebook_cells: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      revealed_cell_ids: z.array(z.string()),
+      selected: z.boolean(),
+      focused_target: z.enum(["cell", "output"]),
+      visible_ranges: z.array(
+        z
+          .object({
+            start: z.number().int(),
+            end: z.number().int(),
+          })
+          .passthrough(),
+      ),
+    })
+    .passthrough(),
+  set_notebook_cell_input_visibility: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      updated_cell_ids: z.array(z.string()),
+      input_visibility: z.enum(["collapse", "expand"]),
+    })
+    .passthrough(),
+  run_notebook_workflow: z
+    .object({
+      notebook_uri: z.string(),
+      on_error: z.enum(["stop", "continue"]),
+      completed_step_ids: z.array(z.string()),
+      failed_step_ids: z.array(z.string()),
+      skipped_step_ids: z.array(z.string()),
+      steps: z.array(notebookWorkflowStepResultOutputSchema),
+    })
+    .passthrough(),
+  get_kernel_info: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      kernel: kernelInfoOutputSchema.nullable(),
+    })
+    .passthrough(),
+  select_kernel: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      kernel: kernelInfoOutputSchema.nullable(),
+      status: z.enum(["requested", "prompted", "selected"]),
+      requires_user_interaction: z.boolean(),
+      message: z.string(),
+    })
+    .passthrough(),
+  select_jupyter_interpreter: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      kernel: kernelInfoOutputSchema.nullable(),
+      status: z.enum(["requested", "prompted", "selected"]),
+      requires_user_interaction: z.boolean(),
+      message: z.string(),
+    })
+    .passthrough(),
+  summarize_notebook_state: z
+    .object({
+      notebook_uri: z.string(),
+      notebook_version: z.number().int(),
+      dirty: z.boolean(),
+      kernel: kernelInfoOutputSchema.nullable(),
+      cells_with_errors: z.array(z.string()),
+      cells_with_images: z.array(z.string()),
+      active_cell_id: z.string().optional(),
+    })
+    .passthrough(),
+};
+
 export function buildToolDescription(toolName: ToolName): string {
   const help = TOOL_HELP[toolName];
   const examples = help.examples.map((example, index) => `${index + 1}. ${example}`).join("\n");
@@ -751,7 +1352,9 @@ export function buildToolDescription(toolName: ToolName): string {
     toolName === "run_notebook_workflow"
       ? `\n\nWorkflow guidance:\n- Use this only when the multi-step plan is known in advance.\n- Each step.tool must be an existing notebook tool name.\n- Each step.with should match that tool's normal input JSON exactly.\n- notebook_uri may be omitted inside steps and is inherited from the workflow root.\n- Use direct tools instead when later steps need LLM inspection of earlier results.`
       : "";
-  return `${preferred}${help.summary}${workflowNote}\n\nStrict JSON types only. Do not quote booleans or numbers.\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
+  const compatibilityNote =
+    "\n\nCompatibility:\n- Tools are the universal interface for all MCP clients.\n- Read-only MCP resources may also be available for progressive discovery when the client supports them.\n- Structured MCP output is additive; plain text and image content remain available.";
+  return `${preferred}${help.summary}${workflowNote}${compatibilityNote}\n\nStrict JSON types only. Do not quote booleans or numbers.\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
 }
 
 export function describeNotebookTool(toolName?: ToolName): unknown {

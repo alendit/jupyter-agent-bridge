@@ -9,6 +9,7 @@ import {
   describeNotebookTool,
   NotebookWorkflowStepToolName,
   NOTEBOOK_TOOL_INPUT_SCHEMAS,
+  NOTEBOOK_TOOL_OUTPUT_SCHEMAS,
   ReadCellOutputsToolRequest,
   ReadNotebookToolRequest,
   TOOL_HELP,
@@ -18,6 +19,7 @@ import {
   NotebookToolInputParser,
   NotebookWorkflowRequest,
 } from "./NotebookToolInputParser";
+import { NotebookReadOperations } from "./NotebookReadOperations";
 import { NotebookToolResultRenderer } from "./NotebookToolResultRenderer";
 
 const EXECUTION_STATUS_PROGRESS: Record<string, number> = {
@@ -42,11 +44,14 @@ interface NotebookWorkflowStepResult {
 export class NotebookTools {
   private readonly parser = new NotebookToolInputParser();
   private readonly renderer = new NotebookToolResultRenderer();
+  private readonly reads: NotebookReadOperations;
 
   public constructor(
     private readonly getClient: (extra: ToolRequestExtra) => Promise<NotebookBridgeClient>,
     private readonly log?: (message: string) => void,
-  ) {}
+  ) {
+    this.reads = new NotebookReadOperations(getClient);
+  }
 
   public register(server: McpServer): void {
     const register = (toolName: ToolName, handler: (input: unknown, extra: ToolRequestExtra) => Promise<unknown>): void => {
@@ -56,6 +61,7 @@ export class NotebookTools {
           title: TOOL_HELP[toolName].title,
           description: this.buildToolDescription(toolName),
           inputSchema: NOTEBOOK_TOOL_INPUT_SCHEMAS[toolName],
+          outputSchema: NOTEBOOK_TOOL_OUTPUT_SCHEMAS[toolName],
         },
         async (input, extra) => this.runTool(toolName, input, extra, () => handler(input, extra)),
       );
@@ -63,7 +69,7 @@ export class NotebookTools {
 
     register("list_open_notebooks", async (input, extra) => {
       this.parseEmptyInput("list_open_notebooks", input);
-      return (await this.getClient(extra)).listOpenNotebooks();
+      return this.reads.listOpenNotebooks(extra);
     });
 
     register("describe_tool", async (input) => this.describeTool(this.parseDescribeToolInput(input).tool_name));
@@ -73,29 +79,27 @@ export class NotebookTools {
     );
 
     register("get_notebook_outline", async (input, extra) =>
-      (await this.getClient(extra)).getNotebookOutline(
-        this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri,
-      ),
+      this.reads.getNotebookOutline(this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri, extra),
     );
 
     register("list_notebook_cells", async (input, extra) =>
-      (await this.getClient(extra)).listNotebookCells(this.parseListNotebookCellsRequest(input)),
+      this.reads.listNotebookCells(this.parseListNotebookCellsRequest(input), extra),
     );
 
     register("list_variables", async (input, extra) =>
-      (await this.getClient(extra)).listVariables(this.parseListVariablesRequest(input)),
+      this.reads.listVariables(this.parseListVariablesRequest(input), extra),
     );
 
     register("search_notebook", async (input, extra) =>
-      (await this.getClient(extra)).searchNotebook(this.parseSearchNotebookRequest(input)),
+      this.reads.searchNotebook(this.parseSearchNotebookRequest(input), extra),
     );
 
     register("find_symbols", async (input, extra) =>
-      (await this.getClient(extra)).findSymbols(this.parseFindSymbolsRequest(input)),
+      this.reads.findSymbols(this.parseFindSymbolsRequest(input), extra),
     );
 
     register("get_diagnostics", async (input, extra) =>
-      (await this.getClient(extra)).getDiagnostics(this.parseGetDiagnosticsRequest(input)),
+      this.reads.getDiagnostics(this.parseGetDiagnosticsRequest(input), extra),
     );
 
     register("go_to_definition", async (input, extra) =>
@@ -104,7 +108,7 @@ export class NotebookTools {
 
     register("read_notebook", async (input, extra) => {
       const request = this.parseReadNotebookRequest(input);
-      const result = await (await this.getClient(extra)).readNotebook(request);
+      const result = await this.reads.readNotebook(request, extra);
       return this.routeResultToFileIfRequested("read_notebook", result, request.output_file_path);
     });
 
@@ -167,7 +171,7 @@ export class NotebookTools {
 
     register("read_cell_outputs", async (input, extra) => {
       const request = this.parseReadCellOutputsRequest(input);
-      const result = await (await this.getClient(extra)).readCellOutputs(request);
+      const result = await this.reads.readCellOutputs(request, extra);
       return this.routeResultToFileIfRequested("read_cell_outputs", result, request.output_file_path);
     });
 
@@ -184,7 +188,7 @@ export class NotebookTools {
     );
 
     register("get_kernel_info", async (input, extra) =>
-      (await this.getClient(extra)).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
+      this.reads.getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri, extra),
     );
 
     register("select_kernel", async (input, extra) =>
@@ -198,9 +202,7 @@ export class NotebookTools {
     );
 
     register("summarize_notebook_state", async (input, extra) =>
-      (await this.getClient(extra)).summarizeNotebookState(
-        this.parseNotebookUriOnlyInput("summarize_notebook_state", input).notebook_uri,
-      ),
+      this.reads.summarizeNotebookState(this.parseNotebookUriOnlyInput("summarize_notebook_state", input).notebook_uri, extra),
     );
   }
 

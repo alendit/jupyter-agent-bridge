@@ -32,6 +32,7 @@ export class NotebookToolResultRenderer {
     const textResult = this.serializeForTextContent(result, images);
 
     return {
+      structuredContent: this.toStructuredContent(result),
       content: [
         {
           type: "text",
@@ -61,6 +62,18 @@ export class NotebookToolResultRenderer {
         },
       ],
     };
+  }
+
+  private toStructuredContent(result: unknown): Record<string, unknown> {
+    if (Array.isArray(result)) {
+      return { notebooks: result };
+    }
+
+    if (result && typeof result === "object") {
+      return result as Record<string, unknown>;
+    }
+
+    return { result };
   }
 
   private serializeForTextContent(value: unknown, images: ImageContent[]): unknown {

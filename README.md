@@ -55,6 +55,7 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 ## Advanced Usage
 
 - **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context. Use `set_notebook_cell_input_visibility` when you want a separate presentation-state change such as collapsing code input before a demo.
+- **Progressive discovery**: the MCP frontend now also exposes read-only MCP resources and structured tool output. Treat those as additive conveniences for capable clients. Tools remain the primary universal interface and continue to be the right default in `AGENTS.md`.
 - **Known multi-step procedures**: use `run_notebook_workflow` when the full notebook plan is already known and does not require LLM inspection between steps. Each workflow step reuses an existing notebook tool name and the same JSON input shape that tool already accepts.
 - **Targeted reading and search**: use `search_notebook`, `find_symbols`, `go_to_definition`, `get_diagnostics`, and targeted `read_notebook` calls to keep context small and stale-safe.
 - **Safe live editing**: use `insert_cell`, `replace_cell_source`, `patch_cell_source`, `format_cell`, `move_cell`, and `delete_cell`. Most edit calls accept `expected_notebook_version`, and source edits can also carry `expected_cell_source_fingerprint` so agents can reuse cached cell metadata instead of re-listing cells before every change. Prefer `replace_cell_source` for medium or large rewrites; prefer `patch_cell_source` for small, local edits.
@@ -67,11 +68,11 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 
 At a high level, the stack works like this:
 
-1. An agent host calls an MCP tool exposed by the bundled `frontend-mcp` server.
+1. An agent host calls an MCP tool or reads an MCP resource exposed by the bundled `frontend-mcp` server.
 2. `frontend-mcp` discovers the active bridge session from the rendezvous directory or the workspace port file. When more than one session is plausible, it can prompt the user through MCP elicitation if the client supports it.
 3. The MCP server sends authenticated JSON-RPC requests to `POST /rpc` on `127.0.0.1`.
 4. The extension resolves the request against the live notebook and kernel state through VS Code notebook APIs and Jupyter command surfaces.
-5. Results are normalized into transport-safe types and returned to the MCP host.
+5. Results are normalized into transport-safe types, then rendered by the MCP shell as either typed `structuredContent`, read-only resources, or compatibility text/image content depending on the feature being used.
 
 The main packages are:
 
@@ -80,11 +81,11 @@ The main packages are:
 - `packages/notebook-domain/`: pure notebook policy, kernel-state rules, previews, outline/search logic, and variable normalization
 - `packages/protocol/`: shared request/response types, JSON-RPC method names, session record types, and shared errors
 
-The key design rule is that the notebook visible in the editor stays authoritative. The MCP server is an adapter, not a second notebook implementation.
+The key design rule is that the notebook visible in the editor stays authoritative. The MCP server is an adapter, not a second notebook implementation. MCP-specific concerns such as resource URIs, elicitation policy, and `outputSchema` live in `frontend-mcp`, not in the protocol, extension, or notebook-domain layers.
 
 ## API
 
-The MCP surface is the primary interface for agents. The bridge surface is the lower-level JSON-RPC contract used by `frontend-mcp`.
+The MCP tool surface is the primary interface for agents. The bridge surface is the lower-level JSON-RPC contract used by `frontend-mcp`. MCP resources and structured tool output are additive progressive-discovery features for clients that support them.
 
 ### MCP API
 
@@ -122,6 +123,30 @@ The MCP surface is the primary interface for agents. The bridge surface is the l
 | `select_kernel` | Selects a kernel directly or opens the kernel picker. | `notebook_uri`, optional `kernel_id`, `extension_id`, `skip_if_already_selected` | `KernelCommandResult` |
 | `select_jupyter_interpreter` | Opens the Jupyter interpreter picker for the notebook. | `notebook_uri` | `KernelCommandResult` |
 | `summarize_notebook_state` | Returns a compact machine-readable notebook status summary. | `notebook_uri` | `NotebookStateSummary` |
+
+All tools now also declare MCP `outputSchema` and return typed `structuredContent` in addition to the existing compatibility text/image content. Clients that ignore structured output can continue using tool text content exactly as before.
+
+### MCP Resources
+
+`frontend-mcp` also exposes read-only MCP resources for passive notebook discovery. These resources are optional conveniences for resource-aware clients; they do not replace tools.
+
+- Fixed resources:
+  - `jupyter://session/active`
+  - `jupyter://notebooks/open`
+- Notebook-scoped templates:
+  - `jupyter://notebook/outline{?notebook_uri}`
+  - `jupyter://notebook/cells{?notebook_uri}`
+  - `jupyter://notebook/read{?notebook_uri}`
+  - `jupyter://notebook/state{?notebook_uri}`
+  - `jupyter://notebook/kernel{?notebook_uri}`
+  - `jupyter://notebook/variables{?notebook_uri}`
+  - `jupyter://notebook/diagnostics{?notebook_uri}`
+  - `jupyter://notebook/symbols{?notebook_uri}`
+  - `jupyter://notebook/search{?notebook_uri,query}`
+- Cell-scoped templates:
+  - `jupyter://cell/outputs{?notebook_uri,cell_id}`
+
+These resources mirror the corresponding read-oriented tool results and delegate through the same frontend shell read paths. Mutations, execution, UI presentation, and workflow orchestration remain tools only.
 
 ### Bridge API
 

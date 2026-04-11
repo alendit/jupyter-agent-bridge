@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/frontend-mcp/src/mcp/NotebookTools.test.js dist/frontend-mcp/src/bridge/BridgeDiscovery.test.js dist/frontend-mcp/src/mcp/SessionSelection.test.js"
+    "test": "npm run build && node --test dist/frontend-mcp/src/mcp/NotebookTools.test.js dist/frontend-mcp/src/bridge/BridgeDiscovery.test.js dist/frontend-mcp/src/mcp/SessionSelection.test.js dist/frontend-mcp/src/mcp/BridgeClientResolver.test.js"
   },
   "dependencies": {
     "@jupyter-agent-bridge/protocol": "file:../packages/protocol",
