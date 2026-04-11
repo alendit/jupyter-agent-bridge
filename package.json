@@ -1,7 +1,7 @@
 {
-  "name": "jupyter-mcp",
-  "displayName": "Jupyter MCP",
-  "description": "Bridge the live VS Code Jupyter notebook model to MCP tools.",
+  "name": "jupyter-agent-bridge",
+  "displayName": "Jupyter Agent Bridge",
+  "description": "Expose the live Jupyter notebook in VS Code-compatible editors as MCP tools for agents.",
   "publisher": "local",
   "version": "0.1.0",
   "private": true,
@@ -14,33 +14,34 @@
   ],
   "activationEvents": [
     "onNotebook:jupyter-notebook",
-    "onCommand:jupyterMcp.startBridge",
-    "onCommand:jupyterMcp.stopBridge",
-    "onCommand:jupyterMcp.showStatus",
-    "onCommand:jupyterMcp.copyMcpDefinition"
+    "onCommand:jupyterAgentBridge.startBridge",
+    "onCommand:jupyterAgentBridge.stopBridge",
+    "onCommand:jupyterAgentBridge.showStatus",
+    "onCommand:jupyterAgentBridge.copyMcpDefinition"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "jupyterMcp.startBridge",
-        "title": "Jupyter MCP: Start Bridge"
+        "command": "jupyterAgentBridge.startBridge",
+        "title": "Jupyter Agent Bridge: Start Bridge"
       },
       {
-        "command": "jupyterMcp.stopBridge",
-        "title": "Jupyter MCP: Stop Bridge"
+        "command": "jupyterAgentBridge.stopBridge",
+        "title": "Jupyter Agent Bridge: Stop Bridge"
       },
       {
-        "command": "jupyterMcp.showStatus",
-        "title": "Jupyter MCP: Show Status"
+        "command": "jupyterAgentBridge.showStatus",
+        "title": "Jupyter Agent Bridge: Show Status"
       },
       {
-        "command": "jupyterMcp.copyMcpDefinition",
-        "title": "Jupyter MCP: Copy MCP Definition"
+        "command": "jupyterAgentBridge.copyMcpDefinition",
+        "title": "Jupyter Agent Bridge: Copy MCP Definition"
       }
     ]
   },
   "workspaces": [
     "packages/protocol",
+    "packages/notebook-domain",
     "extension",
     "frontend-mcp"
   ],

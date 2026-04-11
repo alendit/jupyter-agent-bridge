@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createInitialKernelRuntimeState, isKernelReady, markKernelCommandRequested, reconcileKernelRuntimeState } from "./kernelRuntime";
-import { ParsedNotebookKernelMetadata } from "./kernelMetadata";
+import {
+  createInitialKernelRuntimeState,
+  isKernelReady,
+  markKernelCommandRequested,
+  reconcileKernelRuntimeState,
+  NotebookKernelMetadataSnapshot,
+} from "./kernelRuntime";
 
-const baseMetadata: ParsedNotebookKernelMetadata = {
+const baseMetadata: NotebookKernelMetadataSnapshot = {
   kernel_label: "Python 3.13",
   kernel_id: "python3",
   language: "python",
@@ -95,7 +100,9 @@ test("isKernelReady requires matching generation and no pending interaction", ()
   assert.equal(
     isKernelReady(
       {
-        ...baseMetadata,
+        kernel_label: "Python 3.13",
+        kernel_id: "python3",
+        execution_supported: true,
         state: "idle",
         generation: 2,
         pending_action: null,
@@ -109,7 +116,9 @@ test("isKernelReady requires matching generation and no pending interaction", ()
   assert.equal(
     isKernelReady(
       {
-        ...baseMetadata,
+        kernel_label: "Python 3.13",
+        kernel_id: "python3",
+        execution_supported: true,
         state: "selecting",
         generation: 2,
         pending_action: "select_kernel",

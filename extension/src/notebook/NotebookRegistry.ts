@@ -1,6 +1,4 @@
 import * as vscode from "vscode";
-import { KernelPendingAction } from "../../../packages/protocol/src";
-import { parseNotebookKernelMetadata } from "./kernelMetadata";
 import {
   NotebookKernelRuntimeState,
   createInitialKernelRuntimeState,
@@ -8,7 +6,9 @@ import {
   markKernelExecutionCompleted,
   markKernelExecutionStarted,
   reconcileKernelRuntimeState,
-} from "./kernelRuntime";
+} from "@jupyter-agent-bridge/notebook-domain";
+import { KernelPendingAction } from "../../../packages/protocol/src";
+import { parseNotebookKernelMetadata } from "./kernelMetadata";
 import { isExecutionSummaryRunning } from "./executionSummary";
 
 interface NotebookState {

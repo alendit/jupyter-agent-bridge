@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { buildNotebookCellPreviews, buildNotebookOutline } from "@jupyter-agent-bridge/notebook-domain";
 import {
   CellExecutionSummary,
   CellSnapshot,
@@ -23,8 +24,6 @@ import { computeSourceSha256, getStoredCellId, notebookCellKindToProtocol, clone
 import { NotebookRegistry } from "./NotebookRegistry";
 import { OutputNormalizationService } from "./OutputNormalizationService";
 import { KernelInspectionService } from "./KernelInspectionService";
-import { buildNotebookOutline } from "./outline";
-import { buildNotebookCellPreviews } from "./previews";
 import { toCellExecutionSummary } from "./executionSummary";
 import { selectNotebookCells } from "./cellSelection";
 

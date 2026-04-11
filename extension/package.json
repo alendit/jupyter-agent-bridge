@@ -1,5 +1,5 @@
 {
-  "name": "@jupyter-mcp/extension",
+  "name": "@jupyter-agent-bridge/extension",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/extension/src/extension.js",
@@ -8,38 +8,39 @@
   },
   "activationEvents": [
     "onNotebook:jupyter-notebook",
-    "onCommand:jupyterMcp.startBridge",
-    "onCommand:jupyterMcp.stopBridge",
-    "onCommand:jupyterMcp.showStatus",
-    "onCommand:jupyterMcp.copyMcpDefinition"
+    "onCommand:jupyterAgentBridge.startBridge",
+    "onCommand:jupyterAgentBridge.stopBridge",
+    "onCommand:jupyterAgentBridge.showStatus",
+    "onCommand:jupyterAgentBridge.copyMcpDefinition"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "jupyterMcp.startBridge",
-        "title": "Jupyter MCP: Start Bridge"
+        "command": "jupyterAgentBridge.startBridge",
+        "title": "Jupyter Agent Bridge: Start Bridge"
       },
       {
-        "command": "jupyterMcp.stopBridge",
-        "title": "Jupyter MCP: Stop Bridge"
+        "command": "jupyterAgentBridge.stopBridge",
+        "title": "Jupyter Agent Bridge: Stop Bridge"
       },
       {
-        "command": "jupyterMcp.showStatus",
-        "title": "Jupyter MCP: Show Status"
+        "command": "jupyterAgentBridge.showStatus",
+        "title": "Jupyter Agent Bridge: Show Status"
       },
       {
-        "command": "jupyterMcp.copyMcpDefinition",
-        "title": "Jupyter MCP: Copy MCP Definition"
+        "command": "jupyterAgentBridge.copyMcpDefinition",
+        "title": "Jupyter Agent Bridge: Copy MCP Definition"
       }
     ]
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/executionCompletionPolicy.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/kernelRuntime.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/OutputNormalizationService.test.js dist/extension/src/notebook/outline.test.js dist/extension/src/notebook/previews.test.js dist/extension/src/notebook/searchCore.test.js dist/extension/src/notebook/variableExplorer.test.js"
+    "test": "npm run build && node --test dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/OutputNormalizationService.test.js"
   },
   "dependencies": {
-    "@jupyter-mcp/protocol": "file:../packages/protocol"
+    "@jupyter-agent-bridge/notebook-domain": "file:../packages/notebook-domain",
+    "@jupyter-agent-bridge/protocol": "file:../packages/protocol"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

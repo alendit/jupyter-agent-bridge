@@ -1,0 +1,22 @@
+{
+  "name": "@jupyter-agent-bridge/notebook-domain",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/notebook-domain/src/index.js",
+  "types": "dist/notebook-domain/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/notebook-domain/src/executionCompletionPolicy.test.js dist/notebook-domain/src/kernelRuntime.test.js dist/notebook-domain/src/outline.test.js dist/notebook-domain/src/previews.test.js dist/notebook-domain/src/searchCore.test.js dist/notebook-domain/src/variableExplorer.test.js"
+  },
+  "dependencies": {
+    "@jupyter-agent-bridge/protocol": "file:../protocol"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -4,7 +4,10 @@
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
-      "@jupyter-mcp/protocol": [
+      "@jupyter-agent-bridge/notebook-domain": [
+        "../packages/notebook-domain/src/index.ts"
+      ],
+      "@jupyter-agent-bridge/protocol": [
         "../packages/protocol/src/index.ts"
       ]
     },

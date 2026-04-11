@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isKernelReady } from "@jupyter-agent-bridge/notebook-domain";
 import {
   KernelCommandResult,
   SelectKernelRequest,
@@ -10,7 +11,6 @@ import { NotebookCommandAdapter } from "../commands/NotebookCommandAdapter";
 import { HostKernelObservationService } from "./HostKernelObservationService";
 import { NotebookReadService } from "./NotebookReadService";
 import { NotebookRegistry } from "./NotebookRegistry";
-import { isKernelReady } from "./kernelRuntime";
 
 export class NotebookKernelCommandService {
   public constructor(

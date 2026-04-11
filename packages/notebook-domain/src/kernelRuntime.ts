@@ -1,5 +1,13 @@
-import { KernelPendingAction, KernelState } from "../../../packages/protocol/src";
-import { ParsedNotebookKernelMetadata } from "./kernelMetadata";
+import { KernelInfo, KernelPendingAction, KernelState } from "@jupyter-agent-bridge/protocol";
+
+export interface NotebookKernelMetadataSnapshot {
+  kernel_label: string | null;
+  kernel_id: string | null;
+  language: string | null;
+  execution_supported: boolean;
+  has_kernel: boolean;
+  signature: string | null;
+}
 
 export interface NotebookKernelRuntimeState {
   generation: number;
@@ -13,7 +21,7 @@ export interface NotebookKernelRuntimeState {
 const INTERACTIVE_PENDING_ACTION_TTL_MS = 5_000;
 
 export function createInitialKernelRuntimeState(
-  metadata: ParsedNotebookKernelMetadata,
+  metadata: NotebookKernelMetadataSnapshot,
   now = Date.now(),
 ): NotebookKernelRuntimeState {
   return {
@@ -28,7 +36,7 @@ export function createInitialKernelRuntimeState(
 
 export function reconcileKernelRuntimeState(
   current: NotebookKernelRuntimeState,
-  metadata: ParsedNotebookKernelMetadata,
+  metadata: NotebookKernelMetadataSnapshot,
   options?: {
     now?: number;
     observed_execution_state?: "busy" | "idle" | null;
@@ -137,15 +145,16 @@ export function markKernelExecutionCompleted(
 }
 
 export function isKernelReady(
-  kernel: {
-    execution_supported: boolean;
-    kernel_id: string | null;
-    kernel_label: string | null;
-    generation: number;
-    state: KernelState;
-    pending_action: KernelPendingAction;
-    requires_user_interaction: boolean;
-  } | null,
+  kernel: Pick<
+    KernelInfo,
+    | "execution_supported"
+    | "kernel_id"
+    | "kernel_label"
+    | "generation"
+    | "state"
+    | "pending_action"
+    | "requires_user_interaction"
+  > | null,
   targetGeneration: number,
 ): boolean {
   if (!kernel || !kernel.execution_supported) {
@@ -162,9 +171,5 @@ export function isKernelReady(
     return true;
   }
 
-  return (
-    kernel.state === "unknown" &&
-    kernel.pending_action === null &&
-    hasKernelIdentity
-  );
+  return kernel.state === "unknown" && kernel.pending_action === null && hasKernelIdentity;
 }

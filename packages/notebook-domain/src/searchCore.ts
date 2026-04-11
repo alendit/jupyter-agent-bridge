@@ -2,7 +2,7 @@ import {
   NotebookCellKind,
   SearchNotebookMatch,
   SearchNotebookRequest,
-} from "../../../packages/protocol/src";
+} from "@jupyter-agent-bridge/protocol";
 
 const DEFAULT_MAX_RESULTS = 50;
 const MAX_RESULTS_LIMIT = 200;

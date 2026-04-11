@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
+import { PreparedSearchCell, prepareSearchQuery, searchPreparedCells } from "@jupyter-agent-bridge/notebook-domain";
 import { SearchNotebookRequest, SearchNotebookResult } from "../../../packages/protocol/src";
 import { computeSourceSha256, getStoredCellId, notebookCellKindToProtocol } from "./cells";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookReadService } from "./NotebookReadService";
-import { PreparedSearchCell, prepareSearchQuery, searchPreparedCells } from "./searchCore";
 
 interface PreparedSearchDocument {
   notebook_uri: string;

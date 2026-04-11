@@ -1,220 +1,323 @@
-# Architecture
+# Jupyter Agent Bridge Architecture
 
-This repository follows an onion-style architecture:
+Jupyter Agent Bridge exposes the live Jupyter notebook open in a VS Code-compatible editor to external agents through MCP, while keeping the editor notebook model as the only source of truth.
 
-- immutable core in the center
-- application orchestration around it
-- mutable adapters and transports at the edge
+This document replaces the old build spec and captures the long-term fundamentals that should remain stable as the project evolves.
+It is written with progressive disclosure: overview first, then a deeper pass over responsibilities and runtime behavior, then the lower-level details that matter for maintenance and compatibility.
 
-The goal is to keep notebook policy stable and testable while isolating VS Code,
-Jupyter, HTTP, MCP, files, timers, and logging to the shell.
+## Product Shape
 
-## Layers
+The system has four parts:
 
-### 1. Domain Core
+1. A VS Code-compatible extension that owns notebook access and runtime control.
+2. A localhost HTTP bridge that exposes notebook operations via JSON-RPC 2.0.
+3. A standalone MCP server that discovers the bridge and turns notebook capabilities into MCP tools.
+4. An MCP-capable host such as Cursor or another agent environment.
 
-The core owns pure decisions and stable data transformations.
+The normal runtime path is:
 
-Examples:
+`Agent Host -> MCP -> frontend-mcp -> localhost JSON-RPC bridge -> extension -> VS Code notebook APIs / Jupyter integration`
 
-- kernel runtime transitions
-- execution completion policy
-- notebook outline and preview derivation
-- output classification and normalization policy
-- cell selection and line-span computation
+## Supported Environment
 
-Rules:
+The current target is intentionally narrow:
 
-- no VS Code APIs
-- no file system
-- no HTTP or MCP transport
-- no timers, subscriptions, or logging side effects
+- desktop editors that support the stable VS Code extension API
+- local file-backed notebooks with `notebookType === "jupyter-notebook"`
+- one bridge session per editor window
+- single-user local-machine trust boundaries
 
-These modules should be unit-testable with plain inputs and outputs.
+Out of scope for now:
 
-### 2. Application Layer
+- VS Code web extensions
+- remote SSH, dev container, Codespaces, or tunnel-based extension hosts
+- non-file notebook URIs
+- non-Jupyter notebook types
+- general-purpose editor automation outside the notebook domain
 
-The application layer coordinates use cases against ports and mutable state.
+Unsupported environments should fail explicitly instead of silently degrading into partial behavior.
 
-Examples:
+## Core Invariants
 
-- open notebook
-- read targeted cells
-- apply edits with optimistic version checks
-- execute cells and wait for completion
-- request kernel selection or restart
+These rules are architectural, not implementation details:
 
-Rules:
-
-- may depend on domain core
-- may depend on abstracted host services
-- should not contain transport-specific concerns
-- should be organized by use case, not by protocol
-
-This layer is allowed to manage workflow state, but it should avoid embedding
-policy that belongs in the core.
-
-### 3. Adapters
-
-Adapters connect the application layer to the real world.
-
-Extension-side examples:
-
-- VS Code notebook commands
-- Jupyter extension kernel observation
-- workspace edits
-- visible-editor inspection
-
-Frontend-side examples:
-
-- MCP stdio server
-- JSON-RPC bridge client
-- bridge session discovery
-- result-to-file routing
-
-Rules:
-
-- may be stateful
-- may perform I/O
-- should convert external shapes into application calls and back
-- should remain thin and replaceable
+- The live `NotebookDocument` in the editor is the authoritative notebook state.
+- The project must not create a shadow notebook model outside the editor host.
+- If the bridge reports that a cell changed or executed, the user-visible notebook must reflect the same state.
+- Execution results returned to the agent must come from the live notebook output model.
+- Cells are addressed by stable `cell_id` values, not only by positional indices.
+- Transport choices are replaceable. Notebook logic must not depend on HTTP or JSON-RPC details.
+- Frontends are replaceable. MCP is primary, but notebook-domain services must not depend on MCP-specific assumptions.
 
 ## Repository Mapping
 
-### Shared Types
+### `packages/notebook-domain/`
 
-- `packages/protocol/src/`
-  - bridge contract, shared DTOs, session records, and errors
+Shared pure notebook policy:
 
-### Extension
+- kernel runtime transitions and readiness rules
+- execution completion policy
+- outline extraction
+- cell preview shaping
+- search preparation and matching
+- variable normalization and paging
 
-- `extension/src/notebook/`
-  - notebook domain helpers and application services
-- `extension/src/commands/`
-  - VS Code command adapters
-- `extension/src/bridge/`
-  - localhost HTTP JSON-RPC bridge transport
-- `extension/src/cursor/`
-  - Cursor-specific registration shell
-- `extension/src/extension.ts`
-  - composition root
+This package must stay free of `vscode`, MCP, HTTP, and bridge concerns. It operates on immutable snapshots and value objects only.
 
-### Frontend MCP
+### `packages/protocol/`
 
-- `frontend-mcp/src/mcp/`
-  - tool catalog, parsing, rendering, and MCP registration
-- `frontend-mcp/src/bridge/`
-  - bridge discovery and JSON-RPC client
-- `frontend-mcp/src/main.ts`
-  - composition root
+Shared contracts and durable wire-level primitives:
 
-## Onion View
+- notebook/domain request and result types
+- JSON-RPC method names
+- session discovery record types and helpers
+- shared error codes
 
-```mermaid
-flowchart TD
-  subgraph MutableShell["Mutable Shell"]
-    MCP["MCP stdio server"]
-    HTTP["HTTP JSON-RPC bridge"]
-    VSC["VS Code + Jupyter adapters"]
-    FS["Rendezvous files / port files"]
-  end
+### `extension/`
 
-  subgraph App["Application Layer"]
-    Query["Notebook query use cases"]
-    Edit["Notebook edit use cases"]
-    Runtime["Notebook runtime use cases"]
-  end
+Editor-hosted implementation:
 
-  subgraph Core["Immutable Domain Core"]
-    Kernel["Kernel runtime policy"]
-    Exec["Execution completion policy"]
-    Shape["Outline / previews / selection / outputs"]
-  end
+- `src/notebook/` for notebook application services and VS Code/Jupyter adapters
+- `src/bridge/` for the localhost HTTP server, auth, routing, rendezvous, and project port files
+- `src/commands/` for wrapping VS Code command surfaces
+- `src/cursor/` for Cursor-specific MCP registration
+- `src/extension.ts` as the composition root
 
-  MCP --> Query
-  MCP --> Edit
-  MCP --> Runtime
-  HTTP --> Query
-  HTTP --> Edit
-  HTTP --> Runtime
-  VSC --> Query
-  VSC --> Edit
-  VSC --> Runtime
-  FS --> MCP
+### `frontend-mcp/`
 
-  Query --> Kernel
-  Query --> Shape
-  Edit --> Shape
-  Runtime --> Kernel
-  Runtime --> Exec
-```
+Standalone MCP adapter:
+
+- `src/bridge/` for discovery and the typed JSON-RPC client
+- `src/mcp/` for tool catalog, parsing, and result rendering
+- `src/main.ts` for MCP process startup
 
 ## Runtime Topology
 
 ```mermaid
 flowchart LR
   Agent["Agent Host"] --> MCP["Standalone MCP Server"]
-  MCP --> Client["HTTP JSON-RPC bridge client"]
+  MCP --> Discovery["Bridge Discovery"]
+  Discovery --> Client["HTTP JSON-RPC Client"]
   Client --> Bridge["BridgeHttpServer / JsonRpcRouter"]
-  Bridge --> App["Extension application services"]
-  App --> VSCode["VS Code notebook model"]
-  App --> Jupyter["Jupyter extension API"]
+  Bridge --> App["Notebook Application Services"]
+  App --> VSCode["VS Code Notebook APIs"]
+  App --> Jupyter["Jupyter Extension Commands and State"]
 ```
 
-## Current Service Split
+## Responsibility Split
 
 ### Extension
 
-- `NotebookBridgeService`
-  - thin façade for the bridge contract
-- `NotebookDocumentService`
-  - document resolution, opening, readiness, and environment checks
-- `NotebookQueryApplicationService`
-  - read, search, diagnostics, variables, reveal, and summary flows
-- `NotebookEditApplicationService`
-  - insert, replace, patch, format, delete, and move flows
-- `NotebookRuntimeApplicationService`
-  - execute, interrupt, restart, select kernel, and wait-for-ready flows
+The extension is the only component allowed to touch live notebook state. Its responsibilities are:
 
-### MCP
+- enumerate open and visible notebooks
+- open notebooks on demand
+- ensure stable cell IDs exist
+- project live editor state into immutable snapshots for the domain package
+- read notebook snapshots, previews, outlines, diagnostics, symbols, and outputs
+- apply notebook mutations through VS Code notebook edit APIs
+- execute cells and observe completion
+- inspect and control kernel state through public editor/Jupyter command surfaces
+- expose all of the above through the local bridge
 
-- `NotebookToolCatalog`
-  - tool names, help text, notebook rules, and zod schemas
-- `NotebookToolInputParser`
-  - strict argument validation and normalization
-- `NotebookToolResultRenderer`
-  - MCP text/image/file output shaping
-- `NotebookTools`
-  - thin registrar that wires catalog entries to handlers
+### Local Bridge
 
-## Design Rules
+The bridge is a transport boundary, not a second domain layer. Its responsibilities are:
 
-### Core Rules
+- bind an authenticated HTTP endpoint on `127.0.0.1`
+- expose JSON-RPC 2.0 methods at `POST /rpc`
+- validate auth and route requests to the typed notebook services
+- return domain errors consistently
 
-- put every reusable decision in a pure helper first
-- prefer snapshots and observations over live VS Code objects
-- keep unit tests at the same layer as the policy
+### MCP Frontend
 
-### Application Rules
+The MCP server is an adapter. It must not own notebook state. Its responsibilities are:
 
-- coordinate by use case, not by transport method
-- keep protocol validation outside the notebook domain
-- keep mutable registry state narrow and explicit
+- discover a matching editor bridge session
+- authenticate to the bridge
+- convert MCP tool calls into typed bridge calls
+- render bridge results into MCP-friendly responses
+- keep MCP host integration separate from notebook behavior
 
-### Adapter Rules
+### Shared Notebook Domain
 
-- VS Code specifics stay in `extension/`
-- MCP specifics stay in `frontend-mcp/`
-- Cursor-specific behavior stays isolated from notebook services
+The shared notebook domain package owns the notebook rules that should behave the same regardless of caller:
 
-## Refactoring Direction
+- what counts as kernel-ready
+- how execution progress is derived from observed cell changes
+- how markdown headings become notebook outline sections
+- how lightweight previews are shaped for agent navigation
+- how notebook text search is prepared and matched
+- how raw variable-explorer payloads become stable paged summaries
 
-The main architectural direction is:
+This keeps Cursor-specific, VS Code-specific, and transport-specific differences in the shell instead of leaking them into notebook policy.
 
-1. keep the bridge contract stable
-2. keep moving notebook policy inward into pure helpers
-3. keep moving orchestration into small use-case services
-4. keep transport and host details at the outer edge
+### Cursor Integration
 
-That preserves the current product shape while making the code easier to
-understand, test, and evolve.
+Cursor-specific behavior must stay thin and isolated. The extension may register the bundled MCP server through the Cursor MCP API when available, but that integration must not leak into notebook services, protocol types, or bridge behavior.
+
+## Session Discovery And Binding
+
+The MCP server runs out of process, so it must discover the right bridge instance instead of assuming a single editor session.
+
+### Rendezvous Directory
+
+The extension writes one rendezvous record per active editor window to a platform-specific directory:
+
+- macOS: `~/Library/Caches/jupyter-agent-bridge/sessions`
+- Linux: `$XDG_STATE_HOME/jupyter-agent-bridge/sessions`, falling back to `~/.local/state/jupyter-agent-bridge/sessions`
+- Windows: `%LOCALAPPDATA%\jupyter-agent-bridge\sessions`
+
+Each record is a JSON file named `<session_id>.json` and includes:
+
+- `session_id`
+- `workspace_id`
+- `workspace_folders`
+- `window_title`
+- `bridge_url`
+- `auth_token`
+- `capabilities`
+- `pid`
+- `created_at`
+- `last_seen_at`
+
+Records are refreshed on a heartbeat and considered stale after 15 seconds.
+
+### Project Port File
+
+The extension also writes a project-local port file to each workspace folder:
+
+- `.jupyter-agent-bridge/bridge/port`
+
+This gives hosts and users a stable, workspace-scoped way to pin the bundled MCP server to the active bridge without scanning every session record.
+
+### Session Selection Order
+
+`frontend-mcp` selects a session using this order:
+
+1. explicit port file passed as a CLI argument or `JUPYTER_AGENT_BRIDGE_PORT_FILE`
+2. explicit `JUPYTER_AGENT_BRIDGE_SESSION_ID`
+3. workspace-folder match against the current process working directory
+4. a single remaining active session
+5. otherwise fail with `AmbiguousSession`
+
+The frontend must not guess when more than one plausible session exists.
+
+## Security Model
+
+The project assumes a local-machine trust boundary, but still treats the bridge as a protected local service.
+
+- The bridge binds to `127.0.0.1` only.
+- Every bridge request uses bearer-token authentication.
+- Each editor window gets its own session ID and auth token.
+- The bridge only exposes notebooks that belong to the current editor session or were explicitly opened through the bridge.
+
+## Notebook And Concurrency Model
+
+### Notebook Identity
+
+- Primary notebook handle: notebook URI
+- Secondary notebook state: notebook type, dirty flag, active editor presence, visible editor count, kernel summary
+
+### Cell Identity
+
+Cells use stable `cell_id` values. When the notebook format does not already provide a stable ID, the extension persists one under the extension-owned metadata namespace:
+
+```json
+{
+  "jupyterAgentBridge": {
+    "cellId": "c_000017"
+  }
+}
+```
+
+Indices are returned for convenience but are not the primary mutation handle.
+
+### Notebook Versioning
+
+Each open notebook gets an in-memory monotonic `notebook_version`.
+
+- It increments when the editor reports notebook document changes.
+- Reads, mutations, and execution responses return the current version.
+- Mutating requests may supply `expected_notebook_version`.
+- Version mismatches fail with `NotebookChanged`.
+
+### Mutation Serialization
+
+Writes and executions are serialized per notebook.
+
+- Reads may run concurrently.
+- Different notebooks may be mutated concurrently.
+- Writes and executions for the same notebook must not overlap.
+- The system does not attempt automatic merge behavior between user edits and agent edits.
+
+## Output Normalization And Execution Semantics
+
+### Output Normalization
+
+Outputs are normalized into transport-safe items with these kinds:
+
+- `text`
+- `markdown`
+- `json`
+- `html`
+- `image`
+- `error`
+- `unknown`
+
+Normalization keeps MIME types, ordering, and truncation metadata. The current transport limits are:
+
+- up to 200 normalized output items per cell
+- up to 64 KiB UTF-8 text per text, markdown, or html item
+- up to 256 KiB serialized JSON per json item
+- up to 1 MiB raw bytes per image item before base64 encoding
+
+If truncation occurs, the output item carries `truncated`, `original_bytes`, and `returned_bytes`.
+
+### Execution Rules
+
+- Executing through the bridge must update the visible notebook.
+- Editing source changes notebook text only; it does not change kernel state until code cells execute.
+- `execute_cells` must correlate returned status and outputs with the targeted notebook cells.
+- Per-cell execution status uses normalized terminal states such as `succeeded`, `failed`, `cancelled`, and `timed_out`.
+
+## Public Surfaces
+
+### Extension Commands
+
+The extension currently exposes these user-facing commands:
+
+- `Jupyter Agent Bridge: Start Bridge`
+- `Jupyter Agent Bridge: Stop Bridge`
+- `Jupyter Agent Bridge: Show Status`
+- `Jupyter Agent Bridge: Copy MCP Definition`
+
+### Bridge Surface
+
+The bridge method names are defined centrally in [`packages/protocol/src/rpc.ts`](../packages/protocol/src/rpc.ts). The full user-facing API inventory lives in [`README.md`](../README.md).
+
+### MCP Surface
+
+The MCP tool catalog is defined in [`frontend-mcp/src/mcp/NotebookToolCatalog.ts`](../frontend-mcp/src/mcp/NotebookToolCatalog.ts). `README.md` documents the current tool list and intended use.
+
+## Testing Expectations
+
+The long-term test priorities are:
+
+- unit tests for output normalization, cell ID persistence, execution completion policy, JSON-RPC routing, auth, discovery, and error mapping
+- integration tests for the end-to-end editor-to-bridge flow
+- MCP tests for startup, discovery, ambiguity handling, and tool invocation
+- manual checks for multi-workspace sessions, execution errors, image outputs, kernel controls, bridge token handling, and Cursor bundled MCP registration
+
+## Change Management Rules
+
+The following changes are architectural and must be documented in the same change:
+
+- notebook metadata namespace changes
+- bridge auth, discovery, or rendezvous behavior changes
+- project port file layout changes
+- MCP tool or bridge method contract changes
+- install/setup workflow changes
+- editor compatibility or supported-environment changes
+
+Keep [`README.md`](../README.md), this document, and [`AGENTS.md`](../AGENTS.md) aligned whenever those surfaces move.
