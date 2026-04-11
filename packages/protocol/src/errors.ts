@@ -3,6 +3,7 @@ export type BridgeErrorCode =
   | "AmbiguousSession"
   | "BridgeUnavailable"
   | "CellNotFound"
+  | "CellOutputNotFound"
   | "ExecutionNotFound"
   | "ExecutionFailed"
   | "ExecutionTimedOut"

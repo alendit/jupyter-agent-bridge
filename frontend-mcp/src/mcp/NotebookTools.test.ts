@@ -530,6 +530,7 @@ test("parseRevealNotebookCellsRequest accepts range and reveal options", () => {
         cell_ids?: string[];
         select?: boolean;
         reveal_type?: string;
+        focus_target?: string;
       };
     }
   ).parseRevealNotebookCellsRequest({
@@ -538,6 +539,7 @@ test("parseRevealNotebookCellsRequest accepts range and reveal options", () => {
     cell_ids: ["cell-10"],
     select: true,
     reveal_type: "center",
+    focus_target: "output",
   });
 
   assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
@@ -545,6 +547,7 @@ test("parseRevealNotebookCellsRequest accepts range and reveal options", () => {
   assert.deepEqual(request.cell_ids, ["cell-10"]);
   assert.equal(request.select, true);
   assert.equal(request.reveal_type, "center");
+  assert.equal(request.focus_target, "output");
 });
 
 test("parseRevealNotebookCellsRequest requires a target", () => {
@@ -560,6 +563,73 @@ test("parseRevealNotebookCellsRequest requires a target", () => {
         }
       ).parseRevealNotebookCellsRequest({
         notebook_uri: "file:///workspace/demo.ipynb",
+      }),
+    /Provide range or cell_ids\./,
+  );
+});
+
+test("parseRevealNotebookCellsRequest rejects output focus without selection", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseRevealNotebookCellsRequest: (value: unknown) => unknown;
+        }
+      ).parseRevealNotebookCellsRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        cell_ids: ["cell-10"],
+        select: false,
+        focus_target: "output",
+      }),
+    /focus_target=output requires select=true/,
+  );
+});
+
+test("parseSetNotebookCellInputVisibilityRequest accepts range and visibility", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseSetNotebookCellInputVisibilityRequest: (value: unknown) => {
+        notebook_uri: string;
+        range?: { start: number; end: number };
+        cell_ids?: string[];
+        input_visibility: string;
+      };
+    }
+  ).parseSetNotebookCellInputVisibilityRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    range: { start: 10, end: 12 },
+    cell_ids: ["cell-10"],
+    input_visibility: "collapse",
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual(request.range, { start: 10, end: 12 });
+  assert.deepEqual(request.cell_ids, ["cell-10"]);
+  assert.equal(request.input_visibility, "collapse");
+});
+
+test("parseSetNotebookCellInputVisibilityRequest requires a target", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseSetNotebookCellInputVisibilityRequest: (value: unknown) => unknown;
+        }
+      ).parseSetNotebookCellInputVisibilityRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        input_visibility: "collapse",
       }),
     /Provide range or cell_ids\./,
   );

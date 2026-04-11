@@ -23,6 +23,7 @@ function createRecord(sessionId: string, windowTitle: string, workspaceFolder: s
       select_kernel: true,
       select_jupyter_interpreter: true,
       reveal_cells: true,
+      set_cell_input_visibility: true,
     },
     pid: 8123,
     created_at: "2024-03-09T16:00:00.000Z",

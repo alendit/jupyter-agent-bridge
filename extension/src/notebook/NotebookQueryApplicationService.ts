@@ -21,6 +21,8 @@ import {
   ReadNotebookResult,
   RevealNotebookCellsRequest,
   RevealNotebookCellsResult,
+  SetNotebookCellInputVisibilityRequest,
+  SetNotebookCellInputVisibilityResult,
   SearchNotebookRequest,
   SearchNotebookResult,
   SummarizeNotebookStateResult,
@@ -36,6 +38,7 @@ import { HostKernelObservationService } from "./HostKernelObservationService";
 import { NotebookCommandAdapter } from "../commands/NotebookCommandAdapter";
 import { selectNotebookCells } from "./cellSelection";
 import { getStoredCellId } from "./cells";
+import { planRevealPresentation } from "./revealPresentation";
 
 export class NotebookQueryApplicationService {
   public constructor(
@@ -120,16 +123,54 @@ export class NotebookQueryApplicationService {
     }
 
     const ranges = cells.map((cell) => new vscode.NotebookRange(cell.index, cell.index + 1));
-    const editor = await this.commandAdapter.revealCells(document, ranges, {
+    const presentation = planRevealPresentation(request, cells);
+
+    let editor = await this.commandAdapter.revealCells(document, ranges, {
       select: request.select ?? true,
       revealType: toRevealType(request.reveal_type),
     });
+
+    if (presentation.focusCellIndex !== null) {
+      editor = await this.commandAdapter.focusCellOutput(
+        document,
+        new vscode.NotebookRange(presentation.focusCellIndex, presentation.focusCellIndex + 1),
+        ranges,
+      );
+    }
+
     return {
       notebook_uri: document.uri.toString(),
       notebook_version: this.registry.getVersion(document.uri.toString()),
       revealed_cell_ids: cells.map((cell) => getStoredCellId(cell) ?? "").filter((cellId) => cellId.length > 0),
       selected: request.select ?? true,
+      focused_target: presentation.focusTarget,
       visible_ranges: editor.visibleRanges.map((range) => ({ start: range.start, end: range.end })),
+    };
+  }
+
+  public async setCellInputVisibility(
+    request: SetNotebookCellInputVisibilityRequest,
+  ): Promise<SetNotebookCellInputVisibilityResult> {
+    const document = await this.documentService.requireReadyDocument(request.notebook_uri);
+    const cells = selectNotebookCells(document, {
+      range: request.range,
+      cell_ids: request.cell_ids,
+    });
+    if (cells.length === 0) {
+      fail({
+        code: "CellNotFound",
+        message: "No notebook cells matched the input visibility request.",
+        recoverable: true,
+      });
+    }
+
+    const ranges = cells.map((cell) => new vscode.NotebookRange(cell.index, cell.index + 1));
+    await this.commandAdapter.setCellInputVisibility(document, ranges, request.input_visibility);
+    return {
+      notebook_uri: document.uri.toString(),
+      notebook_version: this.registry.getVersion(document.uri.toString()),
+      updated_cell_ids: cells.map((cell) => getStoredCellId(cell) ?? "").filter((cellId) => cellId.length > 0),
+      input_visibility: request.input_visibility,
     };
   }
 

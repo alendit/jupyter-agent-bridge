@@ -35,6 +35,8 @@ import {
   ReadNotebookResult,
   RevealNotebookCellsRequest,
   RevealNotebookCellsResult,
+  SetNotebookCellInputVisibilityRequest,
+  SetNotebookCellInputVisibilityResult,
   ReplaceCellSourceRequest,
   RestartKernelRequest,
   SearchNotebookRequest,
@@ -67,6 +69,8 @@ export interface NotebookBridgeClient {
       wait_for_kernel_ready: boolean;
       select_kernel: boolean;
       select_jupyter_interpreter: boolean;
+      reveal_cells: boolean;
+      set_cell_input_visibility: boolean;
     };
   }>;
   listOpenNotebooks(): Promise<ListOpenNotebooksResult>;
@@ -94,6 +98,9 @@ export interface NotebookBridgeClient {
   waitForKernelReady(request: WaitForKernelReadyRequest): Promise<WaitForKernelReadyResult>;
   readCellOutputs(request: ReadCellOutputsRequest): Promise<ReadCellOutputsResult>;
   revealCells(request: RevealNotebookCellsRequest): Promise<RevealNotebookCellsResult>;
+  setCellInputVisibility(
+    request: SetNotebookCellInputVisibilityRequest,
+  ): Promise<SetNotebookCellInputVisibilityResult>;
   getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult>;
   selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult>;
   selectJupyterInterpreter(request: SelectJupyterInterpreterRequest): Promise<KernelCommandResult>;

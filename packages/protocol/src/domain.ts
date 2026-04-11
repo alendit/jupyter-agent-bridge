@@ -217,6 +217,14 @@ export interface RevealNotebookCellsRequest {
   cell_ids?: string[];
   select?: boolean;
   reveal_type?: "default" | "center" | "center_if_outside_viewport" | "top";
+  focus_target?: "cell" | "output";
+}
+
+export interface SetNotebookCellInputVisibilityRequest {
+  notebook_uri: string;
+  range?: { start: number; end: number };
+  cell_ids?: string[];
+  input_visibility: "collapse" | "expand";
 }
 
 export interface ExecuteCellsRequest {
@@ -330,7 +338,15 @@ export interface RevealNotebookCellsResult {
   notebook_version: number;
   revealed_cell_ids: string[];
   selected: boolean;
+  focused_target: "cell" | "output";
   visible_ranges: Array<{ start: number; end: number }>;
+}
+
+export interface SetNotebookCellInputVisibilityResult {
+  notebook_uri: string;
+  notebook_version: number;
+  updated_cell_ids: string[];
+  input_visibility: "collapse" | "expand";
 }
 
 export interface NotebookOutlineResult {

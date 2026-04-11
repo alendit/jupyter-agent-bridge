@@ -31,6 +31,7 @@ export const TOOL_NAMES = [
   "wait_for_kernel_ready",
   "read_cell_outputs",
   "reveal_notebook_cells",
+  "set_notebook_cell_input_visibility",
   "get_kernel_info",
   "select_kernel",
   "select_jupyter_interpreter",
@@ -324,6 +325,22 @@ const revealNotebookCellsInputSchema = z
     cell_ids: z.array(z.unknown()).optional(),
     select: optionalBooleanSchema,
     reveal_type: optionalStringSchema,
+    focus_target: optionalStringSchema,
+  })
+  .passthrough();
+
+const setNotebookCellInputVisibilityInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    range: z
+      .object({
+        start: optionalNumberSchema,
+        end: optionalNumberSchema,
+      })
+      .passthrough()
+      .optional(),
+    cell_ids: z.array(z.unknown()).optional(),
+    input_visibility: optionalStringSchema,
   })
   .passthrough();
 
@@ -554,12 +571,24 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   reveal_notebook_cells: {
     title: "Reveal Notebook Cells",
     summary:
-      "Reveal cells in the live notebook editor and optionally select them. Use this to make code and outputs visible without reading raw .ipynb JSON.",
+      "Reveal cells in the live notebook editor and optionally select them or focus the first matching cell output. Use this to demonstrate results without reading raw .ipynb JSON.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1"],"select"?:boolean,"reveal_type"?:"default"|"center"|"center_if_outside_viewport"|"top"}',
+      '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1"],"select"?:boolean,"reveal_type"?:"default"|"center"|"center_if_outside_viewport"|"top","focus_target"?:"cell"|"output"}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"],"select":true}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":15},"reveal_type":"center"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"],"focus_target":"output"}',
+    ],
+  },
+  set_notebook_cell_input_visibility: {
+    title: "Set Notebook Cell Input Visibility",
+    summary:
+      "Collapse or expand the input area for selected notebook cells in the live editor UI without changing notebook content.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1"],"input_visibility":"collapse"|"expand"}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"],"input_visibility":"collapse"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":15},"input_visibility":"expand"}',
     ],
   },
   get_kernel_info: {
@@ -646,6 +675,7 @@ export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
   wait_for_kernel_ready: waitForKernelReadyInputSchema,
   read_cell_outputs: readCellOutputsInputSchema,
   reveal_notebook_cells: revealNotebookCellsInputSchema,
+  set_notebook_cell_input_visibility: setNotebookCellInputVisibilityInputSchema,
   get_kernel_info: singleNotebookInputSchema,
   select_kernel: selectKernelInputSchema,
   select_jupyter_interpreter: singleNotebookInputSchema,

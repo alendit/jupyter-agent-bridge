@@ -15,6 +15,7 @@ import {
   PatchCellSourceRequest,
   ReplaceCellSourceRequest,
   RevealNotebookCellsRequest,
+  SetNotebookCellInputVisibilityRequest,
   SearchNotebookRequest,
   SelectKernelRequest,
   WaitForExecutionRequest,
@@ -540,7 +541,14 @@ export class NotebookToolInputParser {
   public parseRevealNotebookCellsRequest(input: unknown): RevealNotebookCellsRequest {
     const toolName = "reveal_notebook_cells";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "range", "cell_ids", "select", "reveal_type"]);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "range",
+      "cell_ids",
+      "select",
+      "reveal_type",
+      "focus_target",
+    ]);
 
     const request: RevealNotebookCellsRequest = {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -557,6 +565,37 @@ export class NotebookToolInputParser {
               "center_if_outside_viewport",
               "top",
             ]),
+      focus_target:
+        params.focus_target === undefined
+          ? undefined
+          : this.parseEnum(params.focus_target, `${toolName}.focus_target`, ["cell", "output"]),
+    };
+
+    if (!request.range && (!request.cell_ids || request.cell_ids.length === 0)) {
+      this.failValidation(toolName, "Provide range or cell_ids.");
+    }
+
+    if (request.focus_target === "output" && request.select === false) {
+      this.failValidation(toolName, "focus_target=output requires select=true or omission of select.");
+    }
+
+    return request;
+  }
+
+  public parseSetNotebookCellInputVisibilityRequest(input: unknown): SetNotebookCellInputVisibilityRequest {
+    const toolName = "set_notebook_cell_input_visibility";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "range", "cell_ids", "input_visibility"]);
+
+    const request: SetNotebookCellInputVisibilityRequest = {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      range: params.range === undefined ? undefined : this.parseRange(toolName, params.range),
+      cell_ids:
+        params.cell_ids === undefined ? undefined : this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+      input_visibility: this.parseEnum(params.input_visibility, `${toolName}.input_visibility`, [
+        "collapse",
+        "expand",
+      ]),
     };
 
     if (!request.range && (!request.cell_ids || request.cell_ids.length === 0)) {

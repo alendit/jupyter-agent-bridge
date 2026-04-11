@@ -150,6 +150,8 @@ The shared notebook domain package owns the notebook rules that should behave th
 - how notebook text search is prepared and matched
 - how raw variable-explorer payloads become stable paged summaries
 
+UI-oriented presentation behavior stays in the extension shell. That includes commands such as revealing cells in the viewport, collapsing cell input, and focusing rendered output for demonstration flows.
+
 This keeps Cursor-specific, VS Code-specific, and transport-specific differences in the shell instead of leaking them into notebook policy.
 
 ### Cursor Integration

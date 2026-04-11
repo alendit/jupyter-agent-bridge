@@ -162,6 +162,10 @@ export class NotebookTools {
       (await this.getClient(extra)).revealCells(this.parseRevealNotebookCellsRequest(input)),
     );
 
+    register("set_notebook_cell_input_visibility", async (input, extra) =>
+      (await this.getClient(extra)).setCellInputVisibility(this.parseSetNotebookCellInputVisibilityRequest(input)),
+    );
+
     register("get_kernel_info", async (input, extra) =>
       (await this.getClient(extra)).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
     );
@@ -285,6 +289,10 @@ export class NotebookTools {
 
   private parseRevealNotebookCellsRequest(input: unknown) {
     return this.parser.parseRevealNotebookCellsRequest(input);
+  }
+
+  private parseSetNotebookCellInputVisibilityRequest(input: unknown) {
+    return this.parser.parseSetNotebookCellInputVisibilityRequest(input);
   }
 
   private parseNotebookUriOnlyInput(

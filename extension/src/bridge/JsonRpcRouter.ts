@@ -90,6 +90,8 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.readCellOutputs(object(params) as never);
       case BRIDGE_METHODS.revealCells:
         return this.notebookBridgeService.revealCells(object(params) as never);
+      case BRIDGE_METHODS.setCellInputVisibility:
+        return this.notebookBridgeService.setCellInputVisibility(object(params) as never);
       case BRIDGE_METHODS.getKernelInfo:
         return this.notebookBridgeService.getKernelInfo(requiredString(params, "notebook_uri"));
       case BRIDGE_METHODS.selectKernel:

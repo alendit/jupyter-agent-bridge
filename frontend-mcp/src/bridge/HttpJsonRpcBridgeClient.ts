@@ -40,6 +40,8 @@ import {
   ReadNotebookResult,
   RevealNotebookCellsRequest,
   RevealNotebookCellsResult,
+  SetNotebookCellInputVisibilityRequest,
+  SetNotebookCellInputVisibilityResult,
   ReplaceCellSourceRequest,
   RestartKernelRequest,
   SearchNotebookRequest,
@@ -188,6 +190,12 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public revealCells(request: RevealNotebookCellsRequest): Promise<RevealNotebookCellsResult> {
     return this.call(BRIDGE_METHODS.revealCells, request);
+  }
+
+  public setCellInputVisibility(
+    request: SetNotebookCellInputVisibilityRequest,
+  ): Promise<SetNotebookCellInputVisibilityResult> {
+    return this.call(BRIDGE_METHODS.setCellInputVisibility, request);
   }
 
   public getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult> {

@@ -31,6 +31,7 @@ function createRecord(
       select_kernel: true,
       select_jupyter_interpreter: true,
       reveal_cells: true,
+      set_cell_input_visibility: true,
     },
     pid: bridgePort,
     created_at: "2024-03-09T16:00:00.000Z",

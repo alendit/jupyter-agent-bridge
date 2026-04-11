@@ -35,6 +35,8 @@ import {
   ReadNotebookResult,
   RevealNotebookCellsRequest,
   RevealNotebookCellsResult,
+  SetNotebookCellInputVisibilityRequest,
+  SetNotebookCellInputVisibilityResult,
   ReplaceCellSourceRequest,
   RestartKernelRequest,
   SearchNotebookRequest,
@@ -145,6 +147,12 @@ export class NotebookBridgeService {
 
   public async revealCells(request: RevealNotebookCellsRequest): Promise<RevealNotebookCellsResult> {
     return this.queryService.revealCells(request);
+  }
+
+  public async setCellInputVisibility(
+    request: SetNotebookCellInputVisibilityRequest,
+  ): Promise<SetNotebookCellInputVisibilityResult> {
+    return this.queryService.setCellInputVisibility(request);
   }
 
   public async getKernelInfo(notebookUri: string): Promise<GetKernelInfoResult> {

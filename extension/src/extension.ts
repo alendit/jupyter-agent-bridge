@@ -189,6 +189,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
         select_kernel: true,
         select_jupyter_interpreter: true,
         reveal_cells: true,
+        set_cell_input_visibility: true,
       },
     });
 

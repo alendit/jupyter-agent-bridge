@@ -54,7 +54,7 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 
 ## Advanced Usage
 
-- **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context.
+- **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context. Use `set_notebook_cell_input_visibility` when you want a separate presentation-state change such as collapsing code input before a demo.
 - **Targeted reading and search**: use `search_notebook`, `find_symbols`, `go_to_definition`, `get_diagnostics`, and targeted `read_notebook` calls to keep context small and stale-safe.
 - **Safe live editing**: use `insert_cell`, `replace_cell_source`, `patch_cell_source`, `format_cell`, `move_cell`, and `delete_cell`. Most edit calls accept `expected_notebook_version`, and source edits can also carry `expected_cell_source_fingerprint` so agents can reuse cached cell metadata instead of re-listing cells before every change. Prefer `replace_cell_source` for medium or large rewrites; prefer `patch_cell_source` for small, local edits.
 - **Execution and kernel control**: use `execute_cells` when you want a blocking result, or `execute_cells_async` with `get_execution_status` or `wait_for_execution` when you want a handle-first flow. Execution requests can also carry `expected_cell_source_fingerprint_by_id` for stale-safe execution targeting. Use `read_cell_outputs`, `get_kernel_info`, `wait_for_kernel_ready`, `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` to keep runtime state explicit.
@@ -114,7 +114,8 @@ The MCP surface is the primary interface for agents. The bridge surface is the l
 | `restart_kernel` | Requests a kernel restart through the editor/Jupyter stack. | `notebook_uri` | `KernelCommandResult` |
 | `wait_for_kernel_ready` | Waits for the current or target kernel generation to become ready. | `notebook_uri`, optional `timeout_ms`, `target_generation` | `WaitForKernelReadyResult` |
 | `read_cell_outputs` | Reads normalized outputs for one cell. | `notebook_uri`, `cell_id`, optional `include_rich_output_text`, `output_file_path` | `ReadCellOutputsResult` |
-| `reveal_notebook_cells` | Reveals and optionally selects cells in the live editor UI. | `notebook_uri`, optional `range`, `cell_ids`, `select`, `reveal_type` | `RevealNotebookCellsResult` |
+| `reveal_notebook_cells` | Reveals and optionally selects cells in the live editor UI. | `notebook_uri`, optional `range`, `cell_ids`, `select`, `reveal_type`, `focus_target` | `RevealNotebookCellsResult` |
+| `set_notebook_cell_input_visibility` | Collapses or expands the input area for selected cells in the live editor UI. | `notebook_uri`, optional `range`, `cell_ids`, `input_visibility` | `SetNotebookCellInputVisibilityResult` |
 | `get_kernel_info` | Reads best-effort kernel information for the notebook. | `notebook_uri` | `GetKernelInfoResult` |
 | `select_kernel` | Selects a kernel directly or opens the kernel picker. | `notebook_uri`, optional `kernel_id`, `extension_id`, `skip_if_already_selected` | `KernelCommandResult` |
 | `select_jupyter_interpreter` | Opens the Jupyter interpreter picker for the notebook. | `notebook_uri` | `KernelCommandResult` |
@@ -153,7 +154,8 @@ For stale-safe agent flows, treat `cell_id` as stable identity and `source_finge
 | `notebook.restart_kernel` | Requests a kernel restart. | `RestartKernelRequest` | `KernelCommandResult` |
 | `notebook.wait_for_kernel_ready` | Waits for kernel readiness. | `WaitForKernelReadyRequest` | `WaitForKernelReadyResult` |
 | `notebook.read_cell_outputs` | Returns outputs for one cell. | `ReadCellOutputsRequest` | `ReadCellOutputsResult` |
-| `notebook.reveal_cells` | Reveals cells in the editor UI. | `RevealNotebookCellsRequest` | `RevealNotebookCellsResult` |
+| `notebook.reveal_cells` | Reveals cells in the editor UI and can optionally focus output. | `RevealNotebookCellsRequest` | `RevealNotebookCellsResult` |
+| `notebook.set_cell_input_visibility` | Collapses or expands the input area for selected cells in the editor UI. | `SetNotebookCellInputVisibilityRequest` | `SetNotebookCellInputVisibilityResult` |
 | `notebook.get_kernel_info` | Returns best-effort kernel metadata. | `notebook_uri` | `GetKernelInfoResult` |
 | `notebook.select_kernel` | Selects a kernel or opens the kernel picker. | `SelectKernelRequest` | `KernelCommandResult` |
 | `notebook.select_jupyter_interpreter` | Opens the interpreter picker. | `SelectJupyterInterpreterRequest` | `KernelCommandResult` |
