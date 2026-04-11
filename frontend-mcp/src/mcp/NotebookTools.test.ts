@@ -635,6 +635,423 @@ test("parseSetNotebookCellInputVisibilityRequest requires a target", () => {
   );
 });
 
+test("parseNotebookWorkflowRequest reuses the existing step input shapes and inherits notebook_uri", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const workflow = (
+    tools as unknown as {
+      parseNotebookWorkflowRequest: (value: unknown) => {
+        notebook_uri: string;
+        on_error: string;
+        steps: Array<{
+          id: string;
+          tool: string;
+          with: Record<string, unknown>;
+          depends_on: string[];
+        }>;
+      };
+    }
+  ).parseNotebookWorkflowRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    steps: [
+      {
+        id: "execute",
+        tool: "execute_cells",
+        with: {
+          cell_ids: ["cell-1"],
+          stop_on_error: true,
+        },
+      },
+      {
+        id: "reveal",
+        tool: "reveal_notebook_cells",
+        with: {
+          cell_ids: ["cell-1"],
+          focus_target: "output",
+        },
+        depends_on: ["execute"],
+      },
+    ],
+  });
+
+  assert.equal(workflow.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(workflow.on_error, "stop");
+  assert.equal(workflow.steps[0]?.tool, "execute_cells");
+  assert.equal((workflow.steps[0]?.with as Record<string, unknown>)?.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual((workflow.steps[0]?.with as Record<string, unknown>)?.cell_ids, ["cell-1"]);
+  assert.equal((workflow.steps[0]?.with as Record<string, unknown>)?.stop_on_error, true);
+  assert.equal((workflow.steps[1]?.with as Record<string, unknown>)?.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual((workflow.steps[1]?.with as Record<string, unknown>)?.cell_ids, ["cell-1"]);
+  assert.equal((workflow.steps[1]?.with as Record<string, unknown>)?.focus_target, "output");
+});
+
+test("parseNotebookWorkflowRequest rejects dependency cycles", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseNotebookWorkflowRequest: (value: unknown) => unknown;
+        }
+      ).parseNotebookWorkflowRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        steps: [
+          {
+            id: "one",
+            tool: "get_kernel_info",
+            depends_on: ["two"],
+          },
+          {
+            id: "two",
+            tool: "summarize_notebook_state",
+            depends_on: ["one"],
+          },
+        ],
+      }),
+    /contain a cycle/,
+  );
+});
+
+test("executeNotebookWorkflow runs steps in dependency order and skips dependents after a failure", async () => {
+  const calls: string[] = [];
+  const tools = new NotebookTools(async () => ({
+    getSessionInfo: async () => {
+      throw new Error("unused");
+    },
+    listOpenNotebooks: async () => {
+      throw new Error("unused");
+    },
+    openNotebook: async () => {
+      throw new Error("unused");
+    },
+    getNotebookOutline: async () => {
+      throw new Error("unused");
+    },
+    listNotebookCells: async () => {
+      throw new Error("unused");
+    },
+    listVariables: async () => {
+      throw new Error("unused");
+    },
+    searchNotebook: async () => {
+      throw new Error("unused");
+    },
+    getDiagnostics: async () => {
+      throw new Error("unused");
+    },
+    findSymbols: async () => {
+      throw new Error("unused");
+    },
+    goToDefinition: async () => {
+      throw new Error("unused");
+    },
+    readNotebook: async () => {
+      throw new Error("unused");
+    },
+    insertCell: async () => {
+      throw new Error("unused");
+    },
+    replaceCellSource: async () => {
+      throw new Error("unused");
+    },
+    patchCellSource: async () => {
+      throw new Error("unused");
+    },
+    formatCell: async () => {
+      throw new Error("unused");
+    },
+    deleteCell: async () => {
+      throw new Error("unused");
+    },
+    moveCell: async () => {
+      throw new Error("unused");
+    },
+    executeCells: async (request: { cell_ids: string[] }) => {
+      calls.push(`execute:${request.cell_ids.join(",")}`);
+      return { ok: true };
+    },
+    executeCellsAsync: async () => {
+      throw new Error("unused");
+    },
+    getExecutionStatus: async () => {
+      throw new Error("unused");
+    },
+    waitForExecution: async () => {
+      throw new Error("unused");
+    },
+    interruptExecution: async (request: { notebook_uri: string }) => {
+      calls.push(`interrupt:${request.notebook_uri}`);
+      throw {
+        code: "KernelUnavailable",
+        message: "kernel missing",
+      };
+    },
+    restartKernel: async () => {
+      throw new Error("unused");
+    },
+    waitForKernelReady: async () => {
+      throw new Error("unused");
+    },
+    readCellOutputs: async () => {
+      throw new Error("unused");
+    },
+    revealCells: async (request: { cell_ids?: string[] }) => {
+      calls.push(`reveal:${request.cell_ids?.join(",") ?? ""}`);
+      return { ok: true };
+    },
+    setCellInputVisibility: async () => {
+      throw new Error("unused");
+    },
+    getKernelInfo: async () => {
+      throw new Error("unused");
+    },
+    selectKernel: async () => {
+      throw new Error("unused");
+    },
+    selectJupyterInterpreter: async () => {
+      throw new Error("unused");
+    },
+    summarizeNotebookState: async () => {
+      throw new Error("unused");
+    },
+  }) as never);
+
+  const result = await (
+    tools as unknown as {
+      executeNotebookWorkflow: (
+        request: {
+          notebook_uri: string;
+          on_error: "stop" | "continue";
+          steps: Array<{
+            id: string;
+            tool: string;
+            with: unknown;
+            depends_on: string[];
+          }>;
+        },
+        extra: Record<string, unknown>,
+      ) => Promise<Record<string, unknown>>;
+    }
+  ).executeNotebookWorkflow(
+    {
+      notebook_uri: "file:///workspace/demo.ipynb",
+      on_error: "stop",
+      steps: [
+        {
+          id: "execute",
+          tool: "execute_cells",
+          with: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+            cell_ids: ["cell-1"],
+          },
+          depends_on: [],
+        },
+        {
+          id: "interrupt",
+          tool: "interrupt_execution",
+          with: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+          },
+          depends_on: ["execute"],
+        },
+        {
+          id: "reveal",
+          tool: "reveal_notebook_cells",
+          with: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+            cell_ids: ["cell-1"],
+          },
+          depends_on: ["interrupt"],
+        },
+      ],
+    },
+    {},
+  );
+
+  assert.deepEqual(calls, ["execute:cell-1", "interrupt:file:///workspace/demo.ipynb"]);
+  assert.deepEqual(result.failed_step_ids, ["interrupt"]);
+  assert.deepEqual(result.skipped_step_ids, ["reveal"]);
+  assert.equal((result.steps as Array<Record<string, unknown>>)[0]?.status, "completed");
+  assert.equal((result.steps as Array<Record<string, unknown>>)[1]?.status, "failed");
+  assert.equal((result.steps as Array<Record<string, unknown>>)[2]?.status, "skipped");
+});
+
+test("executeNotebookWorkflow continue mode still requires every dependency to complete", async () => {
+  const calls: string[] = [];
+  const tools = new NotebookTools(async () => ({
+    getSessionInfo: async () => {
+      throw new Error("unused");
+    },
+    listOpenNotebooks: async () => {
+      throw new Error("unused");
+    },
+    openNotebook: async () => {
+      throw new Error("unused");
+    },
+    getNotebookOutline: async () => {
+      throw new Error("unused");
+    },
+    listNotebookCells: async () => {
+      throw new Error("unused");
+    },
+    listVariables: async () => {
+      throw new Error("unused");
+    },
+    searchNotebook: async () => {
+      throw new Error("unused");
+    },
+    getDiagnostics: async () => {
+      throw new Error("unused");
+    },
+    findSymbols: async () => {
+      throw new Error("unused");
+    },
+    goToDefinition: async () => {
+      throw new Error("unused");
+    },
+    readNotebook: async () => {
+      throw new Error("unused");
+    },
+    insertCell: async () => {
+      throw new Error("unused");
+    },
+    replaceCellSource: async () => {
+      throw new Error("unused");
+    },
+    patchCellSource: async () => {
+      throw new Error("unused");
+    },
+    formatCell: async () => {
+      throw new Error("unused");
+    },
+    deleteCell: async () => {
+      throw new Error("unused");
+    },
+    moveCell: async () => {
+      throw new Error("unused");
+    },
+    executeCells: async (request: { cell_ids: string[] }) => {
+      calls.push(`execute:${request.cell_ids.join(",")}`);
+      return { ok: true };
+    },
+    executeCellsAsync: async () => {
+      throw new Error("unused");
+    },
+    getExecutionStatus: async () => {
+      throw new Error("unused");
+    },
+    waitForExecution: async () => {
+      throw new Error("unused");
+    },
+    interruptExecution: async () => {
+      calls.push("interrupt");
+      throw {
+        code: "KernelUnavailable",
+        message: "kernel missing",
+      };
+    },
+    restartKernel: async () => {
+      throw new Error("unused");
+    },
+    waitForKernelReady: async () => {
+      throw new Error("unused");
+    },
+    readCellOutputs: async () => {
+      throw new Error("unused");
+    },
+    revealCells: async () => {
+      calls.push("reveal");
+      return { ok: true };
+    },
+    setCellInputVisibility: async () => {
+      throw new Error("unused");
+    },
+    getKernelInfo: async () => {
+      throw new Error("unused");
+    },
+    selectKernel: async () => {
+      throw new Error("unused");
+    },
+    selectJupyterInterpreter: async () => {
+      throw new Error("unused");
+    },
+    summarizeNotebookState: async () => {
+      calls.push("summary");
+      return { ok: true };
+    },
+  }) as never);
+
+  const result = await (
+    tools as unknown as {
+      executeNotebookWorkflow: (
+        request: {
+          notebook_uri: string;
+          on_error: "stop" | "continue";
+          steps: Array<{
+            id: string;
+            tool: string;
+            with: unknown;
+            depends_on: string[];
+          }>;
+        },
+        extra: Record<string, unknown>,
+      ) => Promise<Record<string, unknown>>;
+    }
+  ).executeNotebookWorkflow(
+    {
+      notebook_uri: "file:///workspace/demo.ipynb",
+      on_error: "continue",
+      steps: [
+        {
+          id: "execute",
+          tool: "execute_cells",
+          with: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+            cell_ids: ["cell-1"],
+          },
+          depends_on: [],
+        },
+        {
+          id: "interrupt",
+          tool: "interrupt_execution",
+          with: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+          },
+          depends_on: ["execute"],
+        },
+        {
+          id: "reveal",
+          tool: "reveal_notebook_cells",
+          with: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+            cell_ids: ["cell-1"],
+          },
+          depends_on: ["interrupt"],
+        },
+        {
+          id: "summary",
+          tool: "summarize_notebook_state",
+          with: {
+            notebook_uri: "file:///workspace/demo.ipynb",
+          },
+          depends_on: [],
+        },
+      ],
+    },
+    {},
+  );
+
+  assert.deepEqual(calls, ["execute:cell-1", "interrupt", "summary"]);
+  assert.deepEqual(result.failed_step_ids, ["interrupt"]);
+  assert.deepEqual(result.skipped_step_ids, ["reveal"]);
+  assert.deepEqual(result.completed_step_ids, ["execute", "summary"]);
+});
+
 test("routeResultToFileIfRequested writes a compact receipt instead of returning the payload", async () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");

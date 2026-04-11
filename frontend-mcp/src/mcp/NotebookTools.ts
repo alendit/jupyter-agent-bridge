@@ -7,13 +7,17 @@ import { ToolRequestExtra } from "./SessionSelection";
 import {
   buildToolDescription,
   describeNotebookTool,
+  NotebookWorkflowStepToolName,
   NOTEBOOK_TOOL_INPUT_SCHEMAS,
   ReadCellOutputsToolRequest,
   ReadNotebookToolRequest,
   TOOL_HELP,
   ToolName,
 } from "./NotebookToolCatalog";
-import { NotebookToolInputParser } from "./NotebookToolInputParser";
+import {
+  NotebookToolInputParser,
+  NotebookWorkflowRequest,
+} from "./NotebookToolInputParser";
 import { NotebookToolResultRenderer } from "./NotebookToolResultRenderer";
 
 const EXECUTION_STATUS_PROGRESS: Record<string, number> = {
@@ -25,6 +29,15 @@ const EXECUTION_STATUS_PROGRESS: Record<string, number> = {
 };
 
 const WAIT_FOR_EXECUTION_POLL_INTERVAL_MS = 250;
+
+interface NotebookWorkflowStepResult {
+  id: string;
+  tool: NotebookWorkflowStepToolName;
+  status: "completed" | "failed" | "skipped";
+  depends_on: string[];
+  result?: unknown;
+  error?: ReturnType<typeof asBridgeError>;
+}
 
 export class NotebookTools {
   private readonly parser = new NotebookToolInputParser();
@@ -166,6 +179,10 @@ export class NotebookTools {
       (await this.getClient(extra)).setCellInputVisibility(this.parseSetNotebookCellInputVisibilityRequest(input)),
     );
 
+    register("run_notebook_workflow", async (input, extra) =>
+      this.executeNotebookWorkflow(this.parseNotebookWorkflowRequest(input), extra),
+    );
+
     register("get_kernel_info", async (input, extra) =>
       (await this.getClient(extra)).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
     );
@@ -295,6 +312,10 @@ export class NotebookTools {
     return this.parser.parseSetNotebookCellInputVisibilityRequest(input);
   }
 
+  private parseNotebookWorkflowRequest(input: unknown) {
+    return this.parser.parseNotebookWorkflowRequest(input);
+  }
+
   private parseNotebookUriOnlyInput(
     toolName: Extract<
       ToolName,
@@ -308,6 +329,162 @@ export class NotebookTools {
     input: unknown,
   ) {
     return this.parser.parseNotebookUriOnlyInput(toolName, input);
+  }
+
+  private async executeNotebookWorkflow(request: NotebookWorkflowRequest, extra: ToolRequestExtra): Promise<unknown> {
+    const client = await this.getClient(extra);
+    const results: NotebookWorkflowStepResult[] = [];
+    const completedSteps = new Set<string>();
+    let stopRequested = false;
+
+    for (const step of this.orderWorkflowSteps(request)) {
+      if (stopRequested) {
+        results.push({
+          id: step.id,
+          tool: step.tool,
+          status: "skipped",
+          depends_on: step.depends_on,
+        });
+        continue;
+      }
+
+      if (step.depends_on.some((dependency) => !completedSteps.has(dependency))) {
+        results.push({
+          id: step.id,
+          tool: step.tool,
+          status: "skipped",
+          depends_on: step.depends_on,
+        });
+        continue;
+      }
+
+      try {
+        const result = await this.executeWorkflowStep(client, step.tool, step.with);
+        results.push({
+          id: step.id,
+          tool: step.tool,
+          status: "completed",
+          depends_on: step.depends_on,
+          result,
+        });
+        completedSteps.add(step.id);
+      } catch (error) {
+        const bridgeError = asBridgeError(error);
+        results.push({
+          id: step.id,
+          tool: step.tool,
+          status: "failed",
+          depends_on: step.depends_on,
+          error: bridgeError,
+        });
+        if (request.on_error === "stop") {
+          stopRequested = true;
+        }
+      }
+    }
+
+    return {
+      notebook_uri: request.notebook_uri,
+      on_error: request.on_error,
+      completed_step_ids: results.filter((step) => step.status === "completed").map((step) => step.id),
+      failed_step_ids: results.filter((step) => step.status === "failed").map((step) => step.id),
+      skipped_step_ids: results.filter((step) => step.status === "skipped").map((step) => step.id),
+      steps: results,
+    };
+  }
+
+  private orderWorkflowSteps(request: NotebookWorkflowRequest) {
+    const byId = new Map(request.steps.map((step) => [step.id, step]));
+    const visited = new Set<string>();
+    const ordered: NotebookWorkflowRequest["steps"] = [];
+
+    const visit = (stepId: string): void => {
+      if (visited.has(stepId)) {
+        return;
+      }
+
+      const step = byId.get(stepId);
+      if (!step) {
+        return;
+      }
+
+      for (const dependency of step.depends_on) {
+        visit(dependency);
+      }
+      visited.add(stepId);
+      ordered.push(step);
+    };
+
+    for (const step of request.steps) {
+      visit(step.id);
+    }
+
+    return ordered;
+  }
+
+  private async executeWorkflowStep(
+    client: NotebookBridgeClient,
+    toolName: NotebookWorkflowStepToolName,
+    input: unknown,
+  ): Promise<unknown> {
+    switch (toolName) {
+      case "get_notebook_outline":
+        return client.getNotebookOutline((input as { notebook_uri: string }).notebook_uri);
+      case "list_notebook_cells":
+        return client.listNotebookCells(input as never);
+      case "list_variables":
+        return client.listVariables(input as never);
+      case "search_notebook":
+        return client.searchNotebook(input as never);
+      case "find_symbols":
+        return client.findSymbols(input as never);
+      case "get_diagnostics":
+        return client.getDiagnostics(input as never);
+      case "go_to_definition":
+        return client.goToDefinition(input as never);
+      case "read_notebook": {
+        const request = input as ReadNotebookToolRequest;
+        const result = await client.readNotebook(request);
+        return this.routeResultToFileIfRequested("read_notebook", result, request.output_file_path);
+      }
+      case "insert_cell":
+        return client.insertCell(input as never);
+      case "replace_cell_source":
+        return client.replaceCellSource(input as never);
+      case "patch_cell_source":
+        return client.patchCellSource(input as never);
+      case "format_cell":
+        return client.formatCell(input as never);
+      case "delete_cell":
+        return client.deleteCell(input as never);
+      case "move_cell":
+        return client.moveCell(input as never);
+      case "execute_cells":
+        return client.executeCells(input as never);
+      case "interrupt_execution":
+        return client.interruptExecution(input as never);
+      case "restart_kernel":
+        return client.restartKernel(input as never);
+      case "wait_for_kernel_ready":
+        return client.waitForKernelReady(input as never);
+      case "read_cell_outputs": {
+        const request = input as ReadCellOutputsToolRequest;
+        const result = await client.readCellOutputs(request);
+        return this.routeResultToFileIfRequested("read_cell_outputs", result, request.output_file_path);
+      }
+      case "reveal_notebook_cells":
+        return client.revealCells(input as never);
+      case "set_notebook_cell_input_visibility":
+        return client.setCellInputVisibility(input as never);
+      case "get_kernel_info":
+        return client.getKernelInfo((input as { notebook_uri: string }).notebook_uri);
+      case "select_kernel":
+        return client.selectKernel(input as never);
+      case "select_jupyter_interpreter":
+        return client.selectJupyterInterpreter(input as never);
+      case "summarize_notebook_state":
+        return client.summarizeNotebookState((input as { notebook_uri: string }).notebook_uri);
+    }
   }
 
   private async routeResultToFileIfRequested(

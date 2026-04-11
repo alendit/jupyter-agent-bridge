@@ -136,6 +136,7 @@ The MCP server is an adapter. It must not own notebook state. Its responsibiliti
 - discover a matching editor bridge session
 - authenticate to the bridge
 - convert MCP tool calls into typed bridge calls
+- optionally compose several bridge-backed notebook operations into one higher-level MCP workflow tool when the sequence is purely orchestration
 - render bridge results into MCP-friendly responses
 - keep MCP host integration separate from notebook behavior
 

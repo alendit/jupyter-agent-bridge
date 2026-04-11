@@ -24,12 +24,28 @@ import {
 import {
   ReadCellOutputsToolRequest,
   ReadNotebookToolRequest,
+  NOTEBOOK_WORKFLOW_STEP_TOOLS,
   TOOL_NAMES,
+  NotebookWorkflowStepToolName,
   ToolName,
 } from "./NotebookToolCatalog";
 
 type ToolInput = Record<string, unknown>;
 type NotebookCellInput = InsertCellRequest["cell"];
+type WorkflowOnError = "stop" | "continue";
+
+export interface NotebookWorkflowStepRequest {
+  id: string;
+  tool: NotebookWorkflowStepToolName;
+  with: unknown;
+  depends_on: string[];
+}
+
+export interface NotebookWorkflowRequest {
+  notebook_uri: string;
+  on_error: WorkflowOnError;
+  steps: NotebookWorkflowStepRequest[];
+}
 
 export class NotebookToolInputParser {
   public parseEmptyInput(toolName: ToolName, input: unknown): void {
@@ -605,6 +621,30 @@ export class NotebookToolInputParser {
     return request;
   }
 
+  public parseNotebookWorkflowRequest(input: unknown): NotebookWorkflowRequest {
+    const toolName = "run_notebook_workflow";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "on_error", "steps"]);
+
+    const notebookUri = this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`);
+    const rawSteps = params.steps;
+    if (!Array.isArray(rawSteps) || rawSteps.length === 0) {
+      this.failValidation(toolName, "steps must be a non-empty array.");
+    }
+
+    const workflow: NotebookWorkflowRequest = {
+      notebook_uri: notebookUri,
+      on_error:
+        params.on_error === undefined
+          ? "stop"
+          : this.parseEnum(params.on_error, `${toolName}.on_error`, ["stop", "continue"]),
+      steps: rawSteps.map((step, index) => this.parseNotebookWorkflowStep(toolName, notebookUri, step, index)),
+    };
+
+    this.validateNotebookWorkflowGraph(workflow);
+    return workflow;
+  }
+
   public parseNotebookUriOnlyInput(
     toolName: Extract<
       ToolName,
@@ -703,6 +743,162 @@ export class NotebookToolInputParser {
           : `Unknown position.mode "${mode}". Expected "before_index", "before_cell_id", "after_cell_id", or "at_end".`;
         this.failValidation(toolName, message);
       }
+    }
+  }
+
+  private parseNotebookWorkflowStep(
+    toolName: "run_notebook_workflow",
+    notebookUri: string,
+    step: unknown,
+    index: number,
+  ): NotebookWorkflowStepRequest {
+    const label = `${toolName}.steps[${index}]`;
+    const value = this.requiredPlainObject(step, label);
+    this.assertKnownKeys(toolName, value, ["id", "tool", "with", "depends_on"], label);
+
+    const id = value.id === undefined ? `step_${index + 1}` : this.requiredString(value.id, `${label}.id`);
+    const stepTool = this.parseEnum(value.tool, `${label}.tool`, NOTEBOOK_WORKFLOW_STEP_TOOLS);
+    const dependsOn =
+      value.depends_on === undefined
+        ? []
+        : this.requiredStringArray(value.depends_on, `${label}.depends_on`);
+    const rawInput = this.requireObject(value.with, toolName, `${label}.with`);
+    const normalizedInput = this.injectWorkflowNotebookUri(stepTool, notebookUri, rawInput, `${label}.with`);
+
+    return {
+      id,
+      tool: stepTool,
+      with: this.parseWorkflowStepToolInput(stepTool, normalizedInput),
+      depends_on: dependsOn,
+    };
+  }
+
+  private injectWorkflowNotebookUri(
+    stepTool: NotebookWorkflowStepToolName,
+    notebookUri: string,
+    rawInput: ToolInput,
+    label: string,
+  ): ToolInput {
+    const candidate = rawInput.notebook_uri;
+    if (candidate === undefined) {
+      return {
+        ...rawInput,
+        notebook_uri: notebookUri,
+      };
+    }
+
+    const providedNotebookUri = this.requiredString(candidate, `${label}.notebook_uri`);
+    if (providedNotebookUri !== notebookUri) {
+      this.failValidation(
+        "run_notebook_workflow",
+        `${label}.notebook_uri must match run_notebook_workflow.notebook_uri for step tool ${stepTool}.`,
+      );
+    }
+
+    return rawInput;
+  }
+
+  private parseWorkflowStepToolInput(stepTool: NotebookWorkflowStepToolName, input: ToolInput): unknown {
+    switch (stepTool) {
+      case "get_notebook_outline":
+        return this.parseNotebookUriOnlyInput("get_notebook_outline", input);
+      case "list_notebook_cells":
+        return this.parseListNotebookCellsRequest(input);
+      case "list_variables":
+        return this.parseListVariablesRequest(input);
+      case "search_notebook":
+        return this.parseSearchNotebookRequest(input);
+      case "find_symbols":
+        return this.parseFindSymbolsRequest(input);
+      case "get_diagnostics":
+        return this.parseGetDiagnosticsRequest(input);
+      case "go_to_definition":
+        return this.parseGoToDefinitionRequest(input);
+      case "read_notebook":
+        return this.parseReadNotebookRequest(input);
+      case "insert_cell":
+        return this.normalizeInsertCellRequest(input);
+      case "replace_cell_source":
+        return this.parseReplaceCellSourceRequest(input);
+      case "patch_cell_source":
+        return this.parsePatchCellSourceRequest(input);
+      case "format_cell":
+        return this.parseFormatCellRequest(input);
+      case "delete_cell":
+        return this.parseDeleteCellRequest(input);
+      case "move_cell":
+        return this.parseMoveCellRequest(input);
+      case "execute_cells":
+        return this.parseExecuteCellsRequest(input);
+      case "interrupt_execution":
+        return this.parseNotebookUriOnlyInput("interrupt_execution", input);
+      case "restart_kernel":
+        return this.parseNotebookUriOnlyInput("restart_kernel", input);
+      case "wait_for_kernel_ready":
+        return this.parseWaitForKernelReadyRequest(input);
+      case "read_cell_outputs":
+        return this.parseReadCellOutputsRequest(input);
+      case "reveal_notebook_cells":
+        return this.parseRevealNotebookCellsRequest(input);
+      case "set_notebook_cell_input_visibility":
+        return this.parseSetNotebookCellInputVisibilityRequest(input);
+      case "get_kernel_info":
+        return this.parseNotebookUriOnlyInput("get_kernel_info", input);
+      case "select_kernel":
+        return this.parseSelectKernelRequest(input);
+      case "select_jupyter_interpreter":
+        return this.parseNotebookUriOnlyInput("select_jupyter_interpreter", input);
+      case "summarize_notebook_state":
+        return this.parseNotebookUriOnlyInput("summarize_notebook_state", input);
+    }
+  }
+
+  private validateNotebookWorkflowGraph(workflow: NotebookWorkflowRequest): void {
+    const knownStepIds = new Set<string>();
+    for (const step of workflow.steps) {
+      if (knownStepIds.has(step.id)) {
+        this.failValidation("run_notebook_workflow", `Duplicate step id "${step.id}".`);
+      }
+      knownStepIds.add(step.id);
+    }
+
+    for (const step of workflow.steps) {
+      for (const dependency of step.depends_on) {
+        if (!knownStepIds.has(dependency)) {
+          this.failValidation(
+            "run_notebook_workflow",
+            `Step "${step.id}" depends_on unknown step "${dependency}".`,
+          );
+        }
+      }
+    }
+
+    const visiting = new Set<string>();
+    const visited = new Set<string>();
+    const byId = new Map(workflow.steps.map((step) => [step.id, step]));
+
+    const visit = (stepId: string): void => {
+      if (visited.has(stepId)) {
+        return;
+      }
+      if (visiting.has(stepId)) {
+        this.failValidation("run_notebook_workflow", `Workflow dependencies contain a cycle at "${stepId}".`);
+      }
+
+      visiting.add(stepId);
+      const step = byId.get(stepId);
+      if (!step) {
+        return;
+      }
+      for (const dependency of step.depends_on) {
+        visit(dependency);
+      }
+      visiting.delete(stepId);
+      visited.add(stepId);
+    };
+
+    for (const step of workflow.steps) {
+      visit(step.id);
     }
   }
 

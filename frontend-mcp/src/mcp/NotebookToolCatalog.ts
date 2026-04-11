@@ -32,6 +32,7 @@ export const TOOL_NAMES = [
   "read_cell_outputs",
   "reveal_notebook_cells",
   "set_notebook_cell_input_visibility",
+  "run_notebook_workflow",
   "get_kernel_info",
   "select_kernel",
   "select_jupyter_interpreter",
@@ -39,6 +40,34 @@ export const TOOL_NAMES = [
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
+export const NOTEBOOK_WORKFLOW_STEP_TOOLS = [
+  "get_notebook_outline",
+  "list_notebook_cells",
+  "list_variables",
+  "search_notebook",
+  "find_symbols",
+  "get_diagnostics",
+  "go_to_definition",
+  "read_notebook",
+  "insert_cell",
+  "replace_cell_source",
+  "patch_cell_source",
+  "format_cell",
+  "delete_cell",
+  "move_cell",
+  "execute_cells",
+  "interrupt_execution",
+  "restart_kernel",
+  "wait_for_kernel_ready",
+  "read_cell_outputs",
+  "reveal_notebook_cells",
+  "set_notebook_cell_input_visibility",
+  "get_kernel_info",
+  "select_kernel",
+  "select_jupyter_interpreter",
+  "summarize_notebook_state",
+] as const;
+export type NotebookWorkflowStepToolName = (typeof NOTEBOOK_WORKFLOW_STEP_TOOLS)[number];
 
 interface ToolHelp {
   title: string;
@@ -344,6 +373,25 @@ const setNotebookCellInputVisibilityInputSchema = z
   })
   .passthrough();
 
+const notebookWorkflowInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    on_error: optionalStringSchema,
+    steps: z
+      .array(
+        z
+          .object({
+            id: optionalStringSchema,
+            tool: optionalStringSchema,
+            with: permissiveObjectSchema.optional(),
+            depends_on: z.array(z.unknown()).optional(),
+          })
+          .passthrough(),
+      )
+      .optional(),
+  })
+  .passthrough();
+
 const singleNotebookInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
@@ -591,6 +639,16 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
       '{"notebook_uri":"file:///workspace/demo.ipynb","range":{"start":10,"end":15},"input_visibility":"expand"}',
     ],
   },
+  run_notebook_workflow: {
+    title: "Run Notebook Workflow",
+    summary:
+      "Execute a known multi-step notebook plan in one MCP tool call. Each step.tool is an existing notebook tool name, and each step.with uses that tool's normal JSON shape. notebook_uri is inherited from the workflow root when omitted inside a step.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","on_error"?:"stop"|"continue","steps":[{"id":"step-1","tool":"execute_cells","with":{"cell_ids":["cell-1"],"stop_on_error":true},"depends_on"?:["earlier-step"]}]}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","steps":[{"id":"execute","tool":"execute_cells","with":{"cell_ids":["cell-1"]}},{"id":"reveal","tool":"reveal_notebook_cells","with":{"cell_ids":["cell-1"],"focus_target":"output"},"depends_on":["execute"]}]}',
+    ],
+  },
   get_kernel_info: {
     title: "Get Kernel Info",
     summary: "Read best-effort kernel information for the notebook.",
@@ -642,6 +700,8 @@ export const NOTEBOOK_RULES = [
   "Use select_kernel or select_jupyter_interpreter when the notebook kernel or Python environment needs user-driven setup.",
   "Use get_kernel_info or wait_for_kernel_ready to reason about a notebook's current kernel generation and readiness.",
   "Use execute_cells_async with get_execution_status or wait_for_execution for long-running executions.",
+  "Use run_notebook_workflow when a multi-step notebook procedure is known in advance and does not need LLM inspection between steps.",
+  "In run_notebook_workflow, step.tool reuses an existing notebook tool name and step.with should match that tool's normal input JSON.",
   "Then use targeted read_notebook, go_to_definition, or read_cell_outputs.",
   "Notebook data may change between turns because the user can edit cells.",
   "Use notebook versions and source_fingerprint values to avoid stale edits or executions.",
@@ -676,6 +736,7 @@ export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
   read_cell_outputs: readCellOutputsInputSchema,
   reveal_notebook_cells: revealNotebookCellsInputSchema,
   set_notebook_cell_input_visibility: setNotebookCellInputVisibilityInputSchema,
+  run_notebook_workflow: notebookWorkflowInputSchema,
   get_kernel_info: singleNotebookInputSchema,
   select_kernel: selectKernelInputSchema,
   select_jupyter_interpreter: singleNotebookInputSchema,
@@ -686,7 +747,11 @@ export function buildToolDescription(toolName: ToolName): string {
   const help = TOOL_HELP[toolName];
   const examples = help.examples.map((example, index) => `${index + 1}. ${example}`).join("\n");
   const preferred = toolName === "describe_tool" ? "" : "Preferred notebook interface.\n\n";
-  return `${preferred}${help.summary}\n\nStrict JSON types only. Do not quote booleans or numbers.\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
+  const workflowNote =
+    toolName === "run_notebook_workflow"
+      ? `\n\nWorkflow guidance:\n- Use this only when the multi-step plan is known in advance.\n- Each step.tool must be an existing notebook tool name.\n- Each step.with should match that tool's normal input JSON exactly.\n- notebook_uri may be omitted inside steps and is inherited from the workflow root.\n- Use direct tools instead when later steps need LLM inspection of earlier results.`
+      : "";
+  return `${preferred}${help.summary}${workflowNote}\n\nStrict JSON types only. Do not quote booleans or numbers.\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
 }
 
 export function describeNotebookTool(toolName?: ToolName): unknown {
