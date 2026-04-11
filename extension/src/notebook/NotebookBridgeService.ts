@@ -1,11 +1,15 @@
 import {
   DeleteCellRequest,
+  ExecuteCellsAsyncRequest,
+  ExecuteCellsAsyncResult,
   ExecuteCellsRequest,
   ExecuteCellsResult,
+  ExecutionStatusResult,
   FindSymbolsRequest,
   FindSymbolsResult,
   FormatCellRequest,
   FormatCellResult,
+  GetExecutionStatusRequest,
   GetKernelInfoResult,
   GoToDefinitionRequest,
   GoToDefinitionResult,
@@ -37,6 +41,8 @@ import {
   SearchNotebookResult,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForExecutionRequest,
+  WaitForExecutionResult,
   WaitForKernelReadyRequest,
   WaitForKernelReadyResult,
   MoveCellRequest,
@@ -119,6 +125,18 @@ export class NotebookBridgeService {
 
   public async executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult> {
     return this.runtimeService.executeCells(request);
+  }
+
+  public async executeCellsAsync(request: ExecuteCellsAsyncRequest): Promise<ExecuteCellsAsyncResult> {
+    return this.runtimeService.executeCellsAsync(request);
+  }
+
+  public getExecutionStatus(request: GetExecutionStatusRequest): ExecutionStatusResult {
+    return this.runtimeService.getExecutionStatus(request);
+  }
+
+  public waitForExecution(request: WaitForExecutionRequest): Promise<WaitForExecutionResult> {
+    return this.runtimeService.waitForExecution(request);
   }
 
   public async readCellOutputs(request: ReadCellOutputsRequest): Promise<ReadCellOutputsResult> {

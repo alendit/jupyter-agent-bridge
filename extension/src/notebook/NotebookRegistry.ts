@@ -121,6 +121,10 @@ export class NotebookRegistry implements vscode.Disposable {
   }
 
   public async runExclusive<T>(notebookUri: string, operation: () => Promise<T>): Promise<T> {
+    return this.enqueueExclusive(notebookUri, operation);
+  }
+
+  public async enqueueExclusive<T>(notebookUri: string, operation: () => Promise<T>): Promise<T> {
     const state = this.states.get(this.normalizeUri(notebookUri));
     if (!state) {
       throw new Error(`Notebook is not registered: ${notebookUri}`);

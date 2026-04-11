@@ -17,6 +17,9 @@ export const BRIDGE_METHODS = {
   deleteCell: "notebook.delete_cell",
   moveCell: "notebook.move_cell",
   executeCells: "notebook.execute_cells",
+  executeCellsAsync: "notebook.execute_cells_async",
+  getExecutionStatus: "notebook.get_execution_status",
+  waitForExecution: "notebook.wait_for_execution",
   interruptExecution: "notebook.interrupt_execution",
   restartKernel: "notebook.restart_kernel",
   waitForKernelReady: "notebook.wait_for_kernel_ready",
@@ -30,6 +33,9 @@ export const BRIDGE_METHODS = {
 
 export interface SessionCapabilities {
   execute_cells: boolean;
+  execute_cells_async: boolean;
+  get_execution_status: boolean;
+  wait_for_execution: boolean;
   interrupt_execution: boolean;
   restart_kernel: boolean;
   list_variables: boolean;

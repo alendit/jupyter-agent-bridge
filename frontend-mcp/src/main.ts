@@ -5,6 +5,7 @@ import { BridgeDiscovery } from "./bridge/BridgeDiscovery";
 import { HttpJsonRpcBridgeClient } from "./bridge/HttpJsonRpcBridgeClient";
 import { createFrontendLogger } from "./logging";
 import { NotebookTools } from "./mcp/NotebookTools";
+import { chooseSessionViaElicitation } from "./mcp/SessionSelection";
 
 async function main(): Promise<void> {
   const logger = createFrontendLogger();
@@ -15,13 +16,21 @@ async function main(): Promise<void> {
   });
   logger.info(`frontend-mcp starting pid=${process.pid} log_path=${JSON.stringify(logger.logPath)}`);
 
-  const tools = new NotebookTools(async () => {
-    const session = await discovery.selectSession();
-    logger.info(
-      `bridge session selected session_id=${JSON.stringify(session.session_id)} bridge_url=${JSON.stringify(session.bridge_url)}`,
-    );
-    return new HttpJsonRpcBridgeClient(session.bridge_url, session.auth_token);
-  }, (message) => logger.info(message));
+  const tools = new NotebookTools(
+    async (extra) => {
+      const session = await discovery.selectSession({
+        chooseSession:
+          server.server.getClientCapabilities()?.elicitation !== undefined
+            ? (candidates) => chooseSessionViaElicitation(candidates, extra, (message) => logger.info(message))
+            : undefined,
+      });
+      logger.info(
+        `bridge session selected session_id=${JSON.stringify(session.session_id)} bridge_url=${JSON.stringify(session.bridge_url)}`,
+      );
+      return new HttpJsonRpcBridgeClient(session.bridge_url, session.auth_token);
+    },
+    (message) => logger.info(message),
+  );
   tools.register(server);
 
   const transport = new StdioServerTransport();

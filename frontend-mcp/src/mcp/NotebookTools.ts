@@ -1,7 +1,9 @@
 import { asBridgeError } from "../../../packages/protocol/src";
+import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
 import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
+import { ToolRequestExtra } from "./SessionSelection";
 import {
   buildToolDescription,
   describeNotebookTool,
@@ -14,17 +16,27 @@ import {
 import { NotebookToolInputParser } from "./NotebookToolInputParser";
 import { NotebookToolResultRenderer } from "./NotebookToolResultRenderer";
 
+const EXECUTION_STATUS_PROGRESS: Record<string, number> = {
+  queued: 10,
+  running: 50,
+  completed: 100,
+  failed: 100,
+  timed_out: 100,
+};
+
+const WAIT_FOR_EXECUTION_POLL_INTERVAL_MS = 250;
+
 export class NotebookTools {
   private readonly parser = new NotebookToolInputParser();
   private readonly renderer = new NotebookToolResultRenderer();
 
   public constructor(
-    private readonly getClient: () => Promise<NotebookBridgeClient>,
+    private readonly getClient: (extra: ToolRequestExtra) => Promise<NotebookBridgeClient>,
     private readonly log?: (message: string) => void,
   ) {}
 
   public register(server: McpServer): void {
-    const register = (toolName: ToolName, handler: (input: unknown) => Promise<unknown>): void => {
+    const register = (toolName: ToolName, handler: (input: unknown, extra: ToolRequestExtra) => Promise<unknown>): void => {
       server.registerTool(
         toolName,
         {
@@ -32,121 +44,140 @@ export class NotebookTools {
           description: this.buildToolDescription(toolName),
           inputSchema: NOTEBOOK_TOOL_INPUT_SCHEMAS[toolName],
         },
-        async (input) => this.runTool(toolName, input, () => handler(input)),
+        async (input, extra) => this.runTool(toolName, input, extra, () => handler(input, extra)),
       );
     };
 
-    register("list_open_notebooks", async (input) => {
+    register("list_open_notebooks", async (input, extra) => {
       this.parseEmptyInput("list_open_notebooks", input);
-      return (await this.getClient()).listOpenNotebooks();
+      return (await this.getClient(extra)).listOpenNotebooks();
     });
 
     register("describe_tool", async (input) => this.describeTool(this.parseDescribeToolInput(input).tool_name));
 
-    register("open_notebook", async (input) =>
-      (await this.getClient()).openNotebook(this.parseOpenNotebookRequest(input)),
+    register("open_notebook", async (input, extra) =>
+      (await this.getClient(extra)).openNotebook(this.parseOpenNotebookRequest(input)),
     );
 
-    register("get_notebook_outline", async (input) =>
-      (await this.getClient()).getNotebookOutline(this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri),
+    register("get_notebook_outline", async (input, extra) =>
+      (await this.getClient(extra)).getNotebookOutline(
+        this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri,
+      ),
     );
 
-    register("list_notebook_cells", async (input) =>
-      (await this.getClient()).listNotebookCells(this.parseListNotebookCellsRequest(input)),
+    register("list_notebook_cells", async (input, extra) =>
+      (await this.getClient(extra)).listNotebookCells(this.parseListNotebookCellsRequest(input)),
     );
 
-    register("list_variables", async (input) =>
-      (await this.getClient()).listVariables(this.parseListVariablesRequest(input)),
+    register("list_variables", async (input, extra) =>
+      (await this.getClient(extra)).listVariables(this.parseListVariablesRequest(input)),
     );
 
-    register("search_notebook", async (input) =>
-      (await this.getClient()).searchNotebook(this.parseSearchNotebookRequest(input)),
+    register("search_notebook", async (input, extra) =>
+      (await this.getClient(extra)).searchNotebook(this.parseSearchNotebookRequest(input)),
     );
 
-    register("find_symbols", async (input) =>
-      (await this.getClient()).findSymbols(this.parseFindSymbolsRequest(input)),
+    register("find_symbols", async (input, extra) =>
+      (await this.getClient(extra)).findSymbols(this.parseFindSymbolsRequest(input)),
     );
 
-    register("get_diagnostics", async (input) =>
-      (await this.getClient()).getDiagnostics(this.parseGetDiagnosticsRequest(input)),
+    register("get_diagnostics", async (input, extra) =>
+      (await this.getClient(extra)).getDiagnostics(this.parseGetDiagnosticsRequest(input)),
     );
 
-    register("go_to_definition", async (input) =>
-      (await this.getClient()).goToDefinition(this.parseGoToDefinitionRequest(input)),
+    register("go_to_definition", async (input, extra) =>
+      (await this.getClient(extra)).goToDefinition(this.parseGoToDefinitionRequest(input)),
     );
 
-    register("read_notebook", async (input) => {
+    register("read_notebook", async (input, extra) => {
       const request = this.parseReadNotebookRequest(input);
-      const result = await (await this.getClient()).readNotebook(request);
+      const result = await (await this.getClient(extra)).readNotebook(request);
       return this.routeResultToFileIfRequested("read_notebook", result, request.output_file_path);
     });
 
-    register("insert_cell", async (input) =>
-      (await this.getClient()).insertCell(this.normalizeInsertCellRequest(input)),
+    register("insert_cell", async (input, extra) =>
+      (await this.getClient(extra)).insertCell(this.normalizeInsertCellRequest(input)),
     );
 
-    register("replace_cell_source", async (input) =>
-      (await this.getClient()).replaceCellSource(this.parseReplaceCellSourceRequest(input)),
+    register("replace_cell_source", async (input, extra) =>
+      (await this.getClient(extra)).replaceCellSource(this.parseReplaceCellSourceRequest(input)),
     );
 
-    register("patch_cell_source", async (input) =>
-      (await this.getClient()).patchCellSource(this.parsePatchCellSourceRequest(input)),
+    register("patch_cell_source", async (input, extra) =>
+      (await this.getClient(extra)).patchCellSource(this.parsePatchCellSourceRequest(input)),
     );
 
-    register("format_cell", async (input) =>
-      (await this.getClient()).formatCell(this.parseFormatCellRequest(input)),
+    register("format_cell", async (input, extra) =>
+      (await this.getClient(extra)).formatCell(this.parseFormatCellRequest(input)),
     );
 
-    register("delete_cell", async (input) =>
-      (await this.getClient()).deleteCell(this.parseDeleteCellRequest(input)),
+    register("delete_cell", async (input, extra) =>
+      (await this.getClient(extra)).deleteCell(this.parseDeleteCellRequest(input)),
     );
 
-    register("move_cell", async (input) =>
-      (await this.getClient()).moveCell(this.parseMoveCellRequest(input)),
+    register("move_cell", async (input, extra) =>
+      (await this.getClient(extra)).moveCell(this.parseMoveCellRequest(input)),
     );
 
-    register("execute_cells", async (input) =>
-      (await this.getClient()).executeCells(this.parseExecuteCellsRequest(input)),
+    register("execute_cells", async (input, extra) =>
+      (await this.getClient(extra)).executeCells(this.parseExecuteCellsRequest(input)),
     );
 
-    register("interrupt_execution", async (input) =>
-      (await this.getClient()).interruptExecution(this.parseNotebookUriOnlyInput("interrupt_execution", input)),
+    register("execute_cells_async", async (input, extra) =>
+      (await this.getClient(extra)).executeCellsAsync(this.parseExecuteCellsAsyncRequest(input)),
     );
 
-    register("restart_kernel", async (input) =>
-      (await this.getClient()).restartKernel(this.parseNotebookUriOnlyInput("restart_kernel", input)),
+    register("get_execution_status", async (input, extra) =>
+      (await this.getClient(extra)).getExecutionStatus(this.parseGetExecutionStatusRequest(input)),
     );
 
-    register("wait_for_kernel_ready", async (input) =>
-      (await this.getClient()).waitForKernelReady(this.parseWaitForKernelReadyRequest(input)),
+    register("wait_for_execution", async (input, extra) => {
+      const request = this.parseWaitForExecutionRequest(input);
+      if (extra._meta?.progressToken === undefined) {
+        return (await this.getClient(extra)).waitForExecution(request);
+      }
+
+      return this.waitForExecutionWithProgress(request, extra);
+    });
+
+    register("interrupt_execution", async (input, extra) =>
+      (await this.getClient(extra)).interruptExecution(this.parseNotebookUriOnlyInput("interrupt_execution", input)),
     );
 
-    register("read_cell_outputs", async (input) => {
+    register("restart_kernel", async (input, extra) =>
+      (await this.getClient(extra)).restartKernel(this.parseNotebookUriOnlyInput("restart_kernel", input)),
+    );
+
+    register("wait_for_kernel_ready", async (input, extra) =>
+      (await this.getClient(extra)).waitForKernelReady(this.parseWaitForKernelReadyRequest(input)),
+    );
+
+    register("read_cell_outputs", async (input, extra) => {
       const request = this.parseReadCellOutputsRequest(input);
-      const result = await (await this.getClient()).readCellOutputs(request);
+      const result = await (await this.getClient(extra)).readCellOutputs(request);
       return this.routeResultToFileIfRequested("read_cell_outputs", result, request.output_file_path);
     });
 
-    register("reveal_notebook_cells", async (input) =>
-      (await this.getClient()).revealCells(this.parseRevealNotebookCellsRequest(input)),
+    register("reveal_notebook_cells", async (input, extra) =>
+      (await this.getClient(extra)).revealCells(this.parseRevealNotebookCellsRequest(input)),
     );
 
-    register("get_kernel_info", async (input) =>
-      (await this.getClient()).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
+    register("get_kernel_info", async (input, extra) =>
+      (await this.getClient(extra)).getKernelInfo(this.parseNotebookUriOnlyInput("get_kernel_info", input).notebook_uri),
     );
 
-    register("select_kernel", async (input) =>
-      (await this.getClient()).selectKernel(this.parseSelectKernelRequest(input)),
+    register("select_kernel", async (input, extra) =>
+      (await this.getClient(extra)).selectKernel(this.parseSelectKernelRequest(input)),
     );
 
-    register("select_jupyter_interpreter", async (input) =>
-      (await this.getClient()).selectJupyterInterpreter(
+    register("select_jupyter_interpreter", async (input, extra) =>
+      (await this.getClient(extra)).selectJupyterInterpreter(
         this.parseNotebookUriOnlyInput("select_jupyter_interpreter", input),
       ),
     );
 
-    register("summarize_notebook_state", async (input) =>
-      (await this.getClient()).summarizeNotebookState(
+    register("summarize_notebook_state", async (input, extra) =>
+      (await this.getClient(extra)).summarizeNotebookState(
         this.parseNotebookUriOnlyInput("summarize_notebook_state", input).notebook_uri,
       ),
     );
@@ -228,6 +259,18 @@ export class NotebookTools {
     return this.parser.parseExecuteCellsRequest(input);
   }
 
+  private parseExecuteCellsAsyncRequest(input: unknown) {
+    return this.parser.parseExecuteCellsAsyncRequest(input);
+  }
+
+  private parseGetExecutionStatusRequest(input: unknown) {
+    return this.parser.parseGetExecutionStatusRequest(input);
+  }
+
+  private parseWaitForExecutionRequest(input: unknown) {
+    return this.parser.parseWaitForExecutionRequest(input);
+  }
+
   private parseSelectKernelRequest(input: unknown) {
     return this.parser.parseSelectKernelRequest(input);
   }
@@ -275,7 +318,12 @@ export class NotebookTools {
     return this.renderer.toErrorToolResult(error);
   }
 
-  private async runTool<T>(toolName: ToolName, input: unknown, operation: () => Promise<T>): Promise<CallToolResult> {
+  private async runTool<T>(
+    toolName: ToolName,
+    input: unknown,
+    _extra: ToolRequestExtra,
+    operation: () => Promise<T>,
+  ): Promise<CallToolResult> {
     const startedAt = Date.now();
     this.log?.(`tool request name=${toolName}${this.summarizeToolInput(input)}`);
     try {
@@ -318,8 +366,77 @@ export class NotebookTools {
     if (typeof record.cell_id === "string") {
       parts.push(` cell_id=${this.shortString(record.cell_id)}`);
     }
+    if (typeof record.execution_id === "string") {
+      parts.push(` execution_id=${this.shortString(record.execution_id)}`);
+    }
 
     return parts.join("");
+  }
+
+  private async waitForExecutionWithProgress(
+    request: { execution_id: string; timeout_ms?: number },
+    extra: ToolRequestExtra,
+  ): Promise<unknown> {
+    const client = await this.getClient(extra);
+    const timeoutMs = request.timeout_ms ?? 30_000;
+    const deadline = Date.now() + timeoutMs;
+    let lastStatus: string | null = null;
+
+    while (true) {
+      const status = await client.getExecutionStatus({
+        execution_id: request.execution_id,
+      });
+      if (status.status !== lastStatus) {
+        await this.sendExecutionProgress(extra, status.status, status.message);
+        lastStatus = status.status;
+      }
+
+      if (this.isTerminalExecutionStatus(status.status)) {
+        return {
+          ...status,
+          wait_timed_out: false,
+        };
+      }
+
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        return {
+          ...status,
+          wait_timed_out: true,
+        };
+      }
+
+      await this.sleep(Math.min(WAIT_FOR_EXECUTION_POLL_INTERVAL_MS, remainingMs));
+    }
+  }
+
+  private async sendExecutionProgress(
+    extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+    status: string,
+    message: string,
+  ): Promise<void> {
+    const progressToken = extra._meta?.progressToken;
+    if (progressToken === undefined) {
+      return;
+    }
+
+    await extra.sendNotification({
+      method: "notifications/progress",
+      params: {
+        progressToken,
+        progress: EXECUTION_STATUS_PROGRESS[status] ?? 0,
+        total: 100,
+        message,
+      },
+    });
+  }
+
+  private isTerminalExecutionStatus(status: string): boolean {
+    return status === "completed" || status === "failed" || status === "timed_out";
+  }
+
+  private async sleep(durationMs: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, durationMs));
   }
 
   private shortString(value: unknown, maxLength = 120): string | null {

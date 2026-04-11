@@ -182,7 +182,7 @@ test("parseExecuteCellsRequest rejects false wait_for_completion with a clear me
         cell_ids: ["cell-1"],
         wait_for_completion: false,
       }),
-    /wait_for_completion may be omitted or set to true, but false is not supported\./,
+    /Use execute_cells_async for non-blocking execution\./,
   );
 });
 
@@ -200,6 +200,30 @@ test("parseExecuteCellsRequest accepts stop_on_error", () => {
       };
     }
   ).parseExecuteCellsRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_ids: ["cell-1"],
+    stop_on_error: false,
+  });
+
+  assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.deepEqual(request.cell_ids, ["cell-1"]);
+  assert.equal(request.stop_on_error, false);
+});
+
+test("parseExecuteCellsAsyncRequest accepts stop_on_error", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseExecuteCellsAsyncRequest: (value: unknown) => {
+        notebook_uri: string;
+        cell_ids: string[];
+        stop_on_error?: boolean;
+      };
+    }
+  ).parseExecuteCellsAsyncRequest({
     notebook_uri: "file:///workspace/demo.ipynb",
     cell_ids: ["cell-1"],
     stop_on_error: false,
@@ -271,6 +295,159 @@ test("parseWaitForKernelReadyRequest accepts timeout and target generation", () 
   assert.equal(request.notebook_uri, "file:///workspace/demo.ipynb");
   assert.equal(request.timeout_ms, 45000);
   assert.equal(request.target_generation, 2);
+});
+
+test("parseWaitForExecutionRequest accepts timeout", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parseWaitForExecutionRequest: (value: unknown) => {
+        execution_id: string;
+        timeout_ms?: number;
+      };
+    }
+  ).parseWaitForExecutionRequest({
+    execution_id: "exec-1",
+    timeout_ms: 45000,
+  });
+
+  assert.equal(request.execution_id, "exec-1");
+  assert.equal(request.timeout_ms, 45000);
+});
+
+test("wait_for_execution uses the direct bridge wait path when no progress token is present", async () => {
+  let waitCalls = 0;
+  let progressCalls = 0;
+  let handler:
+    | ((input: unknown, extra: unknown) => Promise<{ content: Array<Record<string, unknown>> }>)
+    | undefined;
+  const tools = new NotebookTools(async () => {
+    return {
+      waitForExecution: async () => {
+        waitCalls += 1;
+        return {
+          execution_id: "exec-1",
+          notebook_uri: "file:///workspace/demo.ipynb",
+          cell_ids: ["cell-1"],
+          status: "completed",
+          submitted_at: "2024-03-09T16:00:00.000Z",
+          started_at: "2024-03-09T16:00:01.000Z",
+          completed_at: "2024-03-09T16:00:02.000Z",
+          message: "Execution completed.",
+          wait_timed_out: false,
+        };
+      },
+      getExecutionStatus: async () => {
+        throw new Error("getExecutionStatus should not be called when progress is not requested");
+      },
+    } as never;
+  });
+  (tools as unknown as { sleep: (durationMs: number) => Promise<void> }).sleep = async () => undefined;
+  tools.register({
+    registerTool: (name: string, _config: unknown, callback: unknown) => {
+      if (name === "wait_for_execution") {
+        handler = callback as (input: unknown, extra: unknown) => Promise<{ content: Array<Record<string, unknown>> }>;
+      }
+    },
+  } as never);
+
+  const result = await handler?.(
+    {
+      execution_id: "exec-1",
+    },
+    {
+      _meta: {},
+      sendNotification: async () => {
+        progressCalls += 1;
+      },
+    },
+  );
+
+  assert.equal(waitCalls, 1);
+  assert.equal(progressCalls, 0);
+  const payload = JSON.parse(String(result?.content[0]?.text)) as { wait_timed_out: boolean; status: string };
+  assert.equal(payload.wait_timed_out, false);
+  assert.equal(payload.status, "completed");
+});
+
+test("wait_for_execution emits progress notifications only when a progress token is present", async () => {
+  let progressCalls = 0;
+  let handler:
+    | ((input: unknown, extra: unknown) => Promise<{ content: Array<Record<string, unknown>> }>)
+    | undefined;
+  const statuses = [
+    {
+      execution_id: "exec-2",
+      notebook_uri: "file:///workspace/demo.ipynb",
+      cell_ids: ["cell-1"],
+      status: "queued",
+      submitted_at: "2024-03-09T16:00:00.000Z",
+      message: "Execution queued.",
+    },
+    {
+      execution_id: "exec-2",
+      notebook_uri: "file:///workspace/demo.ipynb",
+      cell_ids: ["cell-1"],
+      status: "running",
+      submitted_at: "2024-03-09T16:00:00.000Z",
+      started_at: "2024-03-09T16:00:01.000Z",
+      message: "Execution running.",
+    },
+    {
+      execution_id: "exec-2",
+      notebook_uri: "file:///workspace/demo.ipynb",
+      cell_ids: ["cell-1"],
+      status: "completed",
+      submitted_at: "2024-03-09T16:00:00.000Z",
+      started_at: "2024-03-09T16:00:01.000Z",
+      completed_at: "2024-03-09T16:00:02.000Z",
+      message: "Execution completed.",
+    },
+  ];
+
+  const tools = new NotebookTools(async () => {
+    return {
+      waitForExecution: async () => {
+        throw new Error("waitForExecution should not be called when progress is requested");
+      },
+      getExecutionStatus: async () => statuses.shift(),
+    } as never;
+  });
+  (tools as unknown as { sleep: (durationMs: number) => Promise<void> }).sleep = async () => undefined;
+  tools.register({
+    registerTool: (name: string, _config: unknown, callback: unknown) => {
+      if (name === "wait_for_execution") {
+        handler = callback as (input: unknown, extra: unknown) => Promise<{ content: Array<Record<string, unknown>> }>;
+      }
+    },
+  } as never);
+
+  const notifications: Array<{ params: { progress: number } }> = [];
+  const result = await handler?.(
+    {
+      execution_id: "exec-2",
+      timeout_ms: 30000,
+    },
+    {
+      _meta: { progressToken: "progress-1" },
+      sendNotification: async (notification: { params: { progress: number } }) => {
+        progressCalls += 1;
+        notifications.push(notification);
+      },
+    },
+  );
+
+  assert.equal(progressCalls, 3);
+  assert.deepEqual(
+    notifications.map((notification) => notification.params.progress),
+    [10, 50, 100],
+  );
+  const payload = JSON.parse(String(result?.content[0]?.text)) as { wait_timed_out: boolean; status: string };
+  assert.equal(payload.wait_timed_out, false);
+  assert.equal(payload.status, "completed");
 });
 
 test("parseListVariablesRequest accepts optional query and max_results", () => {

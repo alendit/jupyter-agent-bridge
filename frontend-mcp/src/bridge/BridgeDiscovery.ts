@@ -15,7 +15,11 @@ export class BridgeDiscovery {
     private readonly portFilePath = process.argv[2] || process.env.JUPYTER_AGENT_BRIDGE_PORT_FILE || null,
   ) {}
 
-  public async selectSession(): Promise<RendezvousRecord> {
+  private selectedSessionId: string | null = null;
+
+  public async selectSession(options?: {
+    chooseSession?: (candidates: readonly RendezvousRecord[]) => Promise<RendezvousRecord | undefined>;
+  }): Promise<RendezvousRecord> {
     const sessions = await this.listSessions();
     if (sessions.length === 0) {
       throw new BridgeErrorException({
@@ -62,27 +66,22 @@ export class BridgeDiscovery {
     }
 
     if (workspaceMatches.length > 1) {
-      throw new BridgeErrorException({
-        code: "AmbiguousSession",
-        message: "More than one notebook bridge matches the current workspace.",
-        detail: workspaceMatches.map((session) => session.workspace_folders),
-        recoverable: true,
-      });
+      return this.resolveAmbiguousSession(
+        "More than one notebook bridge matches the current workspace.",
+        workspaceMatches,
+        options?.chooseSession,
+      );
     }
 
     if (sessions.length === 1) {
       return sessions[0];
     }
 
-    throw new BridgeErrorException({
-      code: "AmbiguousSession",
-      message: "More than one active notebook bridge is available. Set JUPYTER_AGENT_BRIDGE_SESSION_ID.",
-      detail: sessions.map((session) => ({
-        session_id: session.session_id,
-        workspace_id: session.workspace_id,
-      })),
-      recoverable: true,
-    });
+    return this.resolveAmbiguousSession(
+      "More than one active notebook bridge is available. Set JUPYTER_AGENT_BRIDGE_SESSION_ID.",
+      sessions,
+      options?.chooseSession,
+    );
   }
 
   public async listSessions(): Promise<RendezvousRecord[]> {
@@ -112,6 +111,41 @@ export class BridgeDiscovery {
     return records
       .filter((record): record is RendezvousRecord => record !== null)
       .sort((left, right) => Date.parse(right.last_seen_at) - Date.parse(left.last_seen_at));
+  }
+
+  private async resolveAmbiguousSession(
+    message: string,
+    candidates: readonly RendezvousRecord[],
+    chooseSession?: (candidates: readonly RendezvousRecord[]) => Promise<RendezvousRecord | undefined>,
+  ): Promise<RendezvousRecord> {
+    const cached =
+      this.selectedSessionId === null
+        ? undefined
+        : candidates.find((candidate) => candidate.session_id === this.selectedSessionId);
+    if (cached) {
+      return cached;
+    }
+    this.selectedSessionId = null;
+
+    if (chooseSession) {
+      const chosen = await chooseSession(candidates);
+      if (chosen && candidates.some((candidate) => candidate.session_id === chosen.session_id)) {
+        this.selectedSessionId = chosen.session_id;
+        return chosen;
+      }
+    }
+
+    throw new BridgeErrorException({
+      code: "AmbiguousSession",
+      message,
+      detail: candidates.map((session) => ({
+        session_id: session.session_id,
+        workspace_id: session.workspace_id,
+        window_title: session.window_title,
+        workspace_folders: session.workspace_folders,
+      })),
+      recoverable: true,
+    });
   }
 
   private async readPortFromFile(): Promise<number | null> {

@@ -1,8 +1,10 @@
 import {
   DeleteCellRequest,
+  ExecuteCellsAsyncRequest,
   ExecuteCellsRequest,
   FindSymbolsRequest,
   FormatCellRequest,
+  GetExecutionStatusRequest,
   GoToDefinitionRequest,
   InsertCellRequest,
   ListNotebookCellsRequest,
@@ -15,6 +17,7 @@ import {
   RevealNotebookCellsRequest,
   SearchNotebookRequest,
   SelectKernelRequest,
+  WaitForExecutionRequest,
   WaitForKernelReadyRequest,
 } from "../../../packages/protocol/src";
 import {
@@ -363,7 +366,10 @@ export class NotebookToolInputParser {
         ? undefined
         : this.requiredBoolean(params.wait_for_completion, `${toolName}.wait_for_completion`);
     if (waitForCompletion === false) {
-      this.failValidation(toolName, "wait_for_completion may be omitted or set to true, but false is not supported.");
+      this.failValidation(
+        toolName,
+        "wait_for_completion=false is not supported. Use execute_cells_async for non-blocking execution.",
+      );
     }
 
     return {
@@ -382,6 +388,35 @@ export class NotebookToolInputParser {
           ? undefined
           : this.requiredBoolean(params.stop_on_error, `${toolName}.stop_on_error`),
       wait_for_completion: waitForCompletion ? true : undefined,
+    };
+  }
+
+  public parseExecuteCellsAsyncRequest(input: unknown): ExecuteCellsAsyncRequest {
+    const toolName = "execute_cells_async";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, [
+      "notebook_uri",
+      "cell_ids",
+      "expected_notebook_version",
+      "timeout_ms",
+      "stop_on_error",
+    ]);
+
+    return {
+      notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
+      cell_ids: this.requiredStringArray(params.cell_ids, `${toolName}.cell_ids`),
+      expected_notebook_version:
+        params.expected_notebook_version === undefined
+          ? undefined
+          : this.requiredInteger(params.expected_notebook_version, `${toolName}.expected_notebook_version`),
+      timeout_ms:
+        params.timeout_ms === undefined
+          ? undefined
+          : this.requiredPositiveInteger(params.timeout_ms, `${toolName}.timeout_ms`),
+      stop_on_error:
+        params.stop_on_error === undefined
+          ? undefined
+          : this.requiredBoolean(params.stop_on_error, `${toolName}.stop_on_error`),
     };
   }
 
@@ -425,6 +460,30 @@ export class NotebookToolInputParser {
         params.target_generation === undefined
           ? undefined
           : this.requiredNonNegativeInteger(params.target_generation, `${toolName}.target_generation`),
+    };
+  }
+
+  public parseGetExecutionStatusRequest(input: unknown): GetExecutionStatusRequest {
+    const toolName = "get_execution_status";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["execution_id"]);
+
+    return {
+      execution_id: this.requiredString(params.execution_id, `${toolName}.execution_id`),
+    };
+  }
+
+  public parseWaitForExecutionRequest(input: unknown): WaitForExecutionRequest {
+    const toolName = "wait_for_execution";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["execution_id", "timeout_ms"]);
+
+    return {
+      execution_id: this.requiredString(params.execution_id, `${toolName}.execution_id`),
+      timeout_ms:
+        params.timeout_ms === undefined
+          ? undefined
+          : this.requiredPositiveInteger(params.timeout_ms, `${toolName}.timeout_ms`),
     };
   }
 

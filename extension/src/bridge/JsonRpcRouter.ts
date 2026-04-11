@@ -74,6 +74,12 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.moveCell(object(params) as never);
       case BRIDGE_METHODS.executeCells:
         return this.notebookBridgeService.executeCells(object(params) as never);
+      case BRIDGE_METHODS.executeCellsAsync:
+        return this.notebookBridgeService.executeCellsAsync(object(params) as never);
+      case BRIDGE_METHODS.getExecutionStatus:
+        return Promise.resolve(this.notebookBridgeService.getExecutionStatus(object(params) as never));
+      case BRIDGE_METHODS.waitForExecution:
+        return this.notebookBridgeService.waitForExecution(object(params) as never);
       case BRIDGE_METHODS.interruptExecution:
         return this.notebookBridgeService.interruptExecution(object(params) as never);
       case BRIDGE_METHODS.restartKernel:

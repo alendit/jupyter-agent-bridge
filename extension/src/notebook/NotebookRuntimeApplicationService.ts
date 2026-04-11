@@ -1,11 +1,17 @@
 import {
+  ExecuteCellsAsyncRequest,
+  ExecuteCellsAsyncResult,
   ExecuteCellsRequest,
   ExecuteCellsResult,
+  ExecutionStatusResult,
+  GetExecutionStatusRequest,
   InterruptExecutionRequest,
   KernelCommandResult,
   RestartKernelRequest,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForExecutionRequest,
+  WaitForExecutionResult,
   WaitForKernelReadyRequest,
   WaitForKernelReadyResult,
   fail,
@@ -13,6 +19,7 @@ import {
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookDocumentService } from "./NotebookDocumentService";
 import { NotebookMutationService } from "./NotebookMutationService";
+import { NotebookAsyncExecutionService } from "./NotebookAsyncExecutionService";
 import { NotebookExecutionService } from "./NotebookExecutionService";
 import { NotebookKernelCommandService } from "./NotebookKernelCommandService";
 
@@ -21,6 +28,7 @@ export class NotebookRuntimeApplicationService {
     private readonly registry: NotebookRegistry,
     private readonly documentService: NotebookDocumentService,
     private readonly mutationService: NotebookMutationService,
+    private readonly asyncExecutionService: NotebookAsyncExecutionService,
     private readonly executionService: NotebookExecutionService,
     private readonly kernelCommandService: NotebookKernelCommandService,
   ) {}
@@ -29,7 +37,7 @@ export class NotebookRuntimeApplicationService {
     if ((request as { wait_for_completion?: boolean }).wait_for_completion === false) {
       fail({
         code: "InvalidRequest",
-        message: "wait_for_completion=false is not supported in the MVP.",
+        message: "wait_for_completion=false is not supported. Use execute_cells_async for non-blocking execution.",
         recoverable: true,
       });
     }
@@ -42,6 +50,18 @@ export class NotebookRuntimeApplicationService {
       );
       return this.executionService.executeCells(document, request);
     });
+  }
+
+  public async executeCellsAsync(request: ExecuteCellsAsyncRequest): Promise<ExecuteCellsAsyncResult> {
+    return this.asyncExecutionService.executeCellsAsync(request);
+  }
+
+  public getExecutionStatus(request: GetExecutionStatusRequest): ExecutionStatusResult {
+    return this.asyncExecutionService.getExecutionStatus(request);
+  }
+
+  public waitForExecution(request: WaitForExecutionRequest): Promise<WaitForExecutionResult> {
+    return this.asyncExecutionService.waitForExecution(request);
   }
 
   public async selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult> {

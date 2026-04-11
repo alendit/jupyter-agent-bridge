@@ -1,3 +1,5 @@
+import type { BridgeError } from "./errors";
+
 export type NotebookCellKind = "markdown" | "code";
 export type OutputKind = "text" | "markdown" | "json" | "html" | "image" | "error" | "unknown";
 export type ExecutionStatus =
@@ -225,6 +227,14 @@ export interface ExecuteCellsRequest {
   wait_for_completion?: true;
 }
 
+export interface ExecuteCellsAsyncRequest {
+  notebook_uri: string;
+  cell_ids: string[];
+  expected_notebook_version?: number;
+  timeout_ms?: number;
+  stop_on_error?: boolean;
+}
+
 export interface InterruptExecutionRequest {
   notebook_uri: string;
 }
@@ -255,6 +265,15 @@ export interface WaitForKernelReadyRequest {
   notebook_uri: string;
   timeout_ms?: number;
   target_generation?: number;
+}
+
+export interface GetExecutionStatusRequest {
+  execution_id: string;
+}
+
+export interface WaitForExecutionRequest {
+  execution_id: string;
+  timeout_ms?: number;
 }
 
 export interface PatchCellSourceRequest {
@@ -472,6 +491,27 @@ export interface ExecuteCellsResult {
   notebook_version: number;
   kernel: KernelInfo | null;
   results: ExecuteCellResult[];
+}
+
+export type ExecutionHandleStatus = "queued" | "running" | "completed" | "failed" | "timed_out";
+
+export interface ExecutionStatusResult {
+  execution_id: string;
+  notebook_uri: string;
+  cell_ids: string[];
+  status: ExecutionHandleStatus;
+  submitted_at: string;
+  started_at?: string;
+  completed_at?: string;
+  message: string;
+  result?: ExecuteCellsResult;
+  error?: BridgeError;
+}
+
+export interface ExecuteCellsAsyncResult extends ExecutionStatusResult {}
+
+export interface WaitForExecutionResult extends ExecutionStatusResult {
+  wait_timed_out: boolean;
 }
 
 export interface MutationResult {

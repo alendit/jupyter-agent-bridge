@@ -1,11 +1,15 @@
 import {
   DeleteCellRequest,
+  ExecuteCellsAsyncRequest,
+  ExecuteCellsAsyncResult,
   ExecuteCellsRequest,
   ExecuteCellsResult,
+  ExecutionStatusResult,
   FindSymbolsRequest,
   FindSymbolsResult,
   FormatCellRequest,
   FormatCellResult,
+  GetExecutionStatusRequest,
   GetKernelInfoResult,
   GoToDefinitionRequest,
   GoToDefinitionResult,
@@ -37,6 +41,8 @@ import {
   SearchNotebookResult,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForExecutionRequest,
+  WaitForExecutionResult,
   WaitForKernelReadyRequest,
   WaitForKernelReadyResult,
   MoveCellRequest,
@@ -52,6 +58,9 @@ export interface NotebookBridgeClient {
     extension_version: string;
     capabilities: {
       execute_cells: boolean;
+      execute_cells_async: boolean;
+      get_execution_status: boolean;
+      wait_for_execution: boolean;
       interrupt_execution: boolean;
       restart_kernel: boolean;
       list_variables: boolean;
@@ -77,6 +86,9 @@ export interface NotebookBridgeClient {
   deleteCell(request: DeleteCellRequest): Promise<MutationResult>;
   moveCell(request: MoveCellRequest): Promise<MutationResult>;
   executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult>;
+  executeCellsAsync(request: ExecuteCellsAsyncRequest): Promise<ExecuteCellsAsyncResult>;
+  getExecutionStatus(request: GetExecutionStatusRequest): Promise<ExecutionStatusResult>;
+  waitForExecution(request: WaitForExecutionRequest): Promise<WaitForExecutionResult>;
   interruptExecution(request: InterruptExecutionRequest): Promise<KernelCommandResult>;
   restartKernel(request: RestartKernelRequest): Promise<KernelCommandResult>;
   waitForKernelReady(request: WaitForKernelReadyRequest): Promise<WaitForKernelReadyResult>;

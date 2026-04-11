@@ -15,6 +15,7 @@ import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
 import { CellPatchService } from "./notebook/CellPatchService";
 import { NotebookDocumentService } from "./notebook/NotebookDocumentService";
 import { NotebookEditApplicationService } from "./notebook/NotebookEditApplicationService";
+import { NotebookAsyncExecutionService } from "./notebook/NotebookAsyncExecutionService";
 import { NotebookExecutionService } from "./notebook/NotebookExecutionService";
 import { NotebookKernelCommandService } from "./notebook/NotebookKernelCommandService";
 import { NotebookLanguageService } from "./notebook/NotebookLanguageService";
@@ -65,6 +66,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const cellPatchService = new CellPatchService();
   const commandAdapter = new NotebookCommandAdapter(log);
   const executionService = new NotebookExecutionService(registry, readService, commandAdapter, log);
+  const asyncExecutionService = new NotebookAsyncExecutionService(
+    registry,
+    documentService,
+    mutationService,
+    executionService,
+    readService,
+    log,
+  );
   const kernelCommandService = new NotebookKernelCommandService(
     registry,
     readService,
@@ -95,6 +104,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registry,
     documentService,
     mutationService,
+    asyncExecutionService,
     executionService,
     kernelCommandService,
   );
@@ -169,6 +179,9 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       extension_version: EXTENSION_VERSION,
       capabilities: {
         execute_cells: true,
+        execute_cells_async: true,
+        get_execution_status: true,
+        wait_for_execution: true,
         interrupt_execution: true,
         restart_kernel: true,
         list_variables: true,

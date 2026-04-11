@@ -43,8 +43,8 @@ A normal agent flow looks like this:
 2. `get_notebook_outline` or `list_notebook_cells`
 3. `search_notebook`, `find_symbols`, or `read_notebook` on a small range
 4. `patch_cell_source`, `replace_cell_source`, `insert_cell`, or `move_cell`
-5. `execute_cells`
-6. `read_cell_outputs`, `get_diagnostics`, or `summarize_notebook_state`
+5. `execute_cells` for blocking execution, or `execute_cells_async` followed by `wait_for_execution`
+6. `read_cell_outputs`, `get_diagnostics`, `get_execution_status`, or `summarize_notebook_state`
 
 If your agent uses repository instructions, a short hint in `AGENTS.md` helps it choose the notebook tools first. A good example is:
 
@@ -57,7 +57,7 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 - **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context.
 - **Targeted reading and search**: use `search_notebook`, `find_symbols`, `go_to_definition`, `get_diagnostics`, and targeted `read_notebook` calls to keep context small and stale-safe.
 - **Safe live editing**: use `insert_cell`, `replace_cell_source`, `patch_cell_source`, `format_cell`, `move_cell`, and `delete_cell`. Most edit calls accept `expected_notebook_version`, and patch/format flows can also use `expected_cell_source_sha256`.
-- **Execution and kernel control**: use `execute_cells`, `read_cell_outputs`, `get_kernel_info`, `wait_for_kernel_ready`, `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` to keep runtime state explicit.
+- **Execution and kernel control**: use `execute_cells` when you want a blocking result, or `execute_cells_async` with `get_execution_status` or `wait_for_execution` when you want a handle-first flow. Use `read_cell_outputs`, `get_kernel_info`, `wait_for_kernel_ready`, `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` to keep runtime state explicit.
 - **Variable inspection**: use `list_variables` to page through the live kernel variable explorer state instead of reading huge notebook outputs.
 - **Compact summaries and large payload handling**: use `summarize_notebook_state` when you want a machine-readable status snapshot, and use `output_file_path` on `read_notebook` or `read_cell_outputs` when the result is too large for prompt context.
 - **Tool self-discovery**: use `describe_tool` to ask the MCP server for the exact schema and examples of any tool before invoking it.
@@ -67,7 +67,7 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 At a high level, the stack works like this:
 
 1. An agent host calls an MCP tool exposed by the bundled `frontend-mcp` server.
-2. `frontend-mcp` discovers the active bridge session from the rendezvous directory or the workspace port file.
+2. `frontend-mcp` discovers the active bridge session from the rendezvous directory or the workspace port file. When more than one session is plausible, it can prompt the user through MCP elicitation if the client supports it.
 3. The MCP server sends authenticated JSON-RPC requests to `POST /rpc` on `127.0.0.1`.
 4. The extension resolves the request against the live notebook and kernel state through VS Code notebook APIs and Jupyter command surfaces.
 5. Results are normalized into transport-safe types and returned to the MCP host.
@@ -106,7 +106,10 @@ The MCP surface is the primary interface for agents. The bridge surface is the l
 | `format_cell` | Runs the editor formatter on one cell when available. | `notebook_uri`, `cell_id`, optional version and source guards | `FormatCellResult` |
 | `delete_cell` | Deletes one cell from the notebook. | `notebook_uri`, `cell_id` | `MutationResult` |
 | `move_cell` | Moves one cell to a target index. | `notebook_uri`, `cell_id`, `target_index` | `MutationResult` |
-| `execute_cells` | Executes code cells and returns normalized results. | `notebook_uri`, `cell_ids`, optional `timeout_ms`, `stop_on_error` | `ExecuteCellsResult` |
+| `execute_cells` | Executes code cells and waits for normalized results. | `notebook_uri`, `cell_ids`, optional `timeout_ms`, `stop_on_error` | `ExecuteCellsResult` |
+| `execute_cells_async` | Queues code cell execution and returns an execution handle immediately. | `notebook_uri`, `cell_ids`, optional `timeout_ms`, `stop_on_error` | `ExecuteCellsAsyncResult` |
+| `get_execution_status` | Reads the latest snapshot for an async execution handle. | `execution_id` | `ExecutionStatusResult` |
+| `wait_for_execution` | Waits for an async execution handle to reach a terminal state or returns the latest non-terminal snapshot when the wait itself times out. | `execution_id`, optional `timeout_ms` | `WaitForExecutionResult` |
 | `interrupt_execution` | Requests a kernel interrupt through the editor/Jupyter stack. | `notebook_uri` | `KernelCommandResult` |
 | `restart_kernel` | Requests a kernel restart through the editor/Jupyter stack. | `notebook_uri` | `KernelCommandResult` |
 | `wait_for_kernel_ready` | Waits for the current or target kernel generation to become ready. | `notebook_uri`, optional `timeout_ms`, `target_generation` | `WaitForKernelReadyResult` |
@@ -141,6 +144,9 @@ All bridge calls use JSON-RPC 2.0 over `POST /rpc` on `127.0.0.1` with bearer-to
 | `notebook.delete_cell` | Deletes one cell. | `DeleteCellRequest` | `MutationResult` |
 | `notebook.move_cell` | Moves one cell to a target index. | `MoveCellRequest` | `MutationResult` |
 | `notebook.execute_cells` | Executes code cells and collects normalized outputs. | `ExecuteCellsRequest` | `ExecuteCellsResult` |
+| `notebook.execute_cells_async` | Queues code cells and returns an async execution handle. | `ExecuteCellsAsyncRequest` | `ExecuteCellsAsyncResult` |
+| `notebook.get_execution_status` | Reads the latest async execution snapshot. | `GetExecutionStatusRequest` | `ExecutionStatusResult` |
+| `notebook.wait_for_execution` | Waits for an async execution handle to finish or for the wait itself to time out. | `WaitForExecutionRequest` | `WaitForExecutionResult` |
 | `notebook.interrupt_execution` | Requests a kernel interrupt. | `InterruptExecutionRequest` | `KernelCommandResult` |
 | `notebook.restart_kernel` | Requests a kernel restart. | `RestartKernelRequest` | `KernelCommandResult` |
 | `notebook.wait_for_kernel_ready` | Waits for kernel readiness. | `WaitForKernelReadyRequest` | `WaitForKernelReadyResult` |

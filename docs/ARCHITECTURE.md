@@ -199,9 +199,10 @@ This gives hosts and users a stable, workspace-scoped way to pin the bundled MCP
 2. explicit `JUPYTER_AGENT_BRIDGE_SESSION_ID`
 3. workspace-folder match against the current process working directory
 4. a single remaining active session
-5. otherwise fail with `AmbiguousSession`
+5. if ambiguity remains and the MCP client supports elicitation, prompt the user to choose one session and cache that choice for later ambiguous resolutions until the chosen session disappears
+6. otherwise fail with `AmbiguousSession`
 
-The frontend must not guess when more than one plausible session exists.
+The frontend must not guess when more than one plausible session exists. Elicitation is only allowed as an explicit user choice for an already-ambiguous selection.
 
 ## Security Model
 
@@ -279,6 +280,10 @@ If truncation occurs, the output item carries `truncated`, `original_bytes`, and
 - Executing through the bridge must update the visible notebook.
 - Editing source changes notebook text only; it does not change kernel state until code cells execute.
 - `execute_cells` must correlate returned status and outputs with the targeted notebook cells.
+- `execute_cells` remains the synchronous execution surface.
+- Async execution uses execution handles exposed through `execute_cells_async`, `get_execution_status`, and `wait_for_execution`.
+- Async execution handles are process-local, retain terminal snapshots for 15 minutes, and do not outlive the bridge runtime.
+- Per-notebook serialization applies to both synchronous and async executions.
 - Per-cell execution status uses normalized terminal states such as `succeeded`, `failed`, `cancelled`, and `timed_out`.
 
 ## Public Surfaces

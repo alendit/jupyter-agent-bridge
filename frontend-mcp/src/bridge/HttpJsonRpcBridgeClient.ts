@@ -4,12 +4,16 @@ import {
   BridgeErrorException,
   BridgeSessionInfo,
   DeleteCellRequest,
+  ExecuteCellsAsyncRequest,
+  ExecuteCellsAsyncResult,
   ExecuteCellsRequest,
   ExecuteCellsResult,
+  ExecutionStatusResult,
   FindSymbolsRequest,
   FindSymbolsResult,
   FormatCellRequest,
   FormatCellResult,
+  GetExecutionStatusRequest,
   GetKernelInfoResult,
   GoToDefinitionRequest,
   GoToDefinitionResult,
@@ -42,6 +46,8 @@ import {
   SearchNotebookResult,
   SelectJupyterInterpreterRequest,
   SelectKernelRequest,
+  WaitForExecutionRequest,
+  WaitForExecutionResult,
   WaitForKernelReadyRequest,
   WaitForKernelReadyResult,
   MoveCellRequest,
@@ -150,6 +156,18 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public executeCells(request: ExecuteCellsRequest): Promise<ExecuteCellsResult> {
     return this.call(BRIDGE_METHODS.executeCells, request);
+  }
+
+  public executeCellsAsync(request: ExecuteCellsAsyncRequest): Promise<ExecuteCellsAsyncResult> {
+    return this.call(BRIDGE_METHODS.executeCellsAsync, request);
+  }
+
+  public getExecutionStatus(request: GetExecutionStatusRequest): Promise<ExecutionStatusResult> {
+    return this.call(BRIDGE_METHODS.getExecutionStatus, request);
+  }
+
+  public waitForExecution(request: WaitForExecutionRequest): Promise<WaitForExecutionResult> {
+    return this.call(BRIDGE_METHODS.waitForExecution, request);
   }
 
   public interruptExecution(request: InterruptExecutionRequest): Promise<KernelCommandResult> {

@@ -23,6 +23,9 @@ export const TOOL_NAMES = [
   "delete_cell",
   "move_cell",
   "execute_cells",
+  "execute_cells_async",
+  "get_execution_status",
+  "wait_for_execution",
   "interrupt_execution",
   "restart_kernel",
   "wait_for_kernel_ready",
@@ -261,6 +264,29 @@ const executeCellsInputSchema = z
   })
   .passthrough();
 
+const executeCellsAsyncInputSchema = z
+  .object({
+    notebook_uri: notebookUriSchema,
+    cell_ids: z.array(z.unknown()).optional(),
+    expected_notebook_version: notebookVersionSchema,
+    timeout_ms: optionalNumberSchema,
+    stop_on_error: optionalBooleanSchema,
+  })
+  .passthrough();
+
+const executionStatusInputSchema = z
+  .object({
+    execution_id: optionalStringSchema,
+  })
+  .passthrough();
+
+const waitForExecutionInputSchema = z
+  .object({
+    execution_id: optionalStringSchema,
+    timeout_ms: optionalNumberSchema,
+  })
+  .passthrough();
+
 const selectKernelInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
@@ -457,12 +483,37 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   execute_cells: {
     title: "Execute Cells",
-    summary: "Execute code cells. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
+    summary: "Execute code cells and wait for completion before returning. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"timeout_ms"?:30000,"stop_on_error"?:true,"wait_for_completion"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"timeout_ms":45000,"stop_on_error":true,"wait_for_completion":true}',
+    ],
+  },
+  execute_cells_async: {
+    title: "Execute Cells Async",
+    summary: "Queue code cell execution and return an execution handle immediately. Use get_execution_status or wait_for_execution to observe the terminal result.",
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"timeout_ms"?:30000,"stop_on_error"?:true}',
+    examples: [
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"timeout_ms":45000,"stop_on_error":true}',
+    ],
+  },
+  get_execution_status: {
+    title: "Get Execution Status",
+    summary: "Read the latest status snapshot for a previously accepted async execution handle.",
+    schema: '{"execution_id":"<execution-id>"}',
+    examples: ['{"execution_id":"a2f9a034-8f55-4ae7-81ba-9d2a18b74951"}'],
+  },
+  wait_for_execution: {
+    title: "Wait For Execution",
+    summary: "Wait for an async execution handle to reach a terminal state, or return the latest non-terminal snapshot if the wait itself times out.",
+    schema: '{"execution_id":"<execution-id>","timeout_ms"?:30000}',
+    examples: [
+      '{"execution_id":"a2f9a034-8f55-4ae7-81ba-9d2a18b74951"}',
+      '{"execution_id":"a2f9a034-8f55-4ae7-81ba-9d2a18b74951","timeout_ms":45000}',
     ],
   },
   interrupt_execution: {
@@ -559,6 +610,7 @@ export const NOTEBOOK_RULES = [
   "Use get_diagnostics for editor errors. Runtime errors are in outputs.",
   "Use select_kernel or select_jupyter_interpreter when the notebook kernel or Python environment needs user-driven setup.",
   "Use get_kernel_info or wait_for_kernel_ready to reason about a notebook's current kernel generation and readiness.",
+  "Use execute_cells_async with get_execution_status or wait_for_execution for long-running executions.",
   "Then use targeted read_notebook, go_to_definition, or read_cell_outputs.",
   "Notebook data may change between turns because the user can edit cells.",
   "Use notebook versions and source_sha256 values to avoid stale edits.",
@@ -583,6 +635,9 @@ export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
   delete_cell: deleteCellInputSchema,
   move_cell: moveCellInputSchema,
   execute_cells: executeCellsInputSchema,
+  execute_cells_async: executeCellsAsyncInputSchema,
+  get_execution_status: executionStatusInputSchema,
+  wait_for_execution: waitForExecutionInputSchema,
   interrupt_execution: singleNotebookInputSchema,
   restart_kernel: singleNotebookInputSchema,
   wait_for_kernel_ready: waitForKernelReadyInputSchema,
