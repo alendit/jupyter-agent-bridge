@@ -295,6 +295,27 @@ export interface PatchCellSourceRequest {
   expected_cell_source_fingerprint?: string;
 }
 
+export interface ReplaceCellSourcePreviewRequest {
+  operation: "replace_cell_source";
+  notebook_uri: string;
+  cell_id: string;
+  source: string;
+  expected_notebook_version?: number;
+  expected_cell_source_fingerprint?: string;
+}
+
+export interface PatchCellSourcePreviewRequest {
+  operation: "patch_cell_source";
+  notebook_uri: string;
+  cell_id: string;
+  patch: string;
+  format?: "auto" | "unified_diff" | "codex_apply_patch" | "search_replace_json";
+  expected_notebook_version?: number;
+  expected_cell_source_fingerprint?: string;
+}
+
+export type PreviewCellEditRequest = ReplaceCellSourcePreviewRequest | PatchCellSourcePreviewRequest;
+
 export interface GoToDefinitionRequest {
   notebook_uri: string;
   cell_id: string;
@@ -558,6 +579,19 @@ export interface PatchCellSourceResult extends MutationResult {
   applied_patch_format: "unified_diff" | "codex_apply_patch" | "search_replace_json";
   before_source_fingerprint: string;
   after_source_fingerprint: string;
+}
+
+export interface PreviewCellEditResult {
+  notebook_uri: string;
+  notebook_version: number;
+  cell_id: string;
+  operation: "replace_cell_source" | "patch_cell_source";
+  current_source: string;
+  proposed_source: string;
+  before_source_fingerprint: string;
+  after_source_fingerprint: string;
+  diff_unified: string;
+  applied_patch_format?: "unified_diff" | "codex_apply_patch" | "search_replace_json";
 }
 
 export interface FormatCellResult extends MutationResult {

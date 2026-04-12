@@ -190,6 +190,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
         select_jupyter_interpreter: true,
         reveal_cells: true,
         set_cell_input_visibility: true,
+        preview_cell_edit: true,
       },
     });
 

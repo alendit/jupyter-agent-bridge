@@ -34,6 +34,8 @@ import {
   OpenNotebookResult,
   PatchCellSourceRequest,
   PatchCellSourceResult,
+  PreviewCellEditRequest,
+  PreviewCellEditResult,
   ReadCellOutputsRequest,
   ReadCellOutputsResult,
   ReadNotebookRequest,
@@ -142,6 +144,10 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult> {
     return this.call(BRIDGE_METHODS.patchCellSource, request);
+  }
+
+  public previewCellEdit(request: PreviewCellEditRequest): Promise<PreviewCellEditResult> {
+    return this.call(BRIDGE_METHODS.previewCellEdit, request);
   }
 
   public formatCell(request: FormatCellRequest): Promise<FormatCellResult> {

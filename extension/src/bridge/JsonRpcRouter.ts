@@ -66,6 +66,8 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.replaceCellSource(object(params) as never);
       case BRIDGE_METHODS.patchCellSource:
         return this.notebookBridgeService.patchCellSource(object(params) as never);
+      case BRIDGE_METHODS.previewCellEdit:
+        return this.notebookBridgeService.previewCellEdit(object(params) as never);
       case BRIDGE_METHODS.formatCell:
         return this.notebookBridgeService.formatCell(object(params) as never);
       case BRIDGE_METHODS.deleteCell:

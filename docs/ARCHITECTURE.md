@@ -137,9 +137,10 @@ The MCP server is an adapter. It must not own notebook state. Its responsibiliti
 - authenticate to the bridge
 - convert MCP tool calls into typed bridge calls
 - expose optional MCP resources for passive discovery without changing the underlying notebook model
+- expose optional MCP Apps companion views that orchestrate bridge-backed tools without becoming a second notebook frontend
 - optionally compose several bridge-backed notebook operations into one higher-level MCP workflow tool when the sequence is purely orchestration
 - render bridge results into MCP-friendly responses, including compatibility text/image content and typed structured output
-- keep MCP-specific metadata such as resource URIs, `outputSchema`, and elicitation policy in the frontend shell
+- keep MCP-specific metadata such as resource URIs, `outputSchema`, elicitation policy, and UI resource bindings in the frontend shell
 - keep MCP host integration separate from notebook behavior
 
 ### Shared Notebook Domain
@@ -157,7 +158,7 @@ UI-oriented presentation behavior stays in the extension shell. That includes co
 
 This keeps Cursor-specific, VS Code-specific, and transport-specific differences in the shell instead of leaking them into notebook policy.
 
-The same shell rule applies to MCP features: progressive-discovery affordances such as MCP resources, typed `outputSchema`, and capability-gated elicitation belong to `frontend-mcp`. They must not migrate into the shared protocol or notebook-domain packages unless the change is transport-neutral data that would still make sense without MCP.
+The same shell rule applies to MCP features: progressive-discovery affordances such as MCP resources, typed `outputSchema`, capability-gated elicitation, and MCP Apps UI resources belong to `frontend-mcp`. They must not migrate into the shared protocol or notebook-domain packages unless the change is transport-neutral data that would still make sense without MCP.
 
 ### Cursor Integration
 
@@ -210,6 +211,8 @@ This gives hosts and users a stable, workspace-scoped way to pin the bundled MCP
 6. otherwise fail with `AmbiguousSession`
 
 The frontend must not guess when more than one plausible session exists. Elicitation is only allowed as an explicit user choice for an already-ambiguous selection.
+
+`frontend-mcp` may also maintain an in-process pinned session selected through an MCP tool or MCP Apps chooser. That pin is lower precedence than an explicit port file or `JUPYTER_AGENT_BRIDGE_SESSION_ID`, and it is cleared automatically when the chosen session disappears.
 
 ## Security Model
 
@@ -323,11 +326,22 @@ The bridge method names are defined centrally in [`packages/protocol/src/rpc.ts`
 
 The MCP tool catalog is defined in [`frontend-mcp/src/mcp/NotebookToolCatalog.ts`](../frontend-mcp/src/mcp/NotebookToolCatalog.ts). `README.md` documents the current tool list and intended use.
 
-The MCP shell now exposes three additive discovery layers:
+The MCP shell now exposes four additive discovery layers:
 
 - notebook tools as the universal interface for all clients
 - typed tool `outputSchema` and `structuredContent` for clients that support structured tool results
 - read-only MCP resources for passive notebook discovery
+- MCP Apps companion views for host-rendered human review and orchestration
+
+The current MCP Apps layer uses one shared HTML resource, `ui://jupyter-agent-bridge/notebook-console.html`, behind additive launcher tools for:
+
+- bridge session selection
+- replace/patch change review
+- async execution monitoring
+- notebook triage across diagnostics, search, and symbols
+- normalized cell-output preview plus live notebook reveal/export helpers
+
+These views remain thin: they call existing bridge-backed tools, and they must not introduce notebook-only state or alternate mutation logic in the browser.
 
 Tools remain primary. Resources and structured output must never become mandatory for basic notebook use.
 

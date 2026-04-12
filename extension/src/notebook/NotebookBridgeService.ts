@@ -22,6 +22,8 @@ import {
   ListNotebookVariablesResult,
   ListOpenNotebooksResult,
   MutationResult,
+  PreviewCellEditRequest,
+  PreviewCellEditResult,
   NotebookDiagnosticsRequest,
   NotebookDiagnosticsResult,
   NotebookOutlineResult,
@@ -111,6 +113,10 @@ export class NotebookBridgeService {
 
   public async patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult> {
     return this.editService.patchCellSource(request);
+  }
+
+  public async previewCellEdit(request: PreviewCellEditRequest): Promise<PreviewCellEditResult> {
+    return this.editService.previewCellEdit(request);
   }
 
   public async formatCell(request: FormatCellRequest): Promise<FormatCellResult> {

@@ -15,7 +15,15 @@ export class BridgeDiscovery {
     private readonly portFilePath = process.argv[2] || process.env.JUPYTER_AGENT_BRIDGE_PORT_FILE || null,
   ) {}
 
-  private selectedSessionId: string | null = null;
+  private pinnedSessionId: string | null = null;
+
+  public getPinnedSessionId(): string | null {
+    return this.pinnedSessionId;
+  }
+
+  public setPinnedSession(sessionId: string | null): void {
+    this.pinnedSessionId = sessionId;
+  }
 
   public async selectSession(options?: {
     chooseSession?: (candidates: readonly RendezvousRecord[]) => Promise<RendezvousRecord | undefined>;
@@ -58,6 +66,15 @@ export class BridgeDiscovery {
         });
       }
       return session;
+    }
+
+    if (this.pinnedSessionId) {
+      const pinned = sessions.find((candidate) => candidate.session_id === this.pinnedSessionId);
+      if (pinned) {
+        return pinned;
+      }
+
+      this.pinnedSessionId = null;
     }
 
     const workspaceMatches = sessions.filter((session) => recordMatchesWorkspace(session, this.cwd));
@@ -119,18 +136,18 @@ export class BridgeDiscovery {
     chooseSession?: (candidates: readonly RendezvousRecord[]) => Promise<RendezvousRecord | undefined>,
   ): Promise<RendezvousRecord> {
     const cached =
-      this.selectedSessionId === null
+      this.pinnedSessionId === null
         ? undefined
-        : candidates.find((candidate) => candidate.session_id === this.selectedSessionId);
+        : candidates.find((candidate) => candidate.session_id === this.pinnedSessionId);
     if (cached) {
       return cached;
     }
-    this.selectedSessionId = null;
+    this.pinnedSessionId = null;
 
     if (chooseSession) {
       const chosen = await chooseSession(candidates);
       if (chosen && candidates.some((candidate) => candidate.session_id === chosen.session_id)) {
-        this.selectedSessionId = chosen.session_id;
+        this.pinnedSessionId = chosen.session_id;
         return chosen;
       }
     }

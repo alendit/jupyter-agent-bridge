@@ -95,3 +95,15 @@ test("selectSession falls back to AmbiguousSession when chooser declines", async
       JSON.stringify(error.detail).includes("Notebook A"),
   );
 });
+
+test("selectSession prefers an explicit pinned session before workspace matching", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "jupyter-agent-bridge-sessions-"));
+  await writeSession(tempDir, createRecord("session-1", "file:///workspace/demo", 8123, "Notebook A"));
+  await writeSession(tempDir, createRecord("session-2", "file:///workspace/demo", 8124, "Notebook B"));
+
+  const discovery = new BridgeDiscovery("/workspace/demo", tempDir, null);
+  discovery.setPinnedSession("session-1");
+
+  const chosen = await discovery.selectSession();
+  assert.equal(chosen.session_id, "session-1");
+});

@@ -56,12 +56,15 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 
 - **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context. Use `set_notebook_cell_input_visibility` when you want a separate presentation-state change such as collapsing code input before a demo.
 - **Progressive discovery**: the MCP frontend now also exposes read-only MCP resources and structured tool output. Treat those as additive conveniences for capable clients. Tools remain the primary universal interface and continue to be the right default in `AGENTS.md`.
+- **MCP Apps companion views**: capable hosts can now open app-backed review surfaces for bridge session selection, cell change review, async execution monitoring, notebook triage, and cell output preview. These views are additive helpers on top of the same bridge-backed tools; they do not replace the tool interface.
 - **Known multi-step procedures**: use `run_notebook_workflow` when the full notebook plan is already known and does not require LLM inspection between steps. Each workflow step reuses an existing notebook tool name and the same JSON input shape that tool already accepts.
 - **Targeted reading and search**: use `search_notebook`, `find_symbols`, `go_to_definition`, `get_diagnostics`, and targeted `read_notebook` calls to keep context small and stale-safe.
 - **Safe live editing**: use `insert_cell`, `replace_cell_source`, `patch_cell_source`, `format_cell`, `move_cell`, and `delete_cell`. Most edit calls accept `expected_notebook_version`, and source edits can also carry `expected_cell_source_fingerprint` so agents can reuse cached cell metadata instead of re-listing cells before every change. Prefer `replace_cell_source` for medium or large rewrites; prefer `patch_cell_source` for small, local edits.
+- **Change review before mutation**: use `preview_cell_edit` for a non-mutating replace/patch preview, or `open_cell_edit_review` in an MCP Apps host when a human should inspect the diff before applying it.
 - **Execution and kernel control**: use `execute_cells` when you want a blocking result, or `execute_cells_async` with `get_execution_status` or `wait_for_execution` when you want a handle-first flow. Execution requests can also carry `expected_cell_source_fingerprint_by_id` for stale-safe execution targeting. Use `read_cell_outputs`, `get_kernel_info`, `wait_for_kernel_ready`, `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` to keep runtime state explicit.
 - **Variable inspection**: use `list_variables` to page through the live kernel variable explorer state instead of reading huge notebook outputs.
 - **Compact summaries and large payload handling**: use `summarize_notebook_state` when you want a machine-readable status snapshot, and use `output_file_path` on `read_notebook` or `read_cell_outputs` when the result is too large for prompt context.
+- **Live-result explanation**: prefer `open_cell_output_preview` plus `reveal_notebook_cells` for human-facing output explanation. `export_cell_output_snapshot` writes an ephemeral normalized snapshot to a temp file when a durable artifact is more useful than inline chat content.
 - **Tool self-discovery**: use `describe_tool` to ask the MCP server for the exact schema and examples of any tool before invoking it.
 
 ## Technical Details
@@ -72,7 +75,7 @@ At a high level, the stack works like this:
 2. `frontend-mcp` discovers the active bridge session from the rendezvous directory or the workspace port file. When more than one session is plausible, it can prompt the user through MCP elicitation if the client supports it.
 3. The MCP server sends authenticated JSON-RPC requests to `POST /rpc` on `127.0.0.1`.
 4. The extension resolves the request against the live notebook and kernel state through VS Code notebook APIs and Jupyter command surfaces.
-5. Results are normalized into transport-safe types, then rendered by the MCP shell as either typed `structuredContent`, read-only resources, or compatibility text/image content depending on the feature being used.
+5. Results are normalized into transport-safe types, then rendered by the MCP shell as typed `structuredContent`, read-only resources, compatibility text/image content, or MCP Apps companion views depending on the feature being used.
 
 The main packages are:
 
@@ -81,7 +84,7 @@ The main packages are:
 - `packages/notebook-domain/`: pure notebook policy, kernel-state rules, previews, outline/search logic, and variable normalization
 - `packages/protocol/`: shared request/response types, JSON-RPC method names, session record types, and shared errors
 
-The key design rule is that the notebook visible in the editor stays authoritative. The MCP server is an adapter, not a second notebook implementation. MCP-specific concerns such as resource URIs, elicitation policy, and `outputSchema` live in `frontend-mcp`, not in the protocol, extension, or notebook-domain layers.
+The key design rule is that the notebook visible in the editor stays authoritative. The MCP server is an adapter, not a second notebook implementation. MCP-specific concerns such as resource URIs, elicitation policy, `outputSchema`, and MCP Apps UI resources live in `frontend-mcp`, not in the protocol, extension, or notebook-domain layers.
 
 ## API
 
@@ -105,6 +108,7 @@ The MCP tool surface is the primary interface for agents. The bridge surface is 
 | `insert_cell` | Inserts a new code or markdown cell. | `notebook_uri`, `position`, `cell`, optional `expected_notebook_version` | `MutationResult` |
 | `replace_cell_source` | Replaces one cell’s entire source. | `notebook_uri`, `cell_id`, `source`, optional version and source guards | `MutationResult` |
 | `patch_cell_source` | Applies a structured patch to one cell. | `notebook_uri`, `cell_id`, `patch`, optional `format`, version and source guards | `PatchCellSourceResult` |
+| `preview_cell_edit` | Dry-runs a replace or patch request and returns before/after source plus a unified diff without mutating the notebook. | `operation`, `notebook_uri`, `cell_id`, replace or patch fields, optional version/source guards | `PreviewCellEditResult` |
 | `format_cell` | Runs the editor formatter on one cell when available. | `notebook_uri`, `cell_id`, optional version and source guards | `FormatCellResult` |
 | `delete_cell` | Deletes one cell from the notebook. | `notebook_uri`, `cell_id` | `MutationResult` |
 | `move_cell` | Moves one cell to a target index. | `notebook_uri`, `cell_id`, `target_index` | `MutationResult` |
@@ -123,6 +127,14 @@ The MCP tool surface is the primary interface for agents. The bridge surface is 
 | `select_kernel` | Selects a kernel directly or opens the kernel picker. | `notebook_uri`, optional `kernel_id`, `extension_id`, `skip_if_already_selected` | `KernelCommandResult` |
 | `select_jupyter_interpreter` | Opens the Jupyter interpreter picker for the notebook. | `notebook_uri` | `KernelCommandResult` |
 | `summarize_notebook_state` | Returns a compact machine-readable notebook status summary. | `notebook_uri` | `NotebookStateSummary` |
+| `list_bridge_sessions` | Lists active bridge sessions plus the currently pinned session id, if any. | None | Session summaries |
+| `select_bridge_session` | Pins or clears the bridge session used for later notebook calls in this MCP server process. | Optional `session_id` or `null` | Session selection result |
+| `open_bridge_session_chooser` | Opens the MCP Apps bridge-session chooser in capable hosts. | None | Session chooser app payload |
+| `open_cell_edit_review` | Opens the MCP Apps change-review surface for replace or patch edits. | Same shape as `preview_cell_edit` | Change review app payload |
+| `open_execution_monitor` | Opens the MCP Apps async execution monitor for an existing `execution_id`. | `execution_id` | Execution monitor app payload |
+| `open_notebook_triage` | Opens the MCP Apps triage surface that combines notebook summary, diagnostics, search, and symbols. | `notebook_uri`, optional `query`, `range`, `cell_ids` | Notebook triage app payload |
+| `open_cell_output_preview` | Opens the MCP Apps normalized output preview for one cell. | `notebook_uri`, `cell_id`, optional `output_index` | Output preview app payload |
+| `export_cell_output_snapshot` | Writes an ephemeral normalized cell-output snapshot to a temp file. | `notebook_uri`, `cell_id`, optional `output_index` | Snapshot file receipt |
 
 All tools now also declare MCP `outputSchema` and return typed `structuredContent` in addition to the existing compatibility text/image content. Clients that ignore structured output can continue using tool text content exactly as before.
 
@@ -148,6 +160,18 @@ All tools now also declare MCP `outputSchema` and return typed `structuredConten
 
 These resources mirror the corresponding read-oriented tool results and delegate through the same frontend shell read paths. Mutations, execution, UI presentation, and workflow orchestration remain tools only.
 
+### MCP Apps
+
+`frontend-mcp` also exposes one shared MCP Apps HTML resource, `ui://jupyter-agent-bridge/notebook-console.html`, which backs several additive companion tools:
+
+- `open_bridge_session_chooser`
+- `open_cell_edit_review`
+- `open_execution_monitor`
+- `open_notebook_triage`
+- `open_cell_output_preview`
+
+These views are orchestration shells for the same bridge-backed tools documented above. The live notebook remains the source of truth, and rich notebook output should generally be revealed in the editor rather than reimplemented in chat.
+
 ### Bridge API
 
 All bridge calls use JSON-RPC 2.0 over `POST /rpc` on `127.0.0.1` with bearer-token authentication. The request and result types live in [`packages/protocol/src/domain.ts`](packages/protocol/src/domain.ts), and method names are defined in [`packages/protocol/src/rpc.ts`](packages/protocol/src/rpc.ts).
@@ -170,6 +194,7 @@ For stale-safe agent flows, treat `cell_id` as stable identity and `source_finge
 | `notebook.insert_cell` | Inserts a cell into the live notebook. | `InsertCellRequest` | `MutationResult` |
 | `notebook.replace_cell_source` | Replaces one cell’s source. | `ReplaceCellSourceRequest` | `MutationResult` |
 | `notebook.patch_cell_source` | Applies a structured patch to one cell. | `PatchCellSourceRequest` | `PatchCellSourceResult` |
+| `notebook.preview_cell_edit` | Dry-runs a replace or patch request and returns before/after source plus a unified diff. | `PreviewCellEditRequest` | `PreviewCellEditResult` |
 | `notebook.format_cell` | Formats one cell through the editor formatter. | `FormatCellRequest` | `FormatCellResult` |
 | `notebook.delete_cell` | Deletes one cell. | `DeleteCellRequest` | `MutationResult` |
 | `notebook.move_cell` | Moves one cell to a target index. | `MoveCellRequest` | `MutationResult` |

@@ -1,6 +1,8 @@
 import { BridgeErrorException } from "../../packages/protocol/src";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { AppResourceRegistry } from "./apps/AppResourceRegistry";
+import { AppTools } from "./apps/AppTools";
 import { BridgeDiscovery } from "./bridge/BridgeDiscovery";
 import { createFrontendLogger } from "./logging";
 import { createBridgeClientResolver } from "./mcp/BridgeClientResolver";
@@ -18,9 +20,13 @@ async function main(): Promise<void> {
 
   const getClient = createBridgeClientResolver(discovery, server, (message) => logger.info(message));
   const tools = new NotebookTools(getClient, (message) => logger.info(message));
+  const appTools = new AppTools(getClient, discovery, (message) => logger.info(message));
   const resources = new NotebookResources(getClient);
+  const appResources = new AppResourceRegistry();
   tools.register(server);
+  await appTools.register(server);
   resources.register(server);
+  await appResources.register(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

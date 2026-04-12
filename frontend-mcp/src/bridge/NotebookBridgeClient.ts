@@ -1,4 +1,5 @@
 import {
+  BridgeSessionInfo,
   DeleteCellRequest,
   ExecuteCellsAsyncRequest,
   ExecuteCellsAsyncResult,
@@ -49,30 +50,12 @@ import {
   WaitForKernelReadyResult,
   MoveCellRequest,
   SummarizeNotebookStateResult,
+  PreviewCellEditRequest,
+  PreviewCellEditResult,
 } from "../../../packages/protocol/src";
 
 export interface NotebookBridgeClient {
-  getSessionInfo(): Promise<{
-    session_id: string;
-    workspace_id: string | null;
-    workspace_folders: string[];
-    bridge_url: string;
-    extension_version: string;
-    capabilities: {
-      execute_cells: boolean;
-      execute_cells_async: boolean;
-      get_execution_status: boolean;
-      wait_for_execution: boolean;
-      interrupt_execution: boolean;
-      restart_kernel: boolean;
-      list_variables: boolean;
-      wait_for_kernel_ready: boolean;
-      select_kernel: boolean;
-      select_jupyter_interpreter: boolean;
-      reveal_cells: boolean;
-      set_cell_input_visibility: boolean;
-    };
-  }>;
+  getSessionInfo(): Promise<BridgeSessionInfo>;
   listOpenNotebooks(): Promise<ListOpenNotebooksResult>;
   openNotebook(request: OpenNotebookRequest): Promise<OpenNotebookResult>;
   getNotebookOutline(notebookUri: string): Promise<NotebookOutlineResult>;
@@ -86,6 +69,7 @@ export interface NotebookBridgeClient {
   insertCell(request: InsertCellRequest): Promise<MutationResult>;
   replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult>;
   patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult>;
+  previewCellEdit?(request: PreviewCellEditRequest): Promise<PreviewCellEditResult>;
   formatCell(request: FormatCellRequest): Promise<FormatCellResult>;
   deleteCell(request: DeleteCellRequest): Promise<MutationResult>;
   moveCell(request: MoveCellRequest): Promise<MutationResult>;

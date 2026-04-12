@@ -13,6 +13,7 @@ export const BRIDGE_METHODS = {
   insertCell: "notebook.insert_cell",
   replaceCellSource: "notebook.replace_cell_source",
   patchCellSource: "notebook.patch_cell_source",
+  previewCellEdit: "notebook.preview_cell_edit",
   formatCell: "notebook.format_cell",
   deleteCell: "notebook.delete_cell",
   moveCell: "notebook.move_cell",
@@ -45,6 +46,7 @@ export interface SessionCapabilities {
   select_jupyter_interpreter: boolean;
   reveal_cells: boolean;
   set_cell_input_visibility: boolean;
+  preview_cell_edit?: boolean;
 }
 
 export interface BridgeSessionInfo {

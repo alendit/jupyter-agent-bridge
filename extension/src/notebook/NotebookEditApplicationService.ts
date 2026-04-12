@@ -6,6 +6,8 @@ import {
   InsertCellRequest,
   MoveCellRequest,
   MutationResult,
+  PreviewCellEditRequest,
+  PreviewCellEditResult,
   PatchCellSourceRequest,
   PatchCellSourceResult,
   ReplaceCellSourceRequest,
@@ -17,6 +19,7 @@ import { NotebookMutationService } from "./NotebookMutationService";
 import { CellPatchService } from "./CellPatchService";
 import { NotebookLanguageService } from "./NotebookLanguageService";
 import { computeSourceFingerprint } from "./cells";
+import { buildUnifiedSourceDiff } from "./cellDiff";
 
 export class NotebookEditApplicationService {
   public constructor(
@@ -41,53 +44,40 @@ export class NotebookEditApplicationService {
 
   public async replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult> {
     return this.withExclusiveDocument(request.notebook_uri, async (document) => {
-      this.mutationService.assertExpectedVersion(
-        this.registry.getVersion(request.notebook_uri),
-        request.expected_notebook_version,
-      );
-      this.readService.assertExpectedCellSources(
-        document,
-        request.expected_cell_source_fingerprint
-          ? {
-              [request.cell_id]: request.expected_cell_source_fingerprint,
-            }
-          : undefined,
-        [request.cell_id],
-      );
+      this.assertEditGuards(document, request, false);
       const outcome = await this.mutationService.replaceCellSource(document, request);
       return this.toMutationResult(request.notebook_uri, outcome);
     });
   }
 
+  public async previewCellEdit(request: PreviewCellEditRequest): Promise<PreviewCellEditResult> {
+    return this.withExclusiveDocument(request.notebook_uri, async (document) => {
+      const prepared = this.prepareCellEditPreview(document, request);
+      return {
+        notebook_uri: request.notebook_uri,
+        notebook_version: this.registry.getVersion(request.notebook_uri),
+        cell_id: request.cell_id,
+        operation: request.operation,
+        current_source: prepared.currentSource,
+        proposed_source: prepared.proposedSource,
+        before_source_fingerprint: prepared.currentSourceFingerprint,
+        after_source_fingerprint: computeSourceFingerprint(prepared.proposedSource),
+        diff_unified: buildUnifiedSourceDiff(prepared.currentSource, prepared.proposedSource),
+        applied_patch_format: prepared.appliedPatchFormat,
+      };
+    });
+  }
+
   public async patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult> {
     return this.withExclusiveDocument(request.notebook_uri, async (document) => {
-      const currentVersion = this.registry.getVersion(request.notebook_uri);
-      const cell = this.readService.requireCell(document, request.cell_id);
-      const currentSource = cell.document.getText();
-      const currentSourceFingerprint = computeSourceFingerprint(currentSource);
-      this.readService.assertExpectedCellSources(
-        document,
-        request.expected_cell_source_fingerprint
-          ? {
-              [request.cell_id]: request.expected_cell_source_fingerprint,
-            }
-          : undefined,
-        [request.cell_id],
-      );
-
-      if (
-        request.expected_notebook_version !== undefined &&
-        currentVersion !== request.expected_notebook_version &&
-        !request.expected_cell_source_fingerprint
-      ) {
-        this.mutationService.assertExpectedVersion(currentVersion, request.expected_notebook_version);
-      }
-
-      const patchResult = this.cellPatchService.applyPatch(currentSource, request.patch, request.format);
+      const prepared = this.prepareCellEditPreview(document, {
+        ...request,
+        operation: "patch_cell_source",
+      });
       const outcome = await this.mutationService.replaceCellSource(document, {
         notebook_uri: request.notebook_uri,
         cell_id: request.cell_id,
-        source: patchResult.updatedSource,
+        source: prepared.proposedSource,
       });
       const mutation = this.readService.toMutationResult(
         this.documentService.requireDocumentSync(request.notebook_uri),
@@ -100,9 +90,9 @@ export class NotebookEditApplicationService {
       return {
         ...mutation,
         operation: "patch_cell_source",
-        applied_patch_format: patchResult.format,
-        before_source_fingerprint: currentSourceFingerprint,
-        after_source_fingerprint: computeSourceFingerprint(patchResult.updatedSource),
+        applied_patch_format: prepared.appliedPatchFormat as PatchCellSourceResult["applied_patch_format"],
+        before_source_fingerprint: prepared.currentSourceFingerprint,
+        after_source_fingerprint: computeSourceFingerprint(prepared.proposedSource),
       };
     });
   }
@@ -161,5 +151,64 @@ export class NotebookEditApplicationService {
       outcome.deleted_cell_ids,
       outcome.outline_maybe_changed,
     );
+  }
+
+  private assertEditGuards(
+    document: vscode.NotebookDocument,
+    request: {
+      notebook_uri: string;
+      cell_id: string;
+      expected_notebook_version?: number;
+      expected_cell_source_fingerprint?: string;
+    },
+    allowFingerprintToBypassVersion: boolean,
+  ): void {
+    const currentVersion = this.registry.getVersion(request.notebook_uri);
+    this.readService.assertExpectedCellSources(
+      document,
+      request.expected_cell_source_fingerprint
+        ? {
+            [request.cell_id]: request.expected_cell_source_fingerprint,
+          }
+        : undefined,
+      [request.cell_id],
+    );
+
+    if (allowFingerprintToBypassVersion && request.expected_cell_source_fingerprint) {
+      return;
+    }
+
+    this.mutationService.assertExpectedVersion(currentVersion, request.expected_notebook_version);
+  }
+
+  private prepareCellEditPreview(
+    document: vscode.NotebookDocument,
+    request: PreviewCellEditRequest,
+  ): {
+    currentSource: string;
+    proposedSource: string;
+    currentSourceFingerprint: string;
+    appliedPatchFormat?: PatchCellSourceResult["applied_patch_format"];
+  } {
+    this.assertEditGuards(document, request, request.operation === "patch_cell_source");
+    const cell = this.readService.requireCell(document, request.cell_id);
+    const currentSource = cell.document.getText();
+    const currentSourceFingerprint = computeSourceFingerprint(currentSource);
+
+    if (request.operation === "replace_cell_source") {
+      return {
+        currentSource,
+        proposedSource: request.source,
+        currentSourceFingerprint,
+      };
+    }
+
+    const patchResult = this.cellPatchService.applyPatch(currentSource, request.patch, request.format);
+    return {
+      currentSource,
+      proposedSource: patchResult.updatedSource,
+      currentSourceFingerprint,
+      appliedPatchFormat: patchResult.format,
+    };
   }
 }
