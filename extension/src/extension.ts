@@ -8,7 +8,13 @@ import { ProjectPortFileStore } from "./bridge/ProjectPortFileStore";
 import { RendezvousStore } from "./bridge/RendezvousStore";
 import { NotebookCommandAdapter } from "./commands/NotebookCommandAdapter";
 import { CursorMcpRegistrar } from "./cursor/CursorMcpRegistrar";
-import { buildBundledMcpServerConfig, renderMcpDefinitionSnippet } from "./mcp/BundledMcpServer";
+import { buildBundledMcpServerConfig } from "./mcp/BundledMcpServer";
+import {
+  getMcpConfigTarget,
+  MCP_CONFIG_TARGETS,
+  renderClipboardMcpDefinitionSnippet,
+  writeProjectMcpConfig,
+} from "./mcp/ProjectMcpConfig";
 import { HostKernelObservationService } from "./notebook/HostKernelObservationService";
 import { KernelInspectionService } from "./notebook/KernelInspectionService";
 import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
@@ -35,7 +41,7 @@ const PRODUCT_NAME = "Jupyter Agentic Bridge";
 const START_BRIDGE_COMMAND = "jupyterAgentBridge.startBridge";
 const STOP_BRIDGE_COMMAND = "jupyterAgentBridge.stopBridge";
 const SHOW_STATUS_COMMAND = "jupyterAgentBridge.showStatus";
-const COPY_MCP_DEFINITION_COMMAND = "jupyterAgentBridge.copyMcpDefinition";
+const CREATE_MCP_CONFIG_COMMAND = "jupyterAgentBridge.createMcpConfig";
 
 interface RuntimeState {
   bridgeUrl: string;
@@ -127,7 +133,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       tooltip.appendMarkdown("- Status: stopped\n");
       tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
       tooltip.appendMarkdown(
-        `[Start Bridge](command:${START_BRIDGE_COMMAND}) | [Copy MCP Definition](command:${COPY_MCP_DEFINITION_COMMAND})`,
+        `[Start Bridge](command:${START_BRIDGE_COMMAND}) | [Create MCP Config](command:${CREATE_MCP_CONFIG_COMMAND})`,
       );
       return tooltip;
     }
@@ -141,7 +147,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
     tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
     tooltip.appendMarkdown(
-      `[Copy MCP Definition](command:${COPY_MCP_DEFINITION_COMMAND}) | [Stop Bridge](command:${STOP_BRIDGE_COMMAND}) | [Show Status](command:${SHOW_STATUS_COMMAND})`,
+      `[Create MCP Config](command:${CREATE_MCP_CONFIG_COMMAND}) | [Stop Bridge](command:${STOP_BRIDGE_COMMAND}) | [Show Status](command:${SHOW_STATUS_COMMAND})`,
     );
     return tooltip;
   };
@@ -251,20 +257,28 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     updateStatusBar();
   };
 
-  const copyMcpDefinition = async (): Promise<void> => {
+  const createMcpConfig = async (): Promise<void> => {
     const current = runtimeState ?? (await startRuntime());
     const portFilePath = current.projectPortFileStore.getPreferredPortFilePath();
+    const workspaceFolderPath = current.projectPortFileStore.getPreferredWorkspaceFolderPath();
     if (!portFilePath) {
-      log("Failed to copy MCP definition because no workspace folder is available for a project port file.");
+      log("Failed to create MCP config because no workspace folder is available for a project port file.");
       await vscode.window.showErrorMessage(
-        `${PRODUCT_NAME} needs an open workspace folder to generate a project-local MCP definition.`,
+        `${PRODUCT_NAME} needs an open workspace folder to generate a project-local MCP config.`,
+      );
+      return;
+    }
+    if (!workspaceFolderPath) {
+      log("Failed to create MCP config because no preferred workspace folder could be resolved.");
+      await vscode.window.showErrorMessage(
+        `${PRODUCT_NAME} could not resolve the workspace folder that should receive the project-local MCP config.`,
       );
       return;
     }
 
     const config = buildBundledMcpServerConfig(context.extensionPath, portFilePath);
     if (!config) {
-      log("Failed to copy MCP definition because the bundled MCP server entrypoint was not found.");
+      log("Failed to create MCP config because the bundled MCP server entrypoint was not found.");
       updateStatusBar();
       await vscode.window.showErrorMessage(
         `${PRODUCT_NAME} could not find the bundled MCP server entrypoint. Build the workspace first.`,
@@ -272,26 +286,73 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       return;
     }
 
-    const snippet = renderMcpDefinitionSnippet(config);
-    await vscode.env.clipboard.writeText(snippet);
-    log(`Copied a port-file MCP definition for session ${current.sessionId} using ${portFilePath}.`);
-    updateStatusBar();
-    await vscode.window.showInformationMessage(
-      "Copied a session-pinned MCP definition to the clipboard.",
+    const selection = await vscode.window.showQuickPick(
+      [
+        ...MCP_CONFIG_TARGETS.filter((target) => target.id !== "copy-to-clipboard").map((target) => ({
+          label: target.label,
+          targetId: target.id,
+          description: target.relativePath ?? "generic snippet",
+        })),
+        {
+          label: "Copy to Clipboard",
+          targetId: "copy-to-clipboard" as const,
+          description: "generic snippet",
+          kind: vscode.QuickPickItemKind.Separator,
+        },
+        {
+          label: "Copy to Clipboard",
+          targetId: "copy-to-clipboard" as const,
+          description: "generic snippet",
+        },
+      ],
+      {
+        title: "Create MCP Config",
+        placeHolder: "Choose where to create the MCP config",
+      },
     );
+    if (!selection) {
+      return;
+    }
+
+    if (selection.targetId === "copy-to-clipboard") {
+      const snippet = renderClipboardMcpDefinitionSnippet(config);
+      await vscode.env.clipboard.writeText(snippet);
+      log(`Copied a generic MCP definition snippet for session ${current.sessionId} using ${portFilePath}.`);
+      updateStatusBar();
+      await vscode.window.showInformationMessage("Copied an MCP definition snippet to the clipboard.");
+      return;
+    }
+
+    try {
+      const target = getMcpConfigTarget(selection.targetId);
+      const result = await writeProjectMcpConfig(selection.targetId, workspaceFolderPath, config);
+      log(`Wrote ${target.label} MCP config for session ${current.sessionId} to ${result.filePath}.`);
+      updateStatusBar();
+      const action = await vscode.window.showInformationMessage(
+        `Created ${target.label} MCP config at ${result.filePath}.`,
+        "Open File",
+      );
+      if (action === "Open File") {
+        await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(result.filePath));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`create_mcp_config.failed ${message}`);
+      await vscode.window.showErrorMessage(`Could not create MCP config: ${message}`);
+    }
   };
 
   const startBridgeCommand = vscode.commands.registerCommand(START_BRIDGE_COMMAND, async () => {
     const current = runtimeState ?? (await startRuntime());
     const action = await vscode.window.showInformationMessage(
       `${PRODUCT_NAME} is running at ${current.bridgeUrl}. Session method: ${BRIDGE_METHODS.getSessionInfo}`,
-      "Copy MCP Definition",
+      "Create MCP Config",
       "Show Status",
       "Show Output",
     );
 
-    if (action === "Copy MCP Definition") {
-      await copyMcpDefinition();
+    if (action === "Create MCP Config") {
+      await createMcpConfig();
       return;
     }
 
@@ -319,11 +380,11 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     updateStatusBar();
     const action = await vscode.window.showInformationMessage(
       message,
-      runtimeState ? "Copy MCP Definition" : "Start Bridge",
+      runtimeState ? "Create MCP Config" : "Start Bridge",
       "Show Output",
     );
-    if (action === "Copy MCP Definition") {
-      await copyMcpDefinition();
+    if (action === "Create MCP Config") {
+      await createMcpConfig();
       return;
     }
     if (action === "Start Bridge") {
@@ -335,10 +396,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     }
   });
 
-  const copyMcpDefinitionCommand = vscode.commands.registerCommand(
-    COPY_MCP_DEFINITION_COMMAND,
-    copyMcpDefinition,
-  );
+  const createMcpConfigCommand = vscode.commands.registerCommand(CREATE_MCP_CONFIG_COMMAND, createMcpConfig);
 
   const openCellNavigationCommand = vscode.commands.registerCommand(OPEN_CELL_NAVIGATION_COMMAND, async (request?: unknown) => {
       const parsed = normalizeCellNavigationRequest(request);
@@ -366,7 +424,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     startBridgeCommand,
     stopBridgeCommand,
     showStatusCommand,
-    copyMcpDefinitionCommand,
+    createMcpConfigCommand,
     openCellNavigationCommand,
   );
 }

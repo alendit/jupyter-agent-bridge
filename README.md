@@ -21,17 +21,21 @@ The project is split into a VS Code-compatible extension, a localhost JSON-RPC b
 
 4. Run `Jupyter Agentic Bridge: Start Bridge` if the bridge is not already running.
 
-5. Run `Jupyter Agentic Bridge: Copy MCP Definition`.
+5. Run `Jupyter Agentic Bridge: Create MCP Config`.
 
-   This copies a ready-to-paste MCP config snippet that points at the bundled `frontend-mcp` server and the workspace-local port file under `.jupyter-agent-bridge/bridge/port`.
+   Choose one of the supported targets: `Claude Code`, `Codex`, `Copilot`, `Copy to Clipboard`, or `Cursor`. The extension writes the project-local config file directly for the selected host, using the bundled `frontend-mcp` server and the workspace-local port file under `.jupyter-agent-bridge/bridge/port`.
 
-6. Paste that snippet into the MCP configuration used by your agent host, then reload or restart the host so it picks up the new server.
+6. Reload or restart the selected host so it picks up the new server. If you chose `Copy to Clipboard`, paste the copied snippet into the host config manually.
 
 ### VS Code And Cursor Notes
 
 - The install step is the same: use `Install from Location...` and pick the repo root.
-- Cursor can auto-register the bundled MCP server when its MCP extension API is available. In that case, manual MCP config may be unnecessary, but `Copy MCP Definition` is still useful for explicit or session-pinned setups.
-- In plain VS Code or other MCP-capable hosts, expect to use the copied MCP definition manually.
+- Cursor can auto-register the bundled MCP server when its MCP extension API is available. In that case, manual MCP config may be unnecessary, but `Create MCP Config` is still useful for explicit or session-pinned setups.
+- `Create MCP Config` writes one of these project-local files directly:
+  - `.mcp.json` for Claude Code
+  - `.codex/config.toml` for Codex
+  - `.vscode/mcp.json` for Copilot / VS Code
+  - `.cursor/mcp.json` for Cursor
 
 ## Usage
 

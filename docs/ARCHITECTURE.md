@@ -118,6 +118,7 @@ The extension is the only component allowed to touch live notebook state. Its re
 - apply notebook mutations through VS Code notebook edit APIs
 - execute cells and observe completion
 - inspect and control kernel state through public editor/Jupyter command surfaces
+- write editor- or host-local MCP configuration files that bind the bundled MCP server to the preferred project port file
 - expose all of the above through the local bridge
 
 ### Local Bridge
@@ -317,7 +318,7 @@ The extension currently exposes these user-facing commands:
 - `Jupyter Agentic Bridge: Start Bridge`
 - `Jupyter Agentic Bridge: Stop Bridge`
 - `Jupyter Agentic Bridge: Show Status`
-- `Jupyter Agentic Bridge: Copy MCP Definition`
+- `Jupyter Agentic Bridge: Create MCP Config`
 
 ### Bridge Surface
 

@@ -41,19 +41,3 @@ export function buildBundledMcpServerConfig(
     env: {},
   };
 }
-
-export function renderMcpDefinitionSnippet(config: BundledMcpServerConfig): string {
-  return JSON.stringify(
-    {
-      mcpServers: {
-        [config.name]: {
-          command: config.command,
-          args: config.args,
-          env: config.env,
-        },
-      },
-    },
-    null,
-    2,
-  );
-}

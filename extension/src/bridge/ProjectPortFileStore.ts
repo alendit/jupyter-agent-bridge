@@ -5,6 +5,10 @@ import * as vscode from "vscode";
 const PORT_FILE_RELATIVE_PATH = path.join(".jupyter-agent-bridge", "bridge", "port");
 
 export class ProjectPortFileStore implements vscode.Disposable {
+  public getPreferredWorkspaceFolderPath(): string | null {
+    return this.getPreferredWorkspaceFolder()?.uri.fsPath ?? null;
+  }
+
   public getPreferredPortFilePath(): string | null {
     const folder = this.getPreferredWorkspaceFolder();
     if (!folder) {

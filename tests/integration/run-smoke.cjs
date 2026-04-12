@@ -12,7 +12,7 @@ async function run() {
   assert.ok(commands.includes("jupyterAgentBridge.startBridge"), "bridge start command should be registered");
   assert.ok(commands.includes("jupyterAgentBridge.stopBridge"), "bridge stop command should be registered");
   assert.ok(commands.includes("jupyterAgentBridge.showStatus"), "bridge status command should be registered");
-  assert.ok(commands.includes("jupyterAgentBridge.copyMcpDefinition"), "copy MCP definition command should be registered");
+  assert.ok(commands.includes("jupyterAgentBridge.createMcpConfig"), "create MCP config command should be registered");
   assert.ok(commands.includes("jupyterAgentBridge.openCellNavigation"), "open cell navigation command should be registered");
 }
 

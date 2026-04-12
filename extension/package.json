@@ -12,7 +12,7 @@
     "onCommand:jupyterAgentBridge.startBridge",
     "onCommand:jupyterAgentBridge.stopBridge",
     "onCommand:jupyterAgentBridge.showStatus",
-    "onCommand:jupyterAgentBridge.copyMcpDefinition",
+    "onCommand:jupyterAgentBridge.createMcpConfig",
     "onCommand:jupyterAgentBridge.openCellNavigation"
   ],
   "contributes": {
@@ -30,15 +30,15 @@
         "title": "Jupyter Agentic Bridge: Show Status"
       },
       {
-        "command": "jupyterAgentBridge.copyMcpDefinition",
-        "title": "Jupyter Agentic Bridge: Copy MCP Definition"
+        "command": "jupyterAgentBridge.createMcpConfig",
+        "title": "Jupyter Agentic Bridge: Create MCP Config"
       }
     ]
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/cellDiff.test.js dist/extension/src/notebook/cellNavigation.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/OutputNormalizationService.test.js dist/extension/src/notebook/NotebookAsyncExecutionService.test.js dist/extension/src/notebook/revealPresentation.test.js"
+    "test": "npm run build && node --test dist/extension/src/mcp/ProjectMcpConfig.test.js dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/cellDiff.test.js dist/extension/src/notebook/cellNavigation.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/OutputNormalizationService.test.js dist/extension/src/notebook/NotebookAsyncExecutionService.test.js dist/extension/src/notebook/revealPresentation.test.js"
   },
   "dependencies": {
     "@jupyter-agent-bridge/notebook-domain": "file:../packages/notebook-domain",
