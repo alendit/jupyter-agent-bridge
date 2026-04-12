@@ -8,10 +8,12 @@
   },
   "activationEvents": [
     "onNotebook:jupyter-notebook",
+    "onUri",
     "onCommand:jupyterAgentBridge.startBridge",
     "onCommand:jupyterAgentBridge.stopBridge",
     "onCommand:jupyterAgentBridge.showStatus",
-    "onCommand:jupyterAgentBridge.copyMcpDefinition"
+    "onCommand:jupyterAgentBridge.copyMcpDefinition",
+    "onCommand:jupyterAgentBridge.openCellNavigation"
   ],
   "contributes": {
     "commands": [
@@ -36,7 +38,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "npm run build && node --test dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/cellDiff.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/OutputNormalizationService.test.js dist/extension/src/notebook/NotebookAsyncExecutionService.test.js dist/extension/src/notebook/revealPresentation.test.js"
+    "test": "npm run build && node --test dist/extension/src/notebook/CellPatchService.test.js dist/extension/src/notebook/cellDiff.test.js dist/extension/src/notebook/cellNavigation.test.js dist/extension/src/notebook/executionSummary.test.js dist/extension/src/notebook/HostKernelObservationService.test.js dist/extension/src/notebook/languageFeatures.test.js dist/extension/src/notebook/OutputNormalizationService.test.js dist/extension/src/notebook/NotebookAsyncExecutionService.test.js dist/extension/src/notebook/revealPresentation.test.js"
   },
   "dependencies": {
     "@jupyter-agent-bridge/notebook-domain": "file:../packages/notebook-domain",

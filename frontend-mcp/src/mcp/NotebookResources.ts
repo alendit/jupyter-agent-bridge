@@ -5,6 +5,7 @@ import {
   ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
+import { buildEditorNavigationUris } from "./cellNavigationLinks";
 import { NotebookReadOperations } from "./NotebookReadOperations";
 import { ToolRequestExtra } from "./SessionSelection";
 
@@ -25,7 +26,8 @@ export const NOTEBOOK_RESOURCE_TEMPLATES = {
   diagnostics: "jupyter://notebook/diagnostics{?notebook_uri}",
   symbols: "jupyter://notebook/symbols{?notebook_uri}",
   search: "jupyter://notebook/search{?notebook_uri,query}",
-  cellOutputs: "jupyter://cell/outputs{?notebook_uri,cell_id}",
+  cellCode: "jupyter://cell/code{?notebook_uri,cell_id}",
+  cellOutput: "jupyter://cell/output{?notebook_uri,cell_id}",
 } as const;
 
 type NotebookResourceTemplateKey = keyof typeof NOTEBOOK_RESOURCE_TEMPLATES;
@@ -195,24 +197,61 @@ export class NotebookResources {
     );
 
     server.registerResource(
-      "cell_outputs",
-      new ResourceTemplate(NOTEBOOK_RESOURCE_TEMPLATES.cellOutputs, {
-        list: async (extra) => this.listCellOutputResources(extra),
+      "cell_code",
+      new ResourceTemplate(NOTEBOOK_RESOURCE_TEMPLATES.cellCode, {
+        list: async (extra) => this.listCellCodeResources(extra),
       }),
       {
-        title: "Cell Outputs",
-        description: "Read-only resource for outputs of notebook cells that currently have outputs.",
+        title: "Notebook Cell (code)",
+        description:
+          "Read-only snapshot of a single cell (source, metadata). MCP identity is jupyter://cell/code; use editor_navigation_uris in the payload for vscode:// or cursor:// links that reveal the cell input in the editor.",
         mimeType: JSON_MIME_TYPE,
       },
       async (uri, _variables, extra) => {
         const notebookUri = this.requiredQueryParam(uri, "notebook_uri");
         const cellId = this.requiredQueryParam(uri, "cell_id");
-        return this.jsonResource(
-          uri.toString(),
-          await this.reads.readCellOutputs({ notebook_uri: notebookUri, cell_id: cellId }, extra),
+        const snapshot = await this.reads.readNotebook(
+          { notebook_uri: notebookUri, cell_ids: [cellId], include_outputs: false },
+          extra,
         );
+        const payload = this.withCellNavigation(snapshot, notebookUri, cellId, "code");
+        return this.jsonResource(uri.toString(), payload);
       },
     );
+
+    server.registerResource(
+      "cell_output",
+      new ResourceTemplate(NOTEBOOK_RESOURCE_TEMPLATES.cellOutput, {
+        list: async (extra) => this.listCellOutputResources(extra),
+      }),
+      {
+        title: "Notebook Cell (output)",
+        description:
+          "Read-only normalized outputs for one cell. MCP identity is jupyter://cell/output; use editor_navigation_uris in the payload for vscode:// or cursor:// links that focus the cell output in the editor.",
+        mimeType: JSON_MIME_TYPE,
+      },
+      async (uri, _variables, extra) => {
+        const notebookUri = this.requiredQueryParam(uri, "notebook_uri");
+        const cellId = this.requiredQueryParam(uri, "cell_id");
+        const outputs = await this.reads.readCellOutputs({ notebook_uri: notebookUri, cell_id: cellId }, extra);
+        const payload = this.withCellNavigation(outputs, notebookUri, cellId, "output");
+        return this.jsonResource(uri.toString(), payload);
+      },
+    );
+  }
+
+  private withCellNavigation(
+    payload: unknown,
+    notebookUri: string,
+    cellId: string,
+    kind: "code" | "output",
+  ): Record<string, unknown> {
+    return {
+      ...(payload as Record<string, unknown>),
+      editor_navigation_uris: {
+        ...buildEditorNavigationUris(notebookUri, cellId, kind),
+      },
+    };
   }
 
   private registerNotebookTemplate(
@@ -252,6 +291,25 @@ export class NotebookResources {
     };
   }
 
+  private async listCellCodeResources(extra: ToolRequestExtra): Promise<ListResourcesResult> {
+    const notebooks = await this.reads.listOpenNotebooks(extra);
+    const resources = [];
+
+    for (const notebook of notebooks) {
+      const cells = await this.reads.listNotebookCells({ notebook_uri: notebook.notebook_uri }, extra);
+      for (const cell of cells.cells) {
+        resources.push({
+          uri: buildJupyterCellUri(notebook.notebook_uri, cell.cell_id, "code"),
+          name: `${notebook.notebook_uri}#${cell.cell_id}`,
+          title: `Cell ${cell.cell_id} (code)`,
+          mimeType: JSON_MIME_TYPE,
+        });
+      }
+    }
+
+    return { resources };
+  }
+
   private async listCellOutputResources(extra: ToolRequestExtra): Promise<ListResourcesResult> {
     const notebooks = await this.reads.listOpenNotebooks(extra);
     const resources = [];
@@ -264,9 +322,9 @@ export class NotebookResources {
         }
 
         resources.push({
-          uri: buildCellOutputUri(notebook.notebook_uri, cell.cell_id),
-          name: `${notebook.notebook_uri}#${cell.cell_id}`,
-          title: `${cell.cell_id} outputs`,
+          uri: buildJupyterCellUri(notebook.notebook_uri, cell.cell_id, "output"),
+          name: `${notebook.notebook_uri}#${cell.cell_id}/output`,
+          title: `Cell ${cell.cell_id} (output)`,
           mimeType: JSON_MIME_TYPE,
         });
       }
@@ -303,8 +361,8 @@ function buildNotebookScopedUri(baseUri: string, notebookUri: string): string {
   return url.toString();
 }
 
-function buildCellOutputUri(notebookUri: string, cellId: string): string {
-  const url = new URL("jupyter://cell/outputs");
+function buildJupyterCellUri(notebookUri: string, cellId: string, kind: "code" | "output"): string {
+  const url = new URL(`jupyter://cell/${kind}`);
   url.searchParams.set("notebook_uri", notebookUri);
   url.searchParams.set("cell_id", cellId);
   return url.toString();

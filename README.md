@@ -156,7 +156,9 @@ All tools now also declare MCP `outputSchema` and return typed `structuredConten
   - `jupyter://notebook/symbols{?notebook_uri}`
   - `jupyter://notebook/search{?notebook_uri,query}`
 - Cell-scoped templates:
-  - `jupyter://cell/outputs{?notebook_uri,cell_id}`
+  - `jupyter://cell/code{?notebook_uri,cell_id}` — cell source snapshot (read); list includes every cell
+  - `jupyter://cell/output{?notebook_uri,cell_id}` — normalized outputs; list includes cells that currently have outputs
+  - Cell resource JSON also includes `editor_navigation_uris` (`vscode://` and `cursor://`, same extension authority) so hosts can offer links that reveal the cell input (`code`) or focus rendered output (`output`) via `window.registerUriHandler`. `jupyter://…` remains the canonical MCP resource URI for reads; use the product-scheme URLs when the goal is in-editor navigation.
 
 These resources mirror the corresponding read-oriented tool results and delegate through the same frontend shell read paths. Mutations, execution, UI presentation, and workflow orchestration remain tools only.
 

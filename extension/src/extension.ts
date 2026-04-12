@@ -21,6 +21,8 @@ import { NotebookKernelCommandService } from "./notebook/NotebookKernelCommandSe
 import { NotebookLanguageService } from "./notebook/NotebookLanguageService";
 import { NotebookMutationService } from "./notebook/NotebookMutationService";
 import { NotebookQueryApplicationService } from "./notebook/NotebookQueryApplicationService";
+import { normalizeCellNavigationRequest, OPEN_CELL_NAVIGATION_COMMAND, toRevealCellNavigationRequest } from "./notebook/cellNavigation";
+import { registerCellNavigationUriHandler } from "./notebook/registerCellNavigationUriHandler";
 import { NotebookReadService } from "./notebook/NotebookReadService";
 import { NotebookRegistry } from "./notebook/NotebookRegistry";
 import { NotebookRuntimeApplicationService } from "./notebook/NotebookRuntimeApplicationService";
@@ -113,6 +115,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     editApplicationService,
     runtimeApplicationService,
   );
+
+  const cellNavigationUriHandler = registerCellNavigationUriHandler(context, queryApplicationService, log);
 
   const renderTooltip = (): vscode.MarkdownString => {
     const tooltip = new vscode.MarkdownString(undefined, true);
@@ -336,6 +340,21 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     copyMcpDefinition,
   );
 
+  const openCellNavigationCommand = vscode.commands.registerCommand(OPEN_CELL_NAVIGATION_COMMAND, async (request?: unknown) => {
+      const parsed = normalizeCellNavigationRequest(request);
+      if (!parsed) {
+        void vscode.window.showErrorMessage("Expected { notebook_uri, cell_id, kind } with kind set to 'code' or 'output'.");
+        return;
+      }
+      try {
+        await queryApplicationService.revealCells(toRevealCellNavigationRequest(parsed));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        log(`open_cell_navigation.failed ${message}`);
+        void vscode.window.showErrorMessage(`Could not open notebook cell: ${message}`);
+      }
+    });
+
   await startRuntime();
   updateStatusBar();
 
@@ -343,10 +362,12 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     outputChannel,
     statusBarItem,
     registry,
+    cellNavigationUriHandler,
     startBridgeCommand,
     stopBridgeCommand,
     showStatusCommand,
     copyMcpDefinitionCommand,
+    openCellNavigationCommand,
   );
 }
 

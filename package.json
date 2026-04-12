@@ -14,10 +14,12 @@
   ],
   "activationEvents": [
     "onNotebook:jupyter-notebook",
+    "onUri",
     "onCommand:jupyterAgentBridge.startBridge",
     "onCommand:jupyterAgentBridge.stopBridge",
     "onCommand:jupyterAgentBridge.showStatus",
-    "onCommand:jupyterAgentBridge.copyMcpDefinition"
+    "onCommand:jupyterAgentBridge.copyMcpDefinition",
+    "onCommand:jupyterAgentBridge.openCellNavigation"
   ],
   "contributes": {
     "commands": [

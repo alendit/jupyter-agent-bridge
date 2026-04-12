@@ -140,6 +140,7 @@ The MCP server is an adapter. It must not own notebook state. Its responsibiliti
 - expose optional MCP Apps companion views that orchestrate bridge-backed tools without becoming a second notebook frontend
 - optionally compose several bridge-backed notebook operations into one higher-level MCP workflow tool when the sequence is purely orchestration
 - render bridge results into MCP-friendly responses, including compatibility text/image content and typed structured output
+- build MCP-only affordances such as resource-local editor navigation links or command bindings from bridge-backed data
 - keep MCP-specific metadata such as resource URIs, `outputSchema`, elicitation policy, and UI resource bindings in the frontend shell
 - keep MCP host integration separate from notebook behavior
 
@@ -154,7 +155,7 @@ The shared notebook domain package owns the notebook rules that should behave th
 - how notebook text search is prepared and matched
 - how raw variable-explorer payloads become stable paged summaries
 
-UI-oriented presentation behavior stays in the extension shell. That includes commands such as revealing cells in the viewport, collapsing cell input, and focusing rendered output for demonstration flows.
+UI-oriented presentation behavior stays in the extension shell. That includes commands such as revealing cells in the viewport, collapsing cell input, focusing rendered output for demonstration flows, and handling product-scheme URI opens that map to those editor-native actions.
 
 This keeps Cursor-specific, VS Code-specific, and transport-specific differences in the shell instead of leaking them into notebook policy.
 

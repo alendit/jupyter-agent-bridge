@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { NotebookTools } from "./NotebookTools";
 import { FIXED_RESOURCE_URIS, NOTEBOOK_RESOURCE_TEMPLATES, NotebookResources } from "./NotebookResources";
 import { TOOL_NAMES } from "./NotebookToolCatalog";
+import { buildEditorNavigationUris } from "./cellNavigationLinks";
 
 test("toToolResult emits native MCP image content and omits base64 from text payloads", async () => {
   const tools = new NotebookTools(async () => {
@@ -148,7 +149,16 @@ test("NotebookResources registers fixed resources and notebook templates", () =>
         typeof entry.uriOrTemplate === "object" &&
         "uriTemplate" in (entry.uriOrTemplate as Record<string, unknown>) &&
         String((entry.uriOrTemplate as { uriTemplate: { toString(): string } }).uriTemplate.toString()) ===
-          NOTEBOOK_RESOURCE_TEMPLATES.cellOutputs,
+          NOTEBOOK_RESOURCE_TEMPLATES.cellCode,
+    ),
+  );
+  assert.ok(
+    registrations.find(
+      (entry) =>
+        typeof entry.uriOrTemplate === "object" &&
+        "uriTemplate" in (entry.uriOrTemplate as Record<string, unknown>) &&
+        String((entry.uriOrTemplate as { uriTemplate: { toString(): string } }).uriTemplate.toString()) ===
+          NOTEBOOK_RESOURCE_TEMPLATES.cellOutput,
     ),
   );
 });
@@ -274,7 +284,7 @@ test("NotebookResources reads notebook outline through the shared read path", as
   assert.equal(JSON.parse(String(result?.contents[0]?.text)).notebook_uri, "file:///workspace/demo.ipynb");
 });
 
-test("NotebookResources enumerates concrete cell output resources for open notebooks", async () => {
+test("NotebookResources enumerates cell code and cell output resources for open notebooks", async () => {
   const resources = new NotebookResources(async () => ({
     getSessionInfo: async () => {
       throw new Error("unused");
@@ -418,21 +428,175 @@ test("NotebookResources enumerates concrete cell output resources for open noteb
     },
   }) as never);
 
-  let templateList:
-    | ((extra: Record<string, unknown>) => Promise<{ resources: Array<{ uri: string }> }>)
-    | undefined;
+  type CellResourceListFn = (extra: Record<string, unknown>) => Promise<{ resources: Array<{ uri: string }> }>;
+  const listByName: Record<string, CellResourceListFn | undefined> = {};
   resources.register({
     registerResource: (name: string, uriOrTemplate: unknown) => {
-      if (name === "cell_outputs" && typeof uriOrTemplate === "object" && "listCallback" in (uriOrTemplate as object)) {
-        templateList = (uriOrTemplate as { listCallback?: typeof templateList }).listCallback;
+      if (
+        (name === "cell_code" || name === "cell_output") &&
+        typeof uriOrTemplate === "object" &&
+        "listCallback" in (uriOrTemplate as object)
+      ) {
+        listByName[name] = (uriOrTemplate as { listCallback?: CellResourceListFn }).listCallback;
       }
     },
   } as never);
 
-  const result = await templateList?.({});
-  assert.deepEqual(result?.resources.map((resource) => resource.uri), [
-    "jupyter://cell/outputs?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-1",
-  ]);
+  const codeList = await listByName.cell_code?.({});
+  const outputList = await listByName.cell_output?.({});
+  assert.deepEqual(
+    codeList?.resources.map((resource) => resource.uri).sort(),
+    [
+      "jupyter://cell/code?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-1",
+      "jupyter://cell/code?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-2",
+    ].sort(),
+  );
+  assert.deepEqual(
+    outputList?.resources.map((resource) => resource.uri),
+    ["jupyter://cell/output?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-1"],
+  );
+});
+
+test("NotebookResources adds editor navigation URIs in the frontend shell", async () => {
+  const resources = new NotebookResources(async () => ({
+    getSessionInfo: async () => {
+      throw new Error("unused");
+    },
+    listOpenNotebooks: async () => {
+      throw new Error("unused");
+    },
+    openNotebook: async () => {
+      throw new Error("unused");
+    },
+    getNotebookOutline: async () => {
+      throw new Error("unused");
+    },
+    listNotebookCells: async () => {
+      throw new Error("unused");
+    },
+    listVariables: async () => {
+      throw new Error("unused");
+    },
+    searchNotebook: async () => {
+      throw new Error("unused");
+    },
+    getDiagnostics: async () => {
+      throw new Error("unused");
+    },
+    findSymbols: async () => {
+      throw new Error("unused");
+    },
+    goToDefinition: async () => {
+      throw new Error("unused");
+    },
+    readNotebook: async () => ({
+      notebook: {
+        notebook_uri: "file:///workspace/demo.ipynb",
+        notebook_type: "jupyter-notebook",
+        notebook_version: 7,
+        dirty: false,
+        active_editor: true,
+        visible_editor_count: 1,
+        kernel: null,
+      },
+      cells: [
+        {
+          cell_id: "cell-1",
+          index: 0,
+          kind: "code",
+          language: "python",
+          notebook_line_start: 1,
+          notebook_line_end: 2,
+          source: "print('hi')",
+          source_fingerprint: "abc",
+          metadata: {},
+          execution: null,
+        },
+      ],
+    }),
+    insertCell: async () => {
+      throw new Error("unused");
+    },
+    replaceCellSource: async () => {
+      throw new Error("unused");
+    },
+    patchCellSource: async () => {
+      throw new Error("unused");
+    },
+    formatCell: async () => {
+      throw new Error("unused");
+    },
+    deleteCell: async () => {
+      throw new Error("unused");
+    },
+    moveCell: async () => {
+      throw new Error("unused");
+    },
+    executeCells: async () => {
+      throw new Error("unused");
+    },
+    executeCellsAsync: async () => {
+      throw new Error("unused");
+    },
+    getExecutionStatus: async () => {
+      throw new Error("unused");
+    },
+    waitForExecution: async () => {
+      throw new Error("unused");
+    },
+    interruptExecution: async () => {
+      throw new Error("unused");
+    },
+    restartKernel: async () => {
+      throw new Error("unused");
+    },
+    waitForKernelReady: async () => {
+      throw new Error("unused");
+    },
+    selectKernel: async () => {
+      throw new Error("unused");
+    },
+    selectJupyterInterpreter: async () => {
+      throw new Error("unused");
+    },
+    summarizeNotebookState: async () => {
+      throw new Error("unused");
+    },
+    getKernelInfo: async () => {
+      throw new Error("unused");
+    },
+    readCellOutputs: async () => {
+      throw new Error("unused");
+    },
+    revealCells: async () => {
+      throw new Error("unused");
+    },
+    setCellInputVisibility: async () => {
+      throw new Error("unused");
+    },
+    previewCellEdit: async () => {
+      throw new Error("unused");
+    },
+  }) as never);
+
+  let readCallback:
+    | ((uri: URL, variables: Record<string, unknown>, extra: Record<string, unknown>) => Promise<{ contents: Array<{ text?: string }> }>)
+    | undefined;
+  resources.register({
+    registerResource: (name: string, _uriOrTemplate: unknown, _config: Record<string, unknown>, callback: typeof readCallback) => {
+      if (name === "cell_code") {
+        readCallback = callback;
+      }
+    },
+  } as never);
+
+  const result = await readCallback?.(
+    new URL("jupyter://cell/code?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-1"),
+    {},
+    {},
+  );
+  const payload = JSON.parse(String(result?.contents[0]?.text)) as Record<string, unknown>;
+  assert.deepEqual(payload.editor_navigation_uris, buildEditorNavigationUris("file:///workspace/demo.ipynb", "cell-1", "code"));
 });
 
 test("normalizeInsertCellRequest accepts the simpler position.mode shape", () => {
