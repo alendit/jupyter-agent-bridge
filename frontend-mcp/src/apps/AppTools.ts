@@ -92,10 +92,7 @@ export class AppTools {
     private readonly log?: (message: string) => void,
   ) {}
 
-  public async register(server: McpServer): Promise<void> {
-    const { registerAppTool } = await import("@modelcontextprotocol/ext-apps/server");
-    const registerAppToolUnsafe = registerAppTool as (...args: unknown[]) => unknown;
-
+  public async register(server: McpServer, options?: { enableApps?: boolean }): Promise<void> {
     server.registerTool(
       "list_bridge_sessions",
       {
@@ -204,6 +201,19 @@ export class AppTools {
           this.exportCellOutputSnapshot(cellOutputPreviewInputSchema.parse(input), extra),
         ),
     );
+
+    if (!options?.enableApps) {
+      return;
+    }
+
+    let registerAppToolUnsafe: (...args: unknown[]) => unknown;
+    try {
+      const ext = await import("@modelcontextprotocol/ext-apps/server");
+      registerAppToolUnsafe = ext.registerAppTool as (...args: unknown[]) => unknown;
+    } catch {
+      this.log?.("ext-apps import failed, skipping app launcher registration");
+      return;
+    }
 
     this.registerAppLauncher(
       server,

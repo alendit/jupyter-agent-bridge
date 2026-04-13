@@ -6,27 +6,35 @@ import { AppTools } from "./apps/AppTools";
 import { BridgeDiscovery } from "./bridge/BridgeDiscovery";
 import { createFrontendLogger } from "./logging";
 import { createBridgeClientResolver } from "./mcp/BridgeClientResolver";
+import { resolveToolProfile } from "./mcp/NotebookToolCatalog";
+import { NotebookPrompts } from "./mcp/NotebookPrompts";
 import { NotebookResources } from "./mcp/NotebookResources";
 import { NotebookTools } from "./mcp/NotebookTools";
 
 async function main(): Promise<void> {
   const logger = createFrontendLogger();
   const discovery = new BridgeDiscovery();
+  const profile = resolveToolProfile();
   const server = new McpServer({
     name: "jupyter-agent-bridge",
     version: "0.1.0",
   });
-  logger.info(`frontend-mcp starting pid=${process.pid} log_path=${JSON.stringify(logger.logPath)}`);
+  logger.info(`frontend-mcp starting pid=${process.pid} profile=${profile} log_path=${JSON.stringify(logger.logPath)}`);
 
   const getClient = createBridgeClientResolver(discovery, server, (message) => logger.info(message));
   const tools = new NotebookTools(getClient, (message) => logger.info(message));
-  const appTools = new AppTools(getClient, discovery, (message) => logger.info(message));
   const resources = new NotebookResources(getClient);
-  const appResources = new AppResourceRegistry();
+  const prompts = new NotebookPrompts();
   tools.register(server);
-  await appTools.register(server);
   resources.register(server);
-  await appResources.register(server);
+  prompts.register(server);
+
+  if (profile === "full") {
+    const appTools = new AppTools(getClient, discovery, (message) => logger.info(message));
+    const appResources = new AppResourceRegistry();
+    await appTools.register(server, { enableApps: true });
+    await appResources.register(server);
+  }
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

@@ -61,6 +61,7 @@ Shared pure notebook policy:
 - cell preview shaping
 - search preparation and matching
 - variable normalization and paging
+- workflow orchestration: topological step ordering and DAG execution with error policy
 
 This package must stay free of `vscode`, MCP, HTTP, and bridge concerns. It operates on immutable snapshots and value objects only.
 
@@ -136,13 +137,15 @@ The MCP server is an adapter. It must not own notebook state. Its responsibiliti
 
 - discover a matching editor bridge session
 - authenticate to the bridge
+- register tools based on the resolved profile (core or full)
 - convert MCP tool calls into typed bridge calls
+- expose MCP prompts for guided multi-step workflows
 - expose optional MCP resources for passive discovery without changing the underlying notebook model
-- expose optional MCP Apps companion views that orchestrate bridge-backed tools without becoming a second notebook frontend
-- optionally compose several bridge-backed notebook operations into one higher-level MCP workflow tool when the sequence is purely orchestration
+- expose optional MCP Apps companion views that orchestrate bridge-backed tools without becoming a second notebook frontend (capability-gated behind the full profile)
+- delegate workflow step ordering and execution policy to the shared `notebook-domain` orchestration module
 - render bridge results into MCP-friendly responses, including compatibility text/image content and typed structured output
 - build MCP-only affordances such as resource-local editor navigation links or command bindings from bridge-backed data
-- keep MCP-specific metadata such as resource URIs, `outputSchema`, elicitation policy, and UI resource bindings in the frontend shell
+- keep MCP-specific metadata such as resource URIs, `outputSchema`, annotations, elicitation policy, and UI resource bindings in the frontend shell
 - keep MCP host integration separate from notebook behavior
 
 ### Shared Notebook Domain
@@ -328,12 +331,39 @@ The bridge method names are defined centrally in [`packages/protocol/src/rpc.ts`
 
 The MCP tool catalog is defined in [`frontend-mcp/src/mcp/NotebookToolCatalog.ts`](../frontend-mcp/src/mcp/NotebookToolCatalog.ts). `README.md` documents the current tool list and intended use.
 
-The MCP shell now exposes four additive discovery layers:
+#### Tool Profiles
+
+Tools are split into two profiles controlled by the `JUPYTER_AGENT_BRIDGE_PROFILE` environment variable:
+
+- **core** (default): 12 tools covering the read → edit → execute → inspect cycle. This is the default surface presented to all clients.
+- **full**: all tools, including advanced operations such as async execution, kernel control, UI presentation, and workflow orchestration.
+
+The profile is resolved once at startup by `resolveToolProfile()`. Profile membership is defined by the `CORE_TOOLS` and `ADVANCED_TOOLS` arrays in the tool catalog.
+
+#### Tool Annotations
+
+Every registered tool carries MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) so that hosts can reason about tool safety without parsing descriptions. Annotations are defined per-tool in `TOOL_ANNOTATIONS`.
+
+#### MCP Prompts
+
+The MCP server registers user-invocable prompts for common multi-step workflows:
+
+- `triage_notebook`: assess notebook health via state summary, diagnostics, and output inspection
+- `safe_edit_cell`: read current state, apply a fingerprint-guarded edit, verify with diagnostics
+- `execute_and_inspect`: execute cells with stop-on-error, inspect outputs, report results
+- `recover_kernel`: diagnose stuck kernel, interrupt, restart if needed, confirm recovery
+
+Prompts are defined in [`frontend-mcp/src/mcp/NotebookPrompts.ts`](../frontend-mcp/src/mcp/NotebookPrompts.ts).
+
+#### Discovery Layers
+
+The MCP shell exposes five additive discovery layers:
 
 - notebook tools as the universal interface for all clients
+- tool annotations for host-side safety reasoning
 - typed tool `outputSchema` and `structuredContent` for clients that support structured tool results
-- read-only MCP resources for passive notebook discovery
-- MCP Apps companion views for host-rendered human review and orchestration
+- read-only MCP resources for passive notebook discovery (cell resources are template-only, not eagerly enumerated)
+- MCP Apps companion views for host-rendered human review and orchestration (capability-gated behind the `full` profile)
 
 The current MCP Apps layer uses one shared HTML resource, `ui://jupyter-agent-bridge/notebook-console.html`, behind additive launcher tools for:
 

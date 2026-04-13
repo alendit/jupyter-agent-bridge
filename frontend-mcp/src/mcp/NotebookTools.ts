@@ -1,4 +1,5 @@
 import { asBridgeError } from "../../../packages/protocol/src";
+import { orderWorkflowSteps, runWorkflow } from "../../../packages/notebook-domain/src";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { CallToolResult, ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
@@ -12,7 +13,10 @@ import {
   NOTEBOOK_TOOL_OUTPUT_SCHEMAS,
   ReadCellOutputsToolRequest,
   ReadNotebookToolRequest,
+  resolveToolProfile,
+  TOOL_ANNOTATIONS,
   TOOL_HELP,
+  toolsForProfile,
   ToolName,
 } from "./NotebookToolCatalog";
 import {
@@ -32,15 +36,6 @@ const EXECUTION_STATUS_PROGRESS: Record<string, number> = {
 
 const WAIT_FOR_EXECUTION_POLL_INTERVAL_MS = 250;
 
-interface NotebookWorkflowStepResult {
-  id: string;
-  tool: NotebookWorkflowStepToolName;
-  status: "completed" | "failed" | "skipped";
-  depends_on: string[];
-  result?: unknown;
-  error?: ReturnType<typeof asBridgeError>;
-}
-
 export class NotebookTools {
   private readonly parser = new NotebookToolInputParser();
   private readonly renderer = new NotebookToolResultRenderer();
@@ -54,12 +49,27 @@ export class NotebookTools {
   }
 
   public register(server: McpServer): void {
+    const profile = resolveToolProfile();
+    const enabledTools = new Set(toolsForProfile(profile));
+    this.log?.(`tool profile=${profile} enabled_tools=${enabledTools.size}`);
+
     const register = (toolName: ToolName, handler: (input: unknown, extra: ToolRequestExtra) => Promise<unknown>): void => {
+      if (!enabledTools.has(toolName)) {
+        return;
+      }
+
+      const annotations = TOOL_ANNOTATIONS[toolName];
       server.registerTool(
         toolName,
         {
-          title: TOOL_HELP[toolName].title,
+          title: annotations.title,
           description: this.buildToolDescription(toolName),
+          annotations: {
+            readOnlyHint: annotations.readOnlyHint,
+            destructiveHint: annotations.destructiveHint,
+            idempotentHint: annotations.idempotentHint,
+            openWorldHint: annotations.openWorldHint,
+          },
           inputSchema: NOTEBOOK_TOOL_INPUT_SCHEMAS[toolName],
           outputSchema: NOTEBOOK_TOOL_OUTPUT_SCHEMAS[toolName],
         },
@@ -335,93 +345,19 @@ export class NotebookTools {
 
   private async executeNotebookWorkflow(request: NotebookWorkflowRequest, extra: ToolRequestExtra): Promise<unknown> {
     const client = await this.getClient(extra);
-    const results: NotebookWorkflowStepResult[] = [];
-    const completedSteps = new Set<string>();
-    let stopRequested = false;
-
-    for (const step of this.orderWorkflowSteps(request)) {
-      if (stopRequested) {
-        results.push({
-          id: step.id,
-          tool: step.tool,
-          status: "skipped",
-          depends_on: step.depends_on,
-        });
-        continue;
-      }
-
-      if (step.depends_on.some((dependency) => !completedSteps.has(dependency))) {
-        results.push({
-          id: step.id,
-          tool: step.tool,
-          status: "skipped",
-          depends_on: step.depends_on,
-        });
-        continue;
-      }
-
-      try {
-        const result = await this.executeWorkflowStep(client, step.tool, step.with);
-        results.push({
-          id: step.id,
-          tool: step.tool,
-          status: "completed",
-          depends_on: step.depends_on,
-          result,
-        });
-        completedSteps.add(step.id);
-      } catch (error) {
-        const bridgeError = asBridgeError(error);
-        results.push({
-          id: step.id,
-          tool: step.tool,
-          status: "failed",
-          depends_on: step.depends_on,
-          error: bridgeError,
-        });
-        if (request.on_error === "stop") {
-          stopRequested = true;
-        }
-      }
-    }
+    const ordered = orderWorkflowSteps(request.steps);
+    const workflowResult = await runWorkflow(
+      ordered,
+      request.on_error,
+      (tool, input) => this.executeWorkflowStep(client, tool as NotebookWorkflowStepToolName, input),
+      asBridgeError,
+    );
 
     return {
       notebook_uri: request.notebook_uri,
       on_error: request.on_error,
-      completed_step_ids: results.filter((step) => step.status === "completed").map((step) => step.id),
-      failed_step_ids: results.filter((step) => step.status === "failed").map((step) => step.id),
-      skipped_step_ids: results.filter((step) => step.status === "skipped").map((step) => step.id),
-      steps: results,
+      ...workflowResult,
     };
-  }
-
-  private orderWorkflowSteps(request: NotebookWorkflowRequest) {
-    const byId = new Map(request.steps.map((step) => [step.id, step]));
-    const visited = new Set<string>();
-    const ordered: NotebookWorkflowRequest["steps"] = [];
-
-    const visit = (stepId: string): void => {
-      if (visited.has(stepId)) {
-        return;
-      }
-
-      const step = byId.get(stepId);
-      if (!step) {
-        return;
-      }
-
-      for (const dependency of step.depends_on) {
-        visit(dependency);
-      }
-      visited.add(stepId);
-      ordered.push(step);
-    };
-
-    for (const step of request.steps) {
-      visit(step.id);
-    }
-
-    return ordered;
   }
 
   private async executeWorkflowStep(

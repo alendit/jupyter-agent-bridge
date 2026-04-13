@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { NotebookTools } from "./NotebookTools";
 import { FIXED_RESOURCE_URIS, NOTEBOOK_RESOURCE_TEMPLATES, NotebookResources } from "./NotebookResources";
-import { TOOL_NAMES } from "./NotebookToolCatalog";
+import { CORE_TOOLS, TOOL_NAMES, toolsForProfile } from "./NotebookToolCatalog";
 import { buildEditorNavigationUris } from "./cellNavigationLinks";
 
 test("toToolResult emits native MCP image content and omits base64 from text payloads", async () => {
@@ -102,21 +102,78 @@ test("toToolResult wraps top-level array results in structuredContent for output
   assert.deepEqual(toolResult.structuredContent, { notebooks: summaries });
 });
 
-test("register exposes outputSchema for every notebook tool", () => {
-  const tools = new NotebookTools(async () => {
-    throw new Error("client should not be called in this unit test");
-  });
+test("register exposes outputSchema for every notebook tool in full profile", () => {
+  const prev = process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  process.env.JUPYTER_AGENT_BRIDGE_PROFILE = "full";
+  try {
+    const tools = new NotebookTools(async () => {
+      throw new Error("client should not be called in this unit test");
+    });
 
-  const configs = new Map<string, Record<string, unknown>>();
-  tools.register({
-    registerTool: (name: string, config: Record<string, unknown>) => {
-      configs.set(name, config);
-    },
-  } as never);
+    const configs = new Map<string, Record<string, unknown>>();
+    tools.register({
+      registerTool: (name: string, config: Record<string, unknown>) => {
+        configs.set(name, config);
+      },
+    } as never);
 
-  assert.equal(configs.size, TOOL_NAMES.length);
-  for (const name of TOOL_NAMES) {
-    assert.ok(configs.get(name)?.outputSchema, `${name} should declare an outputSchema`);
+    assert.equal(configs.size, TOOL_NAMES.length);
+    for (const name of TOOL_NAMES) {
+      assert.ok(configs.get(name)?.outputSchema, `${name} should declare an outputSchema`);
+    }
+  } finally {
+    if (prev === undefined) delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+    else process.env.JUPYTER_AGENT_BRIDGE_PROFILE = prev;
+  }
+});
+
+test("register only exposes core tools by default", () => {
+  const prev = process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  try {
+    const tools = new NotebookTools(async () => {
+      throw new Error("client should not be called in this unit test");
+    });
+
+    const configs = new Map<string, Record<string, unknown>>();
+    tools.register({
+      registerTool: (name: string, config: Record<string, unknown>) => {
+        configs.set(name, config);
+      },
+    } as never);
+
+    assert.equal(configs.size, CORE_TOOLS.length);
+    for (const name of CORE_TOOLS) {
+      assert.ok(configs.has(name), `core tool ${name} should be registered`);
+    }
+  } finally {
+    if (prev === undefined) delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+    else process.env.JUPYTER_AGENT_BRIDGE_PROFILE = prev;
+  }
+});
+
+test("register includes annotations on every registered tool", () => {
+  const prev = process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  process.env.JUPYTER_AGENT_BRIDGE_PROFILE = "full";
+  try {
+    const tools = new NotebookTools(async () => {
+      throw new Error("client should not be called in this unit test");
+    });
+
+    const configs = new Map<string, Record<string, unknown>>();
+    tools.register({
+      registerTool: (name: string, config: Record<string, unknown>) => {
+        configs.set(name, config);
+      },
+    } as never);
+
+    for (const [name, config] of configs) {
+      assert.ok(config.annotations, `${name} should have annotations`);
+      assert.equal(typeof (config.annotations as Record<string, unknown>).readOnlyHint, "boolean", `${name} readOnlyHint`);
+    }
+  } finally {
+    if (prev === undefined) delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+    else process.env.JUPYTER_AGENT_BRIDGE_PROFILE = prev;
   }
 });
 
@@ -284,177 +341,29 @@ test("NotebookResources reads notebook outline through the shared read path", as
   assert.equal(JSON.parse(String(result?.contents[0]?.text)).notebook_uri, "file:///workspace/demo.ipynb");
 });
 
-test("NotebookResources enumerates cell code and cell output resources for open notebooks", async () => {
-  const resources = new NotebookResources(async () => ({
-    getSessionInfo: async () => {
-      throw new Error("unused");
-    },
-    listOpenNotebooks: async () => [
-      {
-        notebook_uri: "file:///workspace/demo.ipynb",
-        notebook_type: "jupyter-notebook",
-        notebook_version: 7,
-        dirty: false,
-        active_editor: true,
-        visible_editor_count: 1,
-        kernel: null,
-      },
-    ],
-    openNotebook: async () => {
-      throw new Error("unused");
-    },
-    getNotebookOutline: async () => {
-      throw new Error("unused");
-    },
-    listNotebookCells: async () => ({
-      notebook_uri: "file:///workspace/demo.ipynb",
-      notebook_version: 7,
-      cells: [
-        {
-          cell_id: "cell-1",
-          index: 0,
-          kind: "code",
-          language: "python",
-          notebook_line_start: 1,
-          notebook_line_end: 1,
-          source_preview: "print(1)",
-          source_line_count: 1,
-          source_fingerprint: "fp-1",
-          execution_status: "succeeded",
-          execution_order: 1,
-          started_at: null,
-          ended_at: null,
-          has_outputs: true,
-          output_kinds: ["text"],
-          section_path: [],
-        },
-        {
-          cell_id: "cell-2",
-          index: 1,
-          kind: "code",
-          language: "python",
-          notebook_line_start: 2,
-          notebook_line_end: 2,
-          source_preview: "print(2)",
-          source_line_count: 1,
-          source_fingerprint: "fp-2",
-          execution_status: null,
-          execution_order: null,
-          started_at: null,
-          ended_at: null,
-          has_outputs: false,
-          output_kinds: [],
-          section_path: [],
-        },
-      ],
-    }),
-    listVariables: async () => {
-      throw new Error("unused");
-    },
-    searchNotebook: async () => {
-      throw new Error("unused");
-    },
-    getDiagnostics: async () => {
-      throw new Error("unused");
-    },
-    findSymbols: async () => {
-      throw new Error("unused");
-    },
-    goToDefinition: async () => {
-      throw new Error("unused");
-    },
-    readNotebook: async () => {
-      throw new Error("unused");
-    },
-    insertCell: async () => {
-      throw new Error("unused");
-    },
-    replaceCellSource: async () => {
-      throw new Error("unused");
-    },
-    patchCellSource: async () => {
-      throw new Error("unused");
-    },
-    formatCell: async () => {
-      throw new Error("unused");
-    },
-    deleteCell: async () => {
-      throw new Error("unused");
-    },
-    moveCell: async () => {
-      throw new Error("unused");
-    },
-    executeCells: async () => {
-      throw new Error("unused");
-    },
-    executeCellsAsync: async () => {
-      throw new Error("unused");
-    },
-    getExecutionStatus: async () => {
-      throw new Error("unused");
-    },
-    waitForExecution: async () => {
-      throw new Error("unused");
-    },
-    interruptExecution: async () => {
-      throw new Error("unused");
-    },
-    restartKernel: async () => {
-      throw new Error("unused");
-    },
-    waitForKernelReady: async () => {
-      throw new Error("unused");
-    },
-    readCellOutputs: async () => {
-      throw new Error("unused");
-    },
-    revealCells: async () => {
-      throw new Error("unused");
-    },
-    setCellInputVisibility: async () => {
-      throw new Error("unused");
-    },
-    getKernelInfo: async () => {
-      throw new Error("unused");
-    },
-    selectKernel: async () => {
-      throw new Error("unused");
-    },
-    selectJupyterInterpreter: async () => {
-      throw new Error("unused");
-    },
-    summarizeNotebookState: async () => {
-      throw new Error("unused");
-    },
-  }) as never);
+test("NotebookResources registers cell code and cell output as template-only (no eager enumeration)", () => {
+  const resources = new NotebookResources(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
 
-  type CellResourceListFn = (extra: Record<string, unknown>) => Promise<{ resources: Array<{ uri: string }> }>;
-  const listByName: Record<string, CellResourceListFn | undefined> = {};
+  const templates: Array<{ name: string; uriOrTemplate: unknown }> = [];
   resources.register({
     registerResource: (name: string, uriOrTemplate: unknown) => {
-      if (
-        (name === "cell_code" || name === "cell_output") &&
-        typeof uriOrTemplate === "object" &&
-        "listCallback" in (uriOrTemplate as object)
-      ) {
-        listByName[name] = (uriOrTemplate as { listCallback?: CellResourceListFn }).listCallback;
+      if (name === "cell_code" || name === "cell_output") {
+        templates.push({ name, uriOrTemplate });
       }
     },
   } as never);
 
-  const codeList = await listByName.cell_code?.({});
-  const outputList = await listByName.cell_output?.({});
-  assert.deepEqual(
-    codeList?.resources.map((resource) => resource.uri).sort(),
-    [
-      "jupyter://cell/code?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-1",
-      "jupyter://cell/code?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-2",
-    ].sort(),
-  );
-  assert.deepEqual(
-    outputList?.resources.map((resource) => resource.uri),
-    ["jupyter://cell/output?notebook_uri=file%3A%2F%2F%2Fworkspace%2Fdemo.ipynb&cell_id=cell-1"],
-  );
+  assert.equal(templates.length, 2);
+  for (const { name, uriOrTemplate } of templates) {
+    assert.ok(
+      typeof uriOrTemplate === "object" && "uriTemplate" in (uriOrTemplate as Record<string, unknown>),
+      `${name} should be a ResourceTemplate`,
+    );
+    const listCallback = (uriOrTemplate as { listCallback?: unknown }).listCallback;
+    assert.equal(listCallback, undefined, `${name} should not eagerly enumerate cells (list: undefined)`);
+  }
 });
 
 test("NotebookResources adds editor navigation URIs in the frontend shell", async () => {
@@ -809,6 +718,8 @@ test("parseWaitForExecutionRequest accepts timeout", () => {
 });
 
 test("wait_for_execution uses the direct bridge wait path when no progress token is present", async () => {
+  const prev = process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  process.env.JUPYTER_AGENT_BRIDGE_PROFILE = "full";
   let waitCalls = 0;
   let progressCalls = 0;
   let handler:
@@ -861,9 +772,13 @@ test("wait_for_execution uses the direct bridge wait path when no progress token
   const payload = JSON.parse(String(result?.content[0]?.text)) as { wait_timed_out: boolean; status: string };
   assert.equal(payload.wait_timed_out, false);
   assert.equal(payload.status, "completed");
+  if (prev === undefined) delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  else process.env.JUPYTER_AGENT_BRIDGE_PROFILE = prev;
 });
 
 test("wait_for_execution emits progress notifications only when a progress token is present", async () => {
+  const prev = process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  process.env.JUPYTER_AGENT_BRIDGE_PROFILE = "full";
   let progressCalls = 0;
   let handler:
     | ((input: unknown, extra: unknown) => Promise<{ content: Array<Record<string, unknown>> }>)
@@ -938,6 +853,8 @@ test("wait_for_execution emits progress notifications only when a progress token
   const payload = JSON.parse(String(result?.content[0]?.text)) as { wait_timed_out: boolean; status: string };
   assert.equal(payload.wait_timed_out, false);
   assert.equal(payload.status, "completed");
+  if (prev === undefined) delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
+  else process.env.JUPYTER_AGENT_BRIDGE_PROFILE = prev;
 });
 
 test("parseListVariablesRequest accepts optional query and max_results", () => {

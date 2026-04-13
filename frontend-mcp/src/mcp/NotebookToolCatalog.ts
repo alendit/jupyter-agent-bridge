@@ -40,6 +40,118 @@ export const TOOL_NAMES = [
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
+
+// ---------------------------------------------------------------------------
+// Tool profiles
+// ---------------------------------------------------------------------------
+
+/** Core tools: the default surface for all MCP hosts. ~12 tools covering
+ *  the full read → edit → execute → inspect cycle. */
+export const CORE_TOOLS: readonly ToolName[] = [
+  "list_open_notebooks",
+  "get_notebook_outline",
+  "list_notebook_cells",
+  "read_notebook",
+  "read_cell_outputs",
+  "search_notebook",
+  "get_diagnostics",
+  "insert_cell",
+  "replace_cell_source",
+  "patch_cell_source",
+  "execute_cells",
+  "summarize_notebook_state",
+] as const;
+
+/** Advanced tools: opt-in via JUPYTER_AGENT_BRIDGE_PROFILE=full or registered
+ *  alongside Core when the host supports dynamic tool filtering. */
+export const ADVANCED_TOOLS: readonly ToolName[] = [
+  "describe_tool",
+  "open_notebook",
+  "list_variables",
+  "find_symbols",
+  "go_to_definition",
+  "format_cell",
+  "delete_cell",
+  "move_cell",
+  "execute_cells_async",
+  "get_execution_status",
+  "wait_for_execution",
+  "interrupt_execution",
+  "restart_kernel",
+  "wait_for_kernel_ready",
+  "get_kernel_info",
+  "select_kernel",
+  "select_jupyter_interpreter",
+  "reveal_notebook_cells",
+  "set_notebook_cell_input_visibility",
+  "run_notebook_workflow",
+] as const;
+
+export type ToolProfile = "core" | "full";
+
+export function resolveToolProfile(): ToolProfile {
+  const env = process.env.JUPYTER_AGENT_BRIDGE_PROFILE?.toLowerCase();
+  if (env === "full" || env === "all") {
+    return "full";
+  }
+  return "core";
+}
+
+export function toolsForProfile(profile: ToolProfile): readonly ToolName[] {
+  return profile === "full" ? TOOL_NAMES : CORE_TOOLS;
+}
+
+// ---------------------------------------------------------------------------
+// Tool annotations (MCP spec hints for host-side reasoning)
+// ---------------------------------------------------------------------------
+
+export interface ToolAnnotations {
+  title: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
+export const TOOL_ANNOTATIONS: Record<ToolName, ToolAnnotations> = {
+  list_open_notebooks:              { title: "List Open Notebooks",               readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  describe_tool:                    { title: "Describe Tool",                     readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  open_notebook:                    { title: "Open Notebook",                     readOnlyHint: false, idempotentHint: true,  openWorldHint: false },
+  get_notebook_outline:             { title: "Get Notebook Outline",              readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  list_notebook_cells:              { title: "List Notebook Cells",               readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  list_variables:                   { title: "List Variables",                    readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  search_notebook:                  { title: "Search Notebook",                   readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  find_symbols:                     { title: "Find Symbols",                      readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  get_diagnostics:                  { title: "Get Diagnostics",                   readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  go_to_definition:                 { title: "Go To Definition",                  readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  read_notebook:                    { title: "Read Notebook",                     readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  insert_cell:                      { title: "Insert Cell",                       readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+  replace_cell_source:              { title: "Replace Cell Source",               readOnlyHint: false, idempotentHint: true,  openWorldHint: false },
+  patch_cell_source:                { title: "Patch Cell Source",                 readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+  format_cell:                      { title: "Format Cell",                       readOnlyHint: false, idempotentHint: true,  openWorldHint: false },
+  delete_cell:                      { title: "Delete Cell",                       readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  move_cell:                        { title: "Move Cell",                         readOnlyHint: false, idempotentHint: true,  openWorldHint: false },
+  execute_cells:                    { title: "Execute Cells",                     readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+  execute_cells_async:              { title: "Execute Cells Async",               readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+  get_execution_status:             { title: "Get Execution Status",              readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  wait_for_execution:               { title: "Wait For Execution",               readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  interrupt_execution:              { title: "Interrupt Execution",               readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  restart_kernel:                   { title: "Restart Kernel",                    readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  wait_for_kernel_ready:            { title: "Wait For Kernel Ready",             readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  read_cell_outputs:                { title: "Read Cell Outputs",                 readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  reveal_notebook_cells:            { title: "Reveal Notebook Cells",             readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  set_notebook_cell_input_visibility: { title: "Set Cell Input Visibility",       readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  run_notebook_workflow:            { title: "Run Notebook Workflow",             readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+  get_kernel_info:                  { title: "Get Kernel Info",                   readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+  select_kernel:                    { title: "Select Kernel",                     readOnlyHint: false, idempotentHint: true,  openWorldHint: false },
+  select_jupyter_interpreter:       { title: "Select Jupyter Interpreter",        readOnlyHint: false, idempotentHint: true,  openWorldHint: false },
+  summarize_notebook_state:         { title: "Summarize Notebook State",          readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
+};
+
+// ---------------------------------------------------------------------------
+// Workflow step tools
+// ---------------------------------------------------------------------------
+
 export const NOTEBOOK_WORKFLOW_STEP_TOOLS = [
   "get_notebook_outline",
   "list_notebook_cells",
@@ -641,19 +753,19 @@ const notebookWorkflowStepResultOutputSchema = z
 export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   list_open_notebooks: {
     title: "List Open Notebooks",
-    summary: "List Jupyter notebooks currently visible to the live editor bridge.",
+    summary: "List Jupyter notebooks visible to the bridge.",
     schema: "{}",
     examples: ["{}"],
   },
   describe_tool: {
     title: "Describe Tool",
-    summary: "Return the exact input shape, examples, and notes for one tool or a compact index for all tools.",
+    summary: "Return input schema, examples, and usage notes for one tool or a compact index of all tools.",
     schema: '{"tool_name"?: "<tool-name>"}',
     examples: ["{}", '{"tool_name":"insert_cell"}'],
   },
   open_notebook: {
     title: "Open Notebook",
-    summary: "Open a notebook in the live editor session. Returns notebook summary only, not cells.",
+    summary: "Open a notebook file in the editor. Returns notebook summary without cells.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","view_column"?: "active"|"beside"}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb"}',
@@ -662,14 +774,13 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   get_notebook_outline: {
     title: "Get Notebook Outline",
-    summary: "Cheap notebook structure view from markdown headings. Use this first on large notebooks, then read only the relevant range or cell_ids.",
+    summary: "Get notebook structure from markdown headings. Use before targeted reads on large notebooks.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   list_notebook_cells: {
     title: "List Notebook Cells",
-    summary:
-      "Cheap per-cell previews for navigation, especially for code-heavy notebooks without useful headings. Returns no full source, no outputs, and includes notebook_line_start/end plus a short source fingerprint for stale-safe patching.",
+    summary: "Get lightweight per-cell previews with line spans and source fingerprints. No full source or outputs.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":50},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -679,8 +790,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   list_variables: {
     title: "List Variables",
-    summary:
-      "List variables from the active kernel for one notebook using VS Code Jupyter's variable explorer command. Results are paged and preview fields are capped so agents can fetch small chunks incrementally.",
+    summary: "List kernel variables with paged results. Supports query filtering and offset pagination.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","query"?: "df","offset"?:0,"max_results"?:50}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb"}',
@@ -689,7 +799,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   search_notebook: {
     title: "Search Notebook",
-    summary: "Fast source search across notebook cells. Use this to find symbols or strings before reading specific cells.",
+    summary: "Search cell source text. Supports regex, case sensitivity, and cell-kind filtering.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","query":"fit_model","case_sensitive"?:false,"regex"?:false,"whole_word"?:false,"max_results"?:50,"range"?:{"start":0,"end":50},"cell_ids"?:["cell-1"],"cell_kind"?: "code"|"markdown"}',
     examples: [
@@ -699,7 +809,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   find_symbols: {
     title: "Find Symbols",
-    summary: "Cheap semantic symbol scan for selected cells. Use this when text search is too noisy or you need symbol kinds and positions.",
+    summary: "Semantic symbol scan across selected cells. Use when text search is too noisy.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","query"?: "Trainer","max_results"?:50,"range"?:{"start":0,"end":50},"cell_ids"?:["cell-1"]}',
     examples: [
@@ -709,7 +819,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   get_diagnostics: {
     title: "Get Diagnostics",
-    summary: "Read current editor diagnostics for selected cells. Use this for syntax, type, import, or lint signals. Runtime exceptions are in cell outputs, not here.",
+    summary: "Read editor diagnostics (syntax, type, lint errors) for selected cells. Runtime errors are in cell outputs.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","severities"?:["error","warning"],"max_results"?:100,"range"?:{"start":0,"end":20},"cell_ids"?:["cell-1"]}',
     examples: [
@@ -719,7 +829,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   go_to_definition: {
     title: "Go To Definition",
-    summary: "Resolve one symbol reference from an exact cell position. Use this after a targeted read when you need the defining cell or external file location.",
+    summary: "Resolve a symbol reference to its definition location from an exact cell position.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","line":12,"column":9,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
     examples: [
@@ -728,8 +838,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   read_notebook: {
     title: "Read Notebook",
-    summary:
-      "Read live notebook cells. Outputs are excluded by default and cells include notebook_line_start/end plus a short source fingerprint. Plain notebook stdout, stderr, and error payloads are normalized and returned automatically when outputs are included. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
+    summary: "Read cell source and optionally outputs. Use range or cell_ids for targeted reads. Use output_file_path to keep large results out of context.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/notebook.json","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
@@ -739,7 +848,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   insert_cell: {
     title: "Insert Cell",
-    summary: "Insert a new cell. position must use the mode form. Returns only a compact mutation receipt, not the whole notebook.",
+    summary: "Insert a new cell at a specified position. Mutates notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","expected_notebook_version"?:7,"position":{"mode":"before_index","index":0}|{"mode":"before_cell_id","cell_id":"cell-1"}|{"mode":"after_cell_id","cell_id":"cell-1"}|{"mode":"at_end"},"cell":{"kind":"markdown"|"code","source":"...","language"?:string|null,"metadata"?:object}}',
     examples: [
@@ -749,7 +858,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   replace_cell_source: {
     title: "Replace Cell Source",
-    summary: "Replace one cell source. Prefer this for medium or large rewrites where resending full source is simpler than constructing a patch. Editing source does not change kernel state until code cells are executed. Prefer the last seen source_fingerprint to stay stale-safe. Returns a compact mutation receipt.",
+    summary: "Replace a cell's full source. Pass source_fingerprint for stale-safety. Mutates notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","source":"..."}',
     examples: [
@@ -758,7 +867,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   patch_cell_source: {
     title: "Patch Cell Source",
-    summary: "Apply a patch to one cell without resending full source. Prefer this for small, local edits where minimizing text churn matters. Use format=search_replace_json when you want the least brittle patch shape. Prefer the current source_fingerprint from a recent read or preview to guard against stale cell state.",
+    summary: "Apply a diff patch to one cell without resending full source. Supports unified_diff and search_replace_json formats. Mutates notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"...","format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
     examples: [
@@ -768,7 +877,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   format_cell: {
     title: "Format Cell",
-    summary: "Run the editor formatter on one cell if available. Use this after code edits. Formatting changes source only and clears stale outputs when source changes.",
+    summary: "Run the editor formatter on one cell. Mutates notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
     examples: [
@@ -777,19 +886,19 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   delete_cell: {
     title: "Delete Cell",
-    summary: "Delete one cell from the live notebook. Returns a compact mutation receipt.",
+    summary: "Delete one cell. Mutates notebook.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1"}'],
   },
   move_cell: {
     title: "Move Cell",
-    summary: "Move one cell to a target notebook index. Returns a compact mutation receipt.",
+    summary: "Move one cell to a target index. Mutates notebook.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","target_index":0,"expected_notebook_version"?:7}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","target_index":0}'],
   },
   execute_cells: {
     title: "Execute Cells",
-    summary: "Execute code cells and wait for completion before returning. Executing mutates kernel state immediately; editing source alone does not. Re-run changed definitions and dependents. Carry source_fingerprint values when you want an optimistic stale check before execution. Use execute_cells_async for non-blocking execution. With stop_on_error=true, untouched later cells are reported as cancelled after the first failed cell instead of hanging until timeout.",
+    summary: "Execute code cells and wait for results. Mutates kernel state.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
     examples: [
@@ -799,7 +908,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   execute_cells_async: {
     title: "Execute Cells Async",
-    summary: "Queue code cell execution and return an execution handle immediately. Use get_execution_status or wait_for_execution to observe the terminal result. Carry source_fingerprint values when you want an optimistic stale check before the request is accepted.",
+    summary: "Queue cell execution and return immediately with an execution handle. Poll with get_execution_status or wait_for_execution.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
     examples: [
@@ -809,13 +918,13 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   get_execution_status: {
     title: "Get Execution Status",
-    summary: "Read the latest status snapshot for a previously accepted async execution handle.",
+    summary: "Read the current status of an async execution handle.",
     schema: '{"execution_id":"<execution-id>"}',
     examples: ['{"execution_id":"a2f9a034-8f55-4ae7-81ba-9d2a18b74951"}'],
   },
   wait_for_execution: {
     title: "Wait For Execution",
-    summary: "Wait for an async execution handle to reach a terminal state, or return the latest non-terminal snapshot if the wait itself times out.",
+    summary: "Wait for an async execution to complete or time out.",
     schema: '{"execution_id":"<execution-id>","timeout_ms"?:30000}',
     examples: [
       '{"execution_id":"a2f9a034-8f55-4ae7-81ba-9d2a18b74951"}',
@@ -824,19 +933,19 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   interrupt_execution: {
     title: "Interrupt Execution",
-    summary: "Ask VS Code/Jupyter to interrupt the active notebook kernel.",
+    summary: "Interrupt the active notebook kernel.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   restart_kernel: {
     title: "Restart Kernel",
-    summary: "Ask VS Code/Jupyter to restart the active notebook kernel.",
+    summary: "Restart the notebook kernel. Clears all kernel state.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   wait_for_kernel_ready: {
     title: "Wait For Kernel Ready",
-    summary: "Wait until the notebook's current or target kernel generation is ready, or return the latest not-ready state if setup is still in progress or times out.",
+    summary: "Wait until the kernel is idle and ready for execution.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","timeout_ms"?:30000,"target_generation"?:2}',
     examples: [
@@ -846,8 +955,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   read_cell_outputs: {
     title: "Read Cell Outputs",
-    summary:
-      "Read normalized outputs for one cell. Prefer this over read_notebook(include_outputs=true) when you only need one cell's outputs. Plain notebook stdout, stderr, and error payloads are returned by default. Rich rendered HTML/JS/widget output text is omitted by default; set include_rich_output_text=true only if you need the raw payload. Use output_file_path to write the result to disk and keep it out of context.",
+    summary: "Read normalized outputs for one cell. Prefer over read_notebook when only one cell's outputs are needed.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/cell-output.json"}',
     examples: [
@@ -858,8 +966,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   reveal_notebook_cells: {
     title: "Reveal Notebook Cells",
-    summary:
-      "Reveal cells in the live notebook editor and optionally select them or focus the first matching cell output. Use this to demonstrate results without reading raw .ipynb JSON.",
+    summary: "Scroll to and optionally select cells in the live editor.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1"],"select"?:boolean,"reveal_type"?:"default"|"center"|"center_if_outside_viewport"|"top","focus_target"?:"cell"|"output"}',
     examples: [
@@ -870,8 +977,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   set_notebook_cell_input_visibility: {
     title: "Set Notebook Cell Input Visibility",
-    summary:
-      "Collapse or expand the input area for selected notebook cells in the live editor UI without changing notebook content.",
+    summary: "Collapse or expand cell input areas in the editor UI. Does not change notebook content.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1"],"input_visibility":"collapse"|"expand"}',
     examples: [
@@ -881,8 +987,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   run_notebook_workflow: {
     title: "Run Notebook Workflow",
-    summary:
-      "Execute a known multi-step notebook plan in one MCP tool call. Each step.tool is an existing notebook tool name, and each step.with uses that tool's normal JSON shape. notebook_uri is inherited from the workflow root when omitted inside a step.",
+    summary: "Execute a multi-step notebook plan in one call. Each step reuses an existing tool's input shape.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","on_error"?:"stop"|"continue","steps":[{"id":"step-1","tool":"execute_cells","with":{"cell_ids":["cell-1"],"stop_on_error":true},"depends_on"?:["earlier-step"]}]}',
     examples: [
@@ -891,13 +996,13 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   get_kernel_info: {
     title: "Get Kernel Info",
-    summary: "Read best-effort kernel information for the notebook.",
+    summary: "Read current kernel metadata for the notebook.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   select_kernel: {
     title: "Select Kernel",
-    summary: "Open the VS Code kernel picker or directly select a known kernel controller by id and extension id.",
+    summary: "Open the kernel picker or select a specific kernel by controller id.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","kernel_id"?: "controller-id","extension_id"?: "publisher.extension","skip_if_already_selected"?: true}',
     examples: [
@@ -907,13 +1012,13 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   select_jupyter_interpreter: {
     title: "Select Jupyter Interpreter",
-    summary: "Open the VS Code Jupyter interpreter picker for the active notebook. VS Code may prompt to install ipykernel for the chosen environment.",
+    summary: "Open the Jupyter interpreter picker for the notebook.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   summarize_notebook_state: {
     title: "Summarize Notebook State",
-    summary: "Return a compact machine-readable notebook status summary.",
+    summary: "Return a compact notebook status summary with kernel info and error/image cell counts.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
@@ -1345,16 +1450,7 @@ export const NOTEBOOK_TOOL_OUTPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
 };
 
 export function buildToolDescription(toolName: ToolName): string {
-  const help = TOOL_HELP[toolName];
-  const examples = help.examples.map((example, index) => `${index + 1}. ${example}`).join("\n");
-  const preferred = toolName === "describe_tool" ? "" : "Preferred notebook interface.\n\n";
-  const workflowNote =
-    toolName === "run_notebook_workflow"
-      ? `\n\nWorkflow guidance:\n- Use this only when the multi-step plan is known in advance.\n- Each step.tool must be an existing notebook tool name.\n- Each step.with should match that tool's normal input JSON exactly.\n- notebook_uri may be omitted inside steps and is inherited from the workflow root.\n- Use direct tools instead when later steps need LLM inspection of earlier results.`
-      : "";
-  const compatibilityNote =
-    "\n\nCompatibility:\n- Tools are the universal interface for all MCP clients.\n- Read-only MCP resources may also be available for progressive discovery when the client supports them.\n- Structured MCP output is additive; plain text and image content remain available.";
-  return `${preferred}${help.summary}${workflowNote}${compatibilityNote}\n\nStrict JSON types only. Do not quote booleans or numbers.\n\nSchema:\n${help.schema}\n\nExamples:\n${examples}`;
+  return TOOL_HELP[toolName].summary;
 }
 
 export function describeNotebookTool(toolName?: ToolName): unknown {

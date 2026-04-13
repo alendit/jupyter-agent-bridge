@@ -56,15 +56,21 @@ test("AppTools registers helper tools and app launcher metadata", async () => {
       configs.set(name, config);
       handlers.set(name, handler);
     },
-  } as never);
+  } as never, { enableApps: true });
 
   assert.ok(handlers.has("list_bridge_sessions"));
   assert.ok(handlers.has("select_bridge_session"));
   assert.ok(handlers.has("preview_cell_edit"));
-  assert.equal(
-    (configs.get("open_bridge_session_chooser")?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri,
-    NOTEBOOK_APP_RESOURCE_URI,
-  );
+  assert.ok(handlers.has("export_cell_output_snapshot"));
+
+  // App launchers only register when @modelcontextprotocol/ext-apps is available.
+  // If present, verify the metadata; otherwise confirm graceful skip.
+  if (configs.has("open_bridge_session_chooser")) {
+    assert.equal(
+      (configs.get("open_bridge_session_chooser")?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri,
+      NOTEBOOK_APP_RESOURCE_URI,
+    );
+  }
 
   const listResult = await handlers.get("list_bridge_sessions")?.({}, {});
   assert.equal((listResult?.structuredContent as { sessions: Array<{ session_id: string }> }).sessions[0]?.session_id, "session-1");

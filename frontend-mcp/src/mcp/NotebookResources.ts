@@ -199,12 +199,12 @@ export class NotebookResources {
     server.registerResource(
       "cell_code",
       new ResourceTemplate(NOTEBOOK_RESOURCE_TEMPLATES.cellCode, {
-        list: async (extra) => this.listCellCodeResources(extra),
+        list: undefined,
       }),
       {
         title: "Notebook Cell (code)",
         description:
-          "Read-only snapshot of a single cell (source, metadata). MCP identity is jupyter://cell/code; use editor_navigation_uris in the payload for vscode:// or cursor:// links that reveal the cell input in the editor.",
+          "Read-only snapshot of a single cell (source, metadata). Requires notebook_uri and cell_id parameters.",
         mimeType: JSON_MIME_TYPE,
       },
       async (uri, _variables, extra) => {
@@ -222,12 +222,12 @@ export class NotebookResources {
     server.registerResource(
       "cell_output",
       new ResourceTemplate(NOTEBOOK_RESOURCE_TEMPLATES.cellOutput, {
-        list: async (extra) => this.listCellOutputResources(extra),
+        list: undefined,
       }),
       {
         title: "Notebook Cell (output)",
         description:
-          "Read-only normalized outputs for one cell. MCP identity is jupyter://cell/output; use editor_navigation_uris in the payload for vscode:// or cursor:// links that focus the cell output in the editor.",
+          "Read-only normalized outputs for one cell. Requires notebook_uri and cell_id parameters.",
         mimeType: JSON_MIME_TYPE,
       },
       async (uri, _variables, extra) => {
@@ -291,48 +291,6 @@ export class NotebookResources {
     };
   }
 
-  private async listCellCodeResources(extra: ToolRequestExtra): Promise<ListResourcesResult> {
-    const notebooks = await this.reads.listOpenNotebooks(extra);
-    const resources = [];
-
-    for (const notebook of notebooks) {
-      const cells = await this.reads.listNotebookCells({ notebook_uri: notebook.notebook_uri }, extra);
-      for (const cell of cells.cells) {
-        resources.push({
-          uri: buildJupyterCellUri(notebook.notebook_uri, cell.cell_id, "code"),
-          name: `${notebook.notebook_uri}#${cell.cell_id}`,
-          title: `Cell ${cell.cell_id} (code)`,
-          mimeType: JSON_MIME_TYPE,
-        });
-      }
-    }
-
-    return { resources };
-  }
-
-  private async listCellOutputResources(extra: ToolRequestExtra): Promise<ListResourcesResult> {
-    const notebooks = await this.reads.listOpenNotebooks(extra);
-    const resources = [];
-
-    for (const notebook of notebooks) {
-      const cells = await this.reads.listNotebookCells({ notebook_uri: notebook.notebook_uri }, extra);
-      for (const cell of cells.cells) {
-        if (!cell.has_outputs) {
-          continue;
-        }
-
-        resources.push({
-          uri: buildJupyterCellUri(notebook.notebook_uri, cell.cell_id, "output"),
-          name: `${notebook.notebook_uri}#${cell.cell_id}/output`,
-          title: `Cell ${cell.cell_id} (output)`,
-          mimeType: JSON_MIME_TYPE,
-        });
-      }
-    }
-
-    return { resources };
-  }
-
   private jsonResource(uri: string, value: unknown) {
     return {
       contents: [
@@ -358,13 +316,6 @@ export class NotebookResources {
 function buildNotebookScopedUri(baseUri: string, notebookUri: string): string {
   const url = new URL(baseUri);
   url.searchParams.set("notebook_uri", notebookUri);
-  return url.toString();
-}
-
-function buildJupyterCellUri(notebookUri: string, cellId: string, kind: "code" | "output"): string {
-  const url = new URL(`jupyter://cell/${kind}`);
-  url.searchParams.set("notebook_uri", notebookUri);
-  url.searchParams.set("cell_id", cellId);
   return url.toString();
 }
 
