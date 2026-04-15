@@ -343,6 +343,7 @@ const insertCellInputSchema = z
       })
       .passthrough()
       .optional(),
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -353,6 +354,7 @@ const replaceCellSourceInputSchema = z
     expected_notebook_version: notebookVersionSchema,
     expected_cell_source_fingerprint: optionalStringSchema,
     source: optionalStringSchema,
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -364,6 +366,7 @@ const patchCellSourceInputSchema = z
     format: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
     expected_cell_source_fingerprint: optionalStringSchema,
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -373,6 +376,7 @@ const formatCellInputSchema = z
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
     expected_cell_source_fingerprint: optionalStringSchema,
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -381,6 +385,7 @@ const deleteCellInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -390,6 +395,7 @@ const moveCellInputSchema = z
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
     target_index: optionalNumberSchema,
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -401,6 +407,7 @@ const executeCellsInputSchema = z
     expected_cell_source_fingerprint_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -412,6 +419,7 @@ const executeCellsAsyncInputSchema = z
     expected_cell_source_fingerprint_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
+    reveal: optionalBooleanSchema,
   })
   .passthrough();
 
@@ -1052,6 +1060,7 @@ export const NOTEBOOK_RULES = [
   "Notebook data may change between turns because the user can edit cells.",
   "Use notebook versions and source_fingerprint values to avoid stale edits or executions.",
   "Treat cell_id as stable identity and source_fingerprint as mutable cell state.",
+  "Cell-mutating and execution tools (insert_cell, replace_cell_source, patch_cell_source, format_cell, delete_cell, move_cell, execute_cells, execute_cells_async) accept an optional reveal boolean (default true) that scrolls the editor to the affected cell so the user can follow along. Pass reveal=false to suppress.",
 ];
 
 export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {

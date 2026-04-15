@@ -255,7 +255,7 @@ export class NotebookToolInputParser {
   public normalizeInsertCellRequest(input: unknown): InsertCellRequest {
     const toolName = "insert_cell";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "expected_notebook_version", "position", "cell"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "expected_notebook_version", "position", "cell", "reveal"]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -277,6 +277,7 @@ export class NotebookToolInputParser {
       "expected_notebook_version",
       "expected_cell_source_fingerprint",
       "source",
+      "reveal",
     ]);
 
     return {
@@ -307,6 +308,7 @@ export class NotebookToolInputParser {
       "format",
       "expected_notebook_version",
       "expected_cell_source_fingerprint",
+      "reveal",
     ]);
 
     return {
@@ -344,6 +346,7 @@ export class NotebookToolInputParser {
       "cell_id",
       "expected_notebook_version",
       "expected_cell_source_fingerprint",
+      "reveal",
     ]);
 
     return {
@@ -366,7 +369,7 @@ export class NotebookToolInputParser {
   public parseDeleteCellRequest(input: unknown): DeleteCellRequest {
     const toolName = "delete_cell";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "reveal"]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -381,7 +384,7 @@ export class NotebookToolInputParser {
   public parseMoveCellRequest(input: unknown): MoveCellRequest {
     const toolName = "move_cell";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "target_index"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "target_index", "reveal"]);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -404,6 +407,7 @@ export class NotebookToolInputParser {
       "expected_cell_source_fingerprint_by_id",
       "timeout_ms",
       "stop_on_error",
+      "reveal",
     ]);
 
     return {
@@ -441,6 +445,7 @@ export class NotebookToolInputParser {
       "expected_cell_source_fingerprint_by_id",
       "timeout_ms",
       "stop_on_error",
+      "reveal",
     ]);
 
     return {
