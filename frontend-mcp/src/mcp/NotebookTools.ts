@@ -174,18 +174,16 @@ export class NotebookTools {
       const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
       const request = this.parseExecuteCellsRequest(input);
-      const result = await client.executeCells(request);
-      await this.revealAfterMutation(client, result.notebook_uri, request.cell_ids, reveal);
-      return result;
+      await this.revealBeforeExecution(client, request.notebook_uri, request.cell_ids, reveal);
+      return client.executeCells(request);
     });
 
     register("execute_cells_async", async (input, extra) => {
       const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
       const request = this.parseExecuteCellsAsyncRequest(input);
-      const result = await client.executeCellsAsync(request);
-      await this.revealAfterMutation(client, result.notebook_uri, request.cell_ids, reveal);
-      return result;
+      await this.revealBeforeExecution(client, request.notebook_uri, request.cell_ids, reveal);
+      return client.executeCellsAsync(request);
     });
 
     register("get_execution_status", async (input, extra) =>
@@ -503,6 +501,26 @@ export class NotebookTools {
       });
     } catch {
       // Best-effort: do not fail the mutation if the reveal fails.
+    }
+  }
+
+  private async revealBeforeExecution(
+    client: NotebookBridgeClient,
+    notebookUri: string,
+    cellIds: string[],
+    reveal: boolean,
+  ): Promise<void> {
+    if (!reveal || cellIds.length === 0) {
+      return;
+    }
+    try {
+      await client.revealCells({
+        notebook_uri: notebookUri,
+        cell_ids: [cellIds[0]],
+        reveal_type: "center_if_outside_viewport",
+      });
+    } catch {
+      // Best-effort: do not fail execution if the reveal fails.
     }
   }
 

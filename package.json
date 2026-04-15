@@ -52,9 +52,11 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:smoke": "node tests/integration/launch-smoke.cjs",
-    "dev:host": "npm run build && code --extensionDevelopmentPath=. --new-window tests/fixtures/smoke-workspace/demo.ipynb"
+    "dev:host": "npm run build && code --extensionDevelopmentPath=. --new-window tests/fixtures/smoke-workspace/demo.ipynb",
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --baseContentUrl ."
   },
   "devDependencies": {
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.8.0"
   }
 }
