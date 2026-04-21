@@ -36,6 +36,17 @@ The project is split into a VS Code-compatible extension, a localhost JSON-RPC b
   - `.codex/config.toml` for Codex
   - `.vscode/mcp.json` for Copilot / VS Code
   - `.cursor/mcp.json` for Cursor
+- These generated MCP config files are local artifacts. They include an absolute path to the built `frontend-mcp` entrypoint plus the workspace-local `.jupyter-agent-bridge/bridge/port` path, so they should stay untracked and should not be copied between machines unchanged.
+
+## Local Artifacts
+
+The extension intentionally creates a few local, machine-specific files while it is running:
+
+- `.jupyter-agent-bridge/bridge/port` stores the active localhost bridge port for the current workspace.
+- `.mcp.json`, `.codex/config.toml`, `.vscode/mcp.json`, and `.cursor/mcp.json` are optional generated host configs that point at the bundled MCP server in your local checkout.
+- `frontend-mcp` writes logs under the system temp directory by default, or under `JUPYTER_AGENT_BRIDGE_LOG_DIR` if you override it.
+
+These files are operational state, not source files. Keep them out of commits and regenerate them on each machine.
 
 ## Usage
 

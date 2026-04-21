@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.vsix
 .vscode-test/
+.mcp.json
+.codex/config.toml
+.cursor/mcp.json
+.vscode/mcp.json
+.jupyter-agent-bridge/

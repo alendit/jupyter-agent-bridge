@@ -204,6 +204,18 @@ The extension also writes a project-local port file to each workspace folder:
 
 This gives hosts and users a stable, workspace-scoped way to pin the bundled MCP server to the active bridge without scanning every session record.
 
+### Generated Local Artifacts
+
+The extension may also write host-specific MCP config files such as `.mcp.json`, `.codex/config.toml`, `.vscode/mcp.json`, or `.cursor/mcp.json` when the user runs `Jupyter Agentic Bridge: Create MCP Config`.
+
+These files are intentionally local-only:
+
+- they embed an absolute path to the built `frontend-mcp` entrypoint in the current checkout
+- they reference the workspace-local `.jupyter-agent-bridge/bridge/port` file
+- they are setup artifacts, not durable source files
+
+Treat them the same way as the port file and other generated runtime state: keep them untracked, regenerate them per machine, and never treat them as portable checked-in config.
+
 ### Session Selection Order
 
 `frontend-mcp` selects a session using this order:
