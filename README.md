@@ -27,6 +27,14 @@ The project is split into a VS Code-compatible extension, a localhost JSON-RPC b
 
 6. Reload or restart the selected host so it picks up the new server. If you chose `Copy to Clipboard`, paste the copied snippet into the host config manually.
 
+## CI And Releases
+
+- GitHub Actions is the only checked-in CI for this repository.
+- Pushes to `main`, pull requests targeting `main`, and manual workflow runs execute the full workspace build, typecheck, test, and VSIX packaging flow.
+- Pushing a tag that starts with `v`, for example `v0.1.0`, runs the same checks and then publishes the packaged extension to Open VSX.
+- Open VSX publishing requires an `OVSX_PAT` repository secret with permission to publish under the `alendit` namespace.
+- Before the first release, create the `alendit` namespace in Open VSX and claim ownership of it, because the extension `publisher` field is used as the Open VSX namespace.
+
 ### VS Code And Cursor Notes
 
 - The install step is the same: use `Install from Location...` and pick the repo root.
