@@ -2,6 +2,7 @@
   "name": "jupyter-agent-bridge",
   "displayName": "Jupyter Agentic Bridge",
   "description": "Expose the live Jupyter notebook in VS Code-compatible editors as MCP tools for agents.",
+  "license": "MIT",
   "publisher": "alendit",
   "version": "0.1.0",
   "main": "./extension/dist/extension/src/extension.js",
