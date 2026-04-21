@@ -1,4 +1,4 @@
-import { NotebookCellKind, NotebookOutlineHeading } from "@jupyter-agent-bridge/protocol";
+import { NotebookCellKind, NotebookOutlineHeading } from "@jupyter-agent-bridge/protocol/notebook";
 
 export interface OutlineSourceCell {
   cell_id: string;

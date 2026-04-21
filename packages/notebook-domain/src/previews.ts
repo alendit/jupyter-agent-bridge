@@ -4,7 +4,7 @@ import {
   NotebookCellPreview,
   NotebookOutlineHeading,
   OutputKind,
-} from "@jupyter-agent-bridge/protocol";
+} from "@jupyter-agent-bridge/protocol/notebook";
 
 const MAX_PREVIEW_LENGTH = 120;
 

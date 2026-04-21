@@ -1,4 +1,4 @@
-import { ListNotebookVariablesRequest, NotebookVariableSummary } from "@jupyter-agent-bridge/protocol";
+import { ListNotebookVariablesRequest, NotebookVariableSummary } from "@jupyter-agent-bridge/protocol/notebook";
 
 const DEFAULT_MAX_RESULTS = 200;
 const MAX_RESULTS_LIMIT = 1000;

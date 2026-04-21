@@ -6,6 +6,9 @@
     "paths": {
       "@jupyter-agent-bridge/protocol": [
         "../protocol/src/index.ts"
+      ],
+      "@jupyter-agent-bridge/protocol/notebook": [
+        "../protocol/src/notebook.ts"
       ]
     },
     "types": [

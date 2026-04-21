@@ -1,4 +1,4 @@
-import { KernelInfo, KernelPendingAction, KernelState } from "@jupyter-agent-bridge/protocol";
+import { KernelInfo, KernelPendingAction, KernelState } from "@jupyter-agent-bridge/protocol/notebook";
 
 export interface NotebookKernelMetadataSnapshot {
   kernel_label: string | null;
