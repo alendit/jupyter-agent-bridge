@@ -4,7 +4,7 @@
   "description": "Expose the live Jupyter notebook in VS Code-compatible editors as MCP tools for agents.",
   "license": "MIT",
   "publisher": "alendit",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "icon": "icon.png",
   "repository": {
     "type": "git",
@@ -55,10 +55,12 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test:root": "node --test tests/cut-release.test.cjs",
+    "test": "npm run test:root && npm run test --workspaces --if-present",
     "test:smoke": "node tests/integration/launch-smoke.cjs",
     "dev:host": "npm run build && code --extensionDevelopmentPath=. --new-window tests/fixtures/smoke-workspace/demo.ipynb",
-    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --baseContentUrl ."
+    "package": "npm run build && vsce package --no-dependencies --allow-missing-repository --baseContentUrl .",
+    "cut-release": "node scripts/cut-release.mjs"
   },
   "devDependencies": {
     "@vscode/test-electron": "^2.5.2",
