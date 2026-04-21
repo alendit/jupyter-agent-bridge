@@ -5,8 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { NotebookTools } from "./NotebookTools";
 import { FIXED_RESOURCE_URIS, NOTEBOOK_RESOURCE_TEMPLATES, NotebookResources } from "./NotebookResources";
-import { CORE_TOOLS, TOOL_NAMES, toolsForProfile } from "./NotebookToolCatalog";
-import { buildEditorNavigationUris } from "./cellNavigationLinks";
+import { CORE_TOOLS, TOOL_NAMES } from "./NotebookToolCatalog";
 
 test("toToolResult emits native MCP image content and omits base64 from text payloads", async () => {
   const tools = new NotebookTools(async () => {
@@ -366,7 +365,7 @@ test("NotebookResources registers cell code and cell output as template-only (no
   }
 });
 
-test("NotebookResources adds editor navigation URIs in the frontend shell", async () => {
+test("NotebookResources keeps cell resources read-only", async () => {
   const resources = new NotebookResources(async () => ({
     getSessionInfo: async () => {
       throw new Error("unused");
@@ -505,7 +504,7 @@ test("NotebookResources adds editor navigation URIs in the frontend shell", asyn
     {},
   );
   const payload = JSON.parse(String(result?.contents[0]?.text)) as Record<string, unknown>;
-  assert.deepEqual(payload.editor_navigation_uris, buildEditorNavigationUris("file:///workspace/demo.ipynb", "cell-1", "code"));
+  assert.equal("editor_navigation_uris" in payload, false);
 });
 
 test("normalizeInsertCellRequest accepts the simpler position.mode shape", () => {

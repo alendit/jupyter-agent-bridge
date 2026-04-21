@@ -368,12 +368,13 @@ The MCP shell exposes five additive discovery layers:
 The current MCP Apps layer uses one shared HTML resource, `ui://jupyter-agent-bridge/notebook-console.html`, behind additive launcher tools for:
 
 - bridge session selection
+- cell code preview with live notebook reveal actions
 - replace/patch change review
 - async execution monitoring
 - notebook triage across diagnostics, search, and symbols
 - normalized cell-output preview plus live notebook reveal/export helpers
 
-These views remain thin: they call existing bridge-backed tools, and they must not introduce notebook-only state or alternate mutation logic in the browser.
+These views remain thin: they call existing bridge-backed tools, and they must not introduce notebook-only state or alternate mutation logic in the browser. Read-only MCP resources stay action-free; app surfaces are the place for host-rendered snippets and explicit navigation controls such as "go to cell" or "reveal output".
 
 Tools remain primary. Resources and structured output must never become mandatory for basic notebook use.
 

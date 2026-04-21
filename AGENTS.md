@@ -17,6 +17,28 @@ The live packages are:
 
 Keep VS Code API usage isolated to `extension/`. Keep transport code in `bridge/` modules, notebook policy in `packages/notebook-domain`, transport contracts in `packages/protocol`, and MCP-specific adapters out of notebook logic.
 
+## Architecture Guidance
+Use this section to evaluate decomposition, dependency direction, side-effect placement, interface design, and testability.
+
+### Hard Constraints
+- Keep core notebook policy and protocol behavior isolated from editor, transport, filesystem, process, and network side effects.
+- Keep dependencies flowing from unstable code toward stable code: editor, MCP, and bridge adapters may depend on protocol and domain code, but core policy must not depend on UI or transport glue.
+- Do not mix unrelated concerns into one coordinator. Discovery, auth, session routing, notebook policy, and editor integration should remain separable.
+- Prefer application or domain services over putting business logic into UI commands, transport handlers, webhook-style entrypoints, or tool handlers.
+- Do not introduce an abstraction unless it makes a concrete likely change easier, such as transport variation, host variation, or discovery variation.
+- Do not create shared interfaces that implementations can only satisfy by narrowing behavior, ignoring requirements, or throwing away required obligations.
+
+### Required Self-Check For Design-Sensitive Changes
+For design-sensitive changes, include answers to these in the final note, PR description, or equivalent handoff:
+1. What component owns this behavior, and why?
+2. Does this change increase or reduce coupling?
+3. Did any dependency start pointing the wrong way?
+4. Could any side effect be moved outward into an adapter or shell?
+5. Are the abstractions semantically real?
+6. Does any interface force an implementation to ignore, narrow, or reject required behavior?
+7. What is the next likely change this makes easier?
+8. What tests prove the core behavior independently of the full system?
+
 ## Build, Test, and Development Commands
 - `npm run build` for compiling all packages
 - `npm run typecheck` for workspace TypeScript verification

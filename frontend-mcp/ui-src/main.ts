@@ -7,7 +7,7 @@ import {
 } from "@modelcontextprotocol/ext-apps";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type {
-  BridgeSessionSummary,
+  CellCodePreviewViewPayload,
   CellEditReviewViewPayload,
   CellOutputPreviewViewPayload,
   ExecutionMonitorViewPayload,
@@ -19,18 +19,21 @@ import type { PreviewCellEditRequest } from "../../packages/protocol/src";
 
 const app = new App({ name: "Jupyter Agentic Bridge UI", version: "0.1.0" });
 const root = mustGetRoot();
+
 let currentView: NotebookAppViewPayload | null = null;
 let pollTimer: number | null = null;
 let banner: { kind: "info" | "error"; message: string } | null = null;
 
 app.ontoolresult = (result) => {
   const payload = result.structuredContent as NotebookAppViewPayload | undefined;
-  if (payload) {
-    currentView = payload;
-    banner = null;
-    schedulePolling();
-    render();
+  if (!payload) {
+    return;
   }
+
+  currentView = payload;
+  banner = null;
+  schedulePolling();
+  render();
 };
 
 app.onhostcontextchanged = (ctx) => {
@@ -49,67 +52,78 @@ void app.connect(new PostMessageTransport()).then(render);
 
 function render(): void {
   if (!currentView) {
-    root.innerHTML = `<div class="panel"><h1>Notebook Console</h1><p>Waiting for tool payload.</p></div>`;
+    root.innerHTML = renderShell({
+      title: "Notebook Console",
+      subtitle: "Waiting for an MCP App payload.",
+      body: `<section class="surface surface--empty"><p class="muted">Run an app-backed tool such as <code>open_notebook_triage</code> or <code>open_cell_code_preview</code>.</p></section>`,
+    });
     return;
   }
 
-  const bannerHtml = banner
-    ? `<div class="banner ${banner.kind}">${escapeHtml(banner.message)}</div>`
-    : "";
-
   switch (currentView.view) {
     case "session_chooser":
-      renderSessionChooser(currentView, bannerHtml);
+      renderSessionChooser(currentView);
       return;
     case "cell_edit_review":
-      renderCellEditReview(currentView, bannerHtml);
+      renderCellEditReview(currentView);
       return;
     case "execution_monitor":
-      renderExecutionMonitor(currentView, bannerHtml);
+      renderExecutionMonitor(currentView);
       return;
     case "notebook_triage":
-      renderNotebookTriage(currentView, bannerHtml);
+      renderNotebookTriage(currentView);
       return;
     case "cell_output_preview":
-      renderCellOutputPreview(currentView, bannerHtml);
+      renderCellOutputPreview(currentView);
+      return;
+    case "cell_code_preview":
+      renderCellCodePreview(currentView);
       return;
   }
 }
 
-function renderSessionChooser(view: SessionChooserViewPayload, bannerHtml: string): void {
-  root.innerHTML = `
-    <div class="panel">
-      <h1>Bridge Sessions</h1>
-      ${bannerHtml}
-      <p class="muted">Choose which VS Code window this MCP server should talk to.</p>
-      <div class="actions">
-        <button data-action="refresh-sessions">Refresh</button>
-        <button data-action="clear-session">Clear Pin</button>
-      </div>
-      <div class="list">
-        ${view.sessions
-          .map(
-            (session) => `
-              <button class="list-item" data-action="pin-session" data-session-id="${escapeAttribute(session.session_id)}">
-                <strong>${escapeHtml(session.window_title)}</strong>
-                <span>${escapeHtml(compactWorkspace(session.workspace_folders))}</span>
-                <code>${escapeHtml(session.session_id)}</code>
-                ${view.pinned_session_id === session.session_id ? '<span class="pill">Pinned</span>' : ""}
-              </button>`,
-          )
-          .join("")}
-      </div>
-    </div>
-  `;
+function renderSessionChooser(view: SessionChooserViewPayload): void {
+  root.innerHTML = renderShell({
+    eyebrow: "Workspace Binding",
+    title: "Bridge Sessions",
+    subtitle: "Choose which editor window this MCP server should control.",
+    actions: `
+      <button class="button" data-action="refresh-sessions">Refresh</button>
+      <button class="button button--ghost" data-action="clear-session">Clear Pin</button>
+    `,
+    body: `
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Live Sessions</h2>
+          <p class="muted">Pins are local to this MCP process and help when several notebook windows are open.</p>
+        </div>
+        <div class="card-grid">
+          ${view.sessions
+            .map(
+              (session) => `
+                <button class="card card--interactive" data-action="pin-session" data-session-id="${escapeAttribute(session.session_id)}">
+                  <div class="card-topline">
+                    <span class="card-title">${escapeHtml(session.window_title)}</span>
+                    ${view.pinned_session_id === session.session_id ? '<span class="chip chip--accent">Pinned</span>' : ""}
+                  </div>
+                  <div class="card-meta">
+                    <span>${escapeHtml(compactWorkspace(session.workspace_folders))}</span>
+                    <code>${escapeHtml(session.session_id)}</code>
+                  </div>
+                </button>`,
+            )
+            .join("")}
+        </div>
+      </section>
+    `,
+  });
 
   bindAction("refresh-sessions", async () => {
-    const result = await app.callServerTool({ name: "open_bridge_session_chooser", arguments: {} });
-    hydrateFromToolResult(result);
+    hydrateFromToolResult(await app.callServerTool({ name: "open_bridge_session_chooser", arguments: {} }));
   });
   bindAction("clear-session", async () => {
     await app.callServerTool({ name: "select_bridge_session", arguments: { session_id: null } });
-    const result = await app.callServerTool({ name: "open_bridge_session_chooser", arguments: {} });
-    hydrateFromToolResult(result);
+    hydrateFromToolResult(await app.callServerTool({ name: "open_bridge_session_chooser", arguments: {} }));
   });
   bindAction("pin-session", async (element) => {
     const sessionId = element.getAttribute("data-session-id");
@@ -118,38 +132,48 @@ function renderSessionChooser(view: SessionChooserViewPayload, bannerHtml: strin
     }
 
     await app.callServerTool({ name: "select_bridge_session", arguments: { session_id: sessionId } });
-    const result = await app.callServerTool({ name: "open_bridge_session_chooser", arguments: {} });
-    hydrateFromToolResult(result);
+    hydrateFromToolResult(await app.callServerTool({ name: "open_bridge_session_chooser", arguments: {} }));
   });
 }
 
-function renderCellEditReview(view: CellEditReviewViewPayload, bannerHtml: string): void {
-  root.innerHTML = `
-    <div class="panel">
-      <h1>Change Review</h1>
-      ${bannerHtml}
-      <p class="muted"><code>${escapeHtml(view.preview.cell_id)}</code> in <code>${escapeHtml(view.preview.notebook_uri)}</code></p>
-      <div class="actions">
-        <button data-action="refresh-preview">Refresh Preview</button>
-        <button data-action="reveal-cell">Reveal In Notebook</button>
-        <button class="primary" data-action="apply-change">Apply Change</button>
-      </div>
-      <div class="grid two">
-        <section>
-          <h2>Current</h2>
-          <pre>${escapeHtml(view.preview.current_source)}</pre>
-        </section>
-        <section>
-          <h2>Proposed</h2>
-          <pre>${escapeHtml(view.preview.proposed_source)}</pre>
-        </section>
-      </div>
-      <section>
-        <h2>Unified Diff</h2>
-        <pre>${escapeHtml(view.preview.diff_unified)}</pre>
+function renderCellEditReview(view: CellEditReviewViewPayload): void {
+  root.innerHTML = renderShell({
+    eyebrow: "Review Change",
+    title: "Cell Edit Review",
+    subtitle: renderNotebookLocation(view.preview.notebook_uri, view.preview.cell_id),
+    actions: `
+      <button class="button" data-action="refresh-preview">Refresh</button>
+      <button class="button button--ghost" data-action="reveal-cell">Go To Cell</button>
+      <button class="button button--ghost" data-action="open-snippet">Open Snippet</button>
+      <button class="button button--primary" data-action="apply-change">Apply Change</button>
+    `,
+    body: `
+      <section class="surface">
+        <div class="metric-grid">
+          ${renderMetric("Operation", escapeHtml(view.preview.operation))}
+          ${renderMetric("Language", escapeHtml(view.request.operation === "patch_cell_source" ? "code" : "source"))}
+          ${renderMetric("Notebook Version", escapeHtml(String(view.preview.notebook_version)))}
+        </div>
       </section>
-    </div>
-  `;
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Source</h2>
+          <p class="muted">Compare the current source with the proposed edit before applying it to the live notebook.</p>
+        </div>
+        <div class="split-layout">
+          ${renderCodeFrame(view.preview.current_source, "current", 1, "Current")}
+          ${renderCodeFrame(view.preview.proposed_source, "proposed", 1, "Proposed")}
+        </div>
+      </section>
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Unified Diff</h2>
+          <p class="muted">Patch preview rendered in the app, separate from the live editor.</p>
+        </div>
+        ${renderDiffFrame(view.preview.diff_unified, view.request.operation)}
+      </section>
+    `,
+  });
 
   bindAction("refresh-preview", async () => {
     const result = await app.callServerTool({ name: "preview_cell_edit", arguments: view.request });
@@ -163,24 +187,17 @@ function renderCellEditReview(view: CellEditReviewViewPayload, bannerHtml: strin
     render();
   });
   bindAction("reveal-cell", async () => {
-    await app.callServerTool({
-      name: "reveal_notebook_cells",
-      arguments: {
-        notebook_uri: view.preview.notebook_uri,
-        cell_ids: [view.preview.cell_id],
-        select: true,
-      },
-    });
-    banner = { kind: "info", message: "Cell revealed in the notebook." };
+    await revealCell(view.preview.notebook_uri, view.preview.cell_id, "code");
+    banner = { kind: "info", message: "Cell revealed in the live notebook." };
     render();
+  });
+  bindAction("open-snippet", async () => {
+    await openCellCodePreview(view.preview.notebook_uri, view.preview.cell_id);
   });
   bindAction("apply-change", async () => {
     const toolName =
       view.request.operation === "replace_cell_source" ? "replace_cell_source" : "patch_cell_source";
-    const result = await app.callServerTool({
-      name: toolName,
-      arguments: view.request,
-    });
+    const result = await app.callServerTool({ name: toolName, arguments: view.request });
     if (result.isError) {
       showErrorFromResult(result);
       return;
@@ -197,25 +214,36 @@ function renderCellEditReview(view: CellEditReviewViewPayload, bannerHtml: strin
   });
 }
 
-function renderExecutionMonitor(view: ExecutionMonitorViewPayload, bannerHtml: string): void {
-  root.innerHTML = `
-    <div class="panel">
-      <h1>Execution Monitor</h1>
-      ${bannerHtml}
-      <p class="muted"><code>${escapeHtml(view.execution.execution_id)}</code> • ${escapeHtml(view.execution.status)}</p>
-      <div class="actions">
-        <button data-action="refresh-execution">Refresh</button>
-        <button data-action="interrupt-execution">Interrupt</button>
-        <button data-action="retry-execution">Retry</button>
-        <button data-action="reveal-output">Reveal Output</button>
-        <button data-action="wait-kernel-ready">Wait For Kernel Ready</button>
-      </div>
-      <section>
-        <h2>Status</h2>
-        <pre>${escapeHtml(JSON.stringify(view.execution, null, 2))}</pre>
+function renderExecutionMonitor(view: ExecutionMonitorViewPayload): void {
+  root.innerHTML = renderShell({
+    eyebrow: "Execution",
+    title: "Execution Monitor",
+    subtitle: `${escapeHtml(view.execution.status)} • ${escapeHtml(view.execution.execution_id)}`,
+    actions: `
+      <button class="button" data-action="refresh-execution">Refresh</button>
+      <button class="button button--ghost" data-action="interrupt-execution">Interrupt</button>
+      <button class="button button--ghost" data-action="retry-execution">Retry</button>
+      <button class="button button--ghost" data-action="reveal-output">Reveal Output</button>
+      <button class="button button--ghost" data-action="wait-kernel-ready">Wait For Kernel Ready</button>
+    `,
+    body: `
+      <section class="surface">
+        <div class="metric-grid">
+          ${renderMetric("Notebook", escapeHtml(fileNameFromUri(view.execution.notebook_uri)))}
+          ${renderMetric("Cells", escapeHtml(String(view.execution.cell_ids.length)))}
+          ${renderMetric("Status", escapeHtml(view.execution.status))}
+          ${renderMetric("Started", escapeHtml(view.execution.started_at ?? "pending"))}
+        </div>
       </section>
-    </div>
-  `;
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Status Payload</h2>
+          <p class="muted">Structured execution details as returned by the bridge.</p>
+        </div>
+        ${renderJsonFrame(view.execution, "Execution status")}
+      </section>
+    `,
+  });
 
   bindAction("refresh-execution", async () => {
     await refreshExecutionMonitor(view);
@@ -260,22 +288,22 @@ function renderExecutionMonitor(view: ExecutionMonitorViewPayload, bannerHtml: s
       return;
     }
 
-    const openResult = await app.callServerTool({
-      name: "open_execution_monitor",
-      arguments: { execution_id: (rerun.structuredContent as { execution_id: string }).execution_id },
-    });
-    hydrateFromToolResult(openResult);
+    hydrateFromToolResult(
+      await app.callServerTool({
+        name: "open_execution_monitor",
+        arguments: { execution_id: (rerun.structuredContent as { execution_id: string }).execution_id },
+      }),
+    );
   });
   bindAction("reveal-output", async () => {
-    await app.callServerTool({
-      name: "reveal_notebook_cells",
-      arguments: {
-        notebook_uri: view.execution.notebook_uri,
-        cell_ids: view.execution.cell_ids,
-        focus_target: "output",
-      },
-    });
-    banner = { kind: "info", message: "Execution cells revealed in the notebook." };
+    if (view.execution.cell_ids.length === 0) {
+      banner = { kind: "error", message: "No execution cells were recorded for this run." };
+      render();
+      return;
+    }
+
+    await revealCell(view.execution.notebook_uri, view.execution.cell_ids[0], "output");
+    banner = { kind: "info", message: "Execution output revealed in the notebook." };
     render();
   });
   bindAction("wait-kernel-ready", async () => {
@@ -293,76 +321,104 @@ function renderExecutionMonitor(view: ExecutionMonitorViewPayload, bannerHtml: s
   });
 }
 
-function renderNotebookTriage(view: NotebookTriageViewPayload, bannerHtml: string): void {
+function renderNotebookTriage(view: NotebookTriageViewPayload): void {
   const diagnostics = view.diagnostics.diagnostics;
   const searchMatches = view.search?.matches ?? [];
   const symbols = view.symbols?.symbols ?? [];
+  const previewById = new Map(view.cells.cells.map((cell) => [cell.cell_id, cell]));
 
-  root.innerHTML = `
-    <div class="panel">
-      <h1>Notebook Triage</h1>
-      ${bannerHtml}
-      <p class="muted"><code>${escapeHtml(view.notebook_uri)}</code></p>
-      <div class="actions">
-        <button data-action="refresh-triage">Refresh</button>
-      </div>
-      <div class="stats">
-        <div class="stat"><span>Errors</span><strong>${diagnostics.filter((item) => item.severity === "error").length}</strong></div>
-        <div class="stat"><span>Diagnostics</span><strong>${diagnostics.length}</strong></div>
-        <div class="stat"><span>Matches</span><strong>${searchMatches.length}</strong></div>
-        <div class="stat"><span>Symbols</span><strong>${symbols.length}</strong></div>
-      </div>
-      <section>
-        <h2>Diagnostics</h2>
-        ${diagnostics
-          .map(
-            (item) => `
-              <button class="list-item" data-action="triage-reveal" data-cell-id="${escapeAttribute(item.cell_id)}">
-                <strong>${escapeHtml(item.severity.toUpperCase())}</strong>
-                <span>${escapeHtml(item.message)}</span>
-                <code>${escapeHtml(item.cell_id)}</code>
-              </button>`,
-          )
-          .join("") || '<p class="muted">No diagnostics.</p>'}
+  root.innerHTML = renderShell({
+    eyebrow: "Notebook Review",
+    title: "Notebook Triage",
+    subtitle: escapeHtml(view.notebook_uri),
+    actions: `
+      <button class="button" data-action="refresh-triage">Refresh</button>
+    `,
+    body: `
+      <section class="surface">
+        <div class="metric-grid">
+          ${renderMetric("Errors", escapeHtml(String(diagnostics.filter((item) => item.severity === "error").length)))}
+          ${renderMetric("Diagnostics", escapeHtml(String(diagnostics.length)))}
+          ${renderMetric("Matches", escapeHtml(String(searchMatches.length)))}
+          ${renderMetric("Symbols", escapeHtml(String(symbols.length)))}
+        </div>
       </section>
-      <section>
-        <h2>Search Matches</h2>
-        ${searchMatches
-          .map(
-            (item) => `
-              <button class="list-item" data-action="triage-reveal" data-cell-id="${escapeAttribute(item.cell_id)}">
-                <strong>${escapeHtml(item.match_text)}</strong>
-                <span>${escapeHtml(item.line_text)}</span>
-                <code>${escapeHtml(item.cell_id)}</code>
-              </button>`,
-          )
-          .join("") || '<p class="muted">No search matches.</p>'}
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Diagnostics</h2>
+          <p class="muted">Error and warning hotspots with direct notebook navigation.</p>
+        </div>
+        <div class="stack">
+          ${diagnostics
+            .map((item) => renderInsightCard({
+              title: item.message,
+              badge: item.severity.toUpperCase(),
+              badgeClass: item.severity === "error" ? "chip--danger" : "chip--warning",
+              cellId: item.cell_id,
+              snippet: previewById.get(item.cell_id)?.source_preview ?? "",
+            }))
+            .join("") || '<p class="muted">No diagnostics.</p>'}
+        </div>
       </section>
-      <section>
-        <h2>Symbols</h2>
-        ${symbols
-          .map(
-            (item) => `
-              <button class="list-item" data-action="triage-symbol" data-cell-id="${escapeAttribute(item.cell_id)}" data-line="${item.selection_start_line}" data-column="${item.selection_start_column}">
-                <strong>${escapeHtml(item.name)}</strong>
-                <span>${escapeHtml(item.kind)}</span>
-                <code>${escapeHtml(item.cell_id)}</code>
-              </button>`,
-          )
-          .join("") || '<p class="muted">No symbols.</p>'}
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Search Matches</h2>
+          <p class="muted">Query hits with snippet context from the notebook preview index.</p>
+        </div>
+        <div class="stack">
+          ${searchMatches
+            .map((item) => renderInsightCard({
+              title: item.match_text,
+              badge: "Match",
+              badgeClass: "chip--accent",
+              cellId: item.cell_id,
+              detail: item.line_text,
+              snippet: previewById.get(item.cell_id)?.source_preview ?? "",
+            }))
+            .join("") || '<p class="muted">No search matches.</p>'}
+        </div>
       </section>
-    </div>
-  `;
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Symbols</h2>
+          <p class="muted">Symbol definitions with quick snippet previews and notebook jumps.</p>
+        </div>
+        <div class="stack">
+          ${symbols
+            .map(
+              (item) => `
+                <article class="insight-card">
+                  <div class="insight-card__header">
+                    <div>
+                      <h3>${escapeHtml(item.name)}</h3>
+                      <p class="muted">${escapeHtml(item.kind)} • <code>${escapeHtml(item.cell_id)}</code></p>
+                    </div>
+                    <span class="chip chip--accent">Symbol</span>
+                  </div>
+                  ${previewById.get(item.cell_id)?.source_preview ? renderMiniSnippet(previewById.get(item.cell_id)?.source_preview ?? "", previewById.get(item.cell_id)?.language ?? null) : ""}
+                  <div class="button-row">
+                    <button class="button button--ghost" data-action="triage-reveal" data-cell-id="${escapeAttribute(item.cell_id)}">Go To Cell</button>
+                    <button class="button button--ghost" data-action="triage-open-snippet" data-cell-id="${escapeAttribute(item.cell_id)}">Open Snippet</button>
+                    <button class="button" data-action="triage-symbol" data-cell-id="${escapeAttribute(item.cell_id)}" data-line="${item.selection_start_line}" data-column="${item.selection_start_column}">Find Definition</button>
+                  </div>
+                </article>`,
+            )
+            .join("") || '<p class="muted">No symbols.</p>'}
+        </div>
+      </section>
+    `,
+  });
 
   bindAction("refresh-triage", async () => {
-    const result = await app.callServerTool({
-      name: "open_notebook_triage",
-      arguments: {
-        notebook_uri: view.notebook_uri,
-        query: view.query,
-      },
-    });
-    hydrateFromToolResult(result);
+    hydrateFromToolResult(
+      await app.callServerTool({
+        name: "open_notebook_triage",
+        arguments: {
+          notebook_uri: view.notebook_uri,
+          query: view.query,
+        },
+      }),
+    );
   });
   bindAction("triage-reveal", async (element) => {
     const cellId = element.getAttribute("data-cell-id");
@@ -370,16 +426,17 @@ function renderNotebookTriage(view: NotebookTriageViewPayload, bannerHtml: strin
       return;
     }
 
-    await app.callServerTool({
-      name: "reveal_notebook_cells",
-      arguments: {
-        notebook_uri: view.notebook_uri,
-        cell_ids: [cellId],
-        select: true,
-      },
-    });
+    await revealCell(view.notebook_uri, cellId, "code");
     banner = { kind: "info", message: `Revealed ${cellId} in the notebook.` };
     render();
+  });
+  bindAction("triage-open-snippet", async (element) => {
+    const cellId = element.getAttribute("data-cell-id");
+    if (!cellId) {
+      return;
+    }
+
+    await openCellCodePreview(view.notebook_uri, cellId);
   });
   bindAction("triage-symbol", async (element) => {
     const cellId = element.getAttribute("data-cell-id");
@@ -404,35 +461,43 @@ function renderNotebookTriage(view: NotebookTriageViewPayload, bannerHtml: strin
       showErrorFromResult(result);
       return;
     }
-    banner = { kind: "info", message: "Definition lookup completed. See tool result in chat if needed." };
+
+    banner = { kind: "info", message: "Definition lookup completed. Inspect the tool result in chat if needed." };
     render();
   });
 }
 
-function renderCellOutputPreview(view: CellOutputPreviewViewPayload, bannerHtml: string): void {
+function renderCellOutputPreview(view: CellOutputPreviewViewPayload): void {
   const outputs = view.output_index === undefined ? view.result.outputs : [view.result.outputs[view.output_index]].filter(Boolean);
-  root.innerHTML = `
-    <div class="panel">
-      <h1>Cell Output Preview</h1>
-      ${bannerHtml}
-      <p class="muted"><code>${escapeHtml(view.cell_id)}</code> in <code>${escapeHtml(view.notebook_uri)}</code></p>
-      <div class="actions">
-        <button data-action="reveal-output">Reveal In Notebook</button>
-        <button data-action="export-output">Export Snapshot</button>
-      </div>
-      ${outputs.map(renderOutputCard).join("") || '<p class="muted">No outputs.</p>'}
-    </div>
-  `;
 
+  root.innerHTML = renderShell({
+    eyebrow: "Output",
+    title: "Cell Output Preview",
+    subtitle: renderNotebookLocation(view.notebook_uri, view.cell_id),
+    actions: `
+      <button class="button button--ghost" data-action="open-code">Open Snippet</button>
+      <button class="button button--ghost" data-action="reveal-output">Reveal Output</button>
+      <button class="button" data-action="export-output">Export Snapshot</button>
+    `,
+    body: `
+      <section class="surface">
+        <div class="metric-grid">
+          ${renderMetric("Outputs", escapeHtml(String(outputs.length)))}
+          ${renderMetric("Cell", escapeHtml(view.cell_id))}
+          ${renderMetric("Notebook", escapeHtml(fileNameFromUri(view.notebook_uri)))}
+        </div>
+      </section>
+      <section class="stack">
+        ${outputs.map(renderOutputCard).join("") || '<section class="surface"><p class="muted">No outputs.</p></section>'}
+      </section>
+    `,
+  });
+
+  bindAction("open-code", async () => {
+    await openCellCodePreview(view.notebook_uri, view.cell_id);
+  });
   bindAction("reveal-output", async () => {
-    await app.callServerTool({
-      name: "reveal_notebook_cells",
-      arguments: {
-        notebook_uri: view.notebook_uri,
-        cell_ids: [view.cell_id],
-        focus_target: "output",
-      },
-    });
+    await revealCell(view.notebook_uri, view.cell_id, "output");
     banner = { kind: "info", message: "Output revealed in the live notebook." };
     render();
   });
@@ -449,29 +514,108 @@ function renderCellOutputPreview(view: CellOutputPreviewViewPayload, bannerHtml:
       showErrorFromResult(result);
       return;
     }
-    const outputFilePath = String((result.structuredContent as { output_file_path: string }).output_file_path);
-    banner = { kind: "info", message: `Snapshot exported to ${outputFilePath}.` };
+
+    banner = {
+      kind: "info",
+      message: `Snapshot exported to ${String((result.structuredContent as { output_file_path: string }).output_file_path)}.`,
+    };
+    render();
+  });
+}
+
+function renderCellCodePreview(view: CellCodePreviewViewPayload): void {
+  const metadataEntries = Object.entries(view.cell.metadata ?? {});
+
+  root.innerHTML = renderShell({
+    eyebrow: "Code Navigation",
+    title: `Cell ${escapeHtml(String(view.preview.index + 1))}`,
+    subtitle: renderNotebookLocation(view.notebook_uri, view.cell.cell_id),
+    actions: `
+      <button class="button button--ghost" data-action="reveal-cell">Go To Cell</button>
+      ${view.preview.has_outputs ? '<button class="button button--ghost" data-action="open-output">Open Output</button>' : ""}
+      ${view.preview.has_outputs ? '<button class="button" data-action="reveal-output">Reveal Output</button>' : ""}
+    `,
+    body: `
+      <section class="surface">
+        <div class="metric-grid">
+          ${renderMetric("Kind", escapeHtml(view.cell.kind))}
+          ${renderMetric("Language", escapeHtml(view.cell.language ?? "plain text"))}
+          ${renderMetric("Lines", escapeHtml(String(view.preview.source_line_count)))}
+          ${renderMetric("Outputs", escapeHtml(view.preview.has_outputs ? view.preview.output_kinds.join(", ") || "yes" : "none"))}
+        </div>
+        ${view.preview.section_path.length > 0 ? `<div class="chip-row">${view.preview.section_path.map((segment) => `<span class="chip">${escapeHtml(segment)}</span>`).join("")}</div>` : ""}
+      </section>
+      <section class="surface">
+        <div class="surface-header">
+          <h2>Source</h2>
+          <p class="muted">Live cell source resolved through the bridge, rendered as an app-side snippet.</p>
+        </div>
+        ${renderCodeFrame(view.cell.source, view.cell.language, view.cell.notebook_line_start, "Cell source")}
+      </section>
+      ${
+        metadataEntries.length > 0
+          ? `
+            <section class="surface">
+              <div class="surface-header">
+                <h2>Metadata</h2>
+                <p class="muted">Notebook cell metadata is shown separately from the source.</p>
+              </div>
+              ${renderJsonFrame(view.cell.metadata, "Metadata")}
+            </section>
+          `
+          : ""
+      }
+    `,
+  });
+
+  bindAction("reveal-cell", async () => {
+    await revealCell(view.notebook_uri, view.cell.cell_id, "code");
+    banner = { kind: "info", message: "Cell revealed in the live notebook." };
+    render();
+  });
+  bindAction("open-output", async () => {
+    hydrateFromToolResult(
+      await app.callServerTool({
+        name: "open_cell_output_preview",
+        arguments: {
+          notebook_uri: view.notebook_uri,
+          cell_id: view.cell.cell_id,
+        },
+      }),
+    );
+  });
+  bindAction("reveal-output", async () => {
+    await revealCell(view.notebook_uri, view.cell.cell_id, "output");
+    banner = { kind: "info", message: "Cell output revealed in the live notebook." };
     render();
   });
 }
 
 function renderOutputCard(output: Record<string, unknown>): string {
   const kind = String(output.kind ?? "unknown");
+
   if (kind === "image" && typeof output.base64 === "string" && typeof output.mime === "string") {
     return `
-      <section>
-        <h2>${escapeHtml(kind)}</h2>
-        <img alt="Notebook output image" src="data:${escapeAttribute(output.mime)};base64,${escapeAttribute(output.base64)}" />
+      <section class="surface">
+        <div class="surface-header">
+          <h2>${escapeHtml(kind)}</h2>
+          <p class="muted">${escapeHtml(String(output.mime))}</p>
+        </div>
+        <div class="image-frame">
+          <img alt="Notebook output image" src="data:${escapeAttribute(output.mime)};base64,${escapeAttribute(output.base64)}" />
+        </div>
       </section>
     `;
   }
 
   if (kind === "html") {
     return `
-      <section>
-        <h2>${escapeHtml(kind)}</h2>
-        <p class="muted">Rich HTML output is available in the live notebook. Preview is text-only here.</p>
-        <pre>${escapeHtml(String(output.summary ?? output.mime ?? "HTML output"))}</pre>
+      <section class="surface">
+        <div class="surface-header">
+          <h2>${escapeHtml(kind)}</h2>
+          <p class="muted">Rich HTML stays best in the live notebook. This app shows a text summary instead.</p>
+        </div>
+        ${renderCodeFrame(String(output.summary ?? output.mime ?? "HTML output"), null, 1, "Output summary")}
       </section>
     `;
   }
@@ -484,10 +628,14 @@ function renderOutputCard(output: Record<string, unknown>): string {
         : typeof output.summary === "string"
           ? output.summary
           : JSON.stringify(output.json ?? output, null, 2);
+
   return `
-    <section>
-      <h2>${escapeHtml(kind)}</h2>
-      <pre>${escapeHtml(text)}</pre>
+    <section class="surface">
+      <div class="surface-header">
+        <h2>${escapeHtml(kind)}</h2>
+        <p class="muted">${escapeHtml(typeof output.mime === "string" ? output.mime : "normalized output")}</p>
+      </div>
+      ${renderCodeFrame(text, kind === "error" ? "traceback" : null, 1, "Output")}
     </section>
   `;
 }
@@ -506,6 +654,30 @@ async function refreshExecutionMonitor(view: ExecutionMonitorViewPayload): Promi
   banner = { kind: "info", message: "Execution status refreshed." };
   schedulePolling();
   render();
+}
+
+async function revealCell(notebookUri: string, cellId: string, kind: "code" | "output"): Promise<void> {
+  await app.callServerTool({
+    name: "reveal_notebook_cells",
+    arguments: {
+      notebook_uri: notebookUri,
+      cell_ids: [cellId],
+      select: true,
+      focus_target: kind === "output" ? "output" : "cell",
+    },
+  });
+}
+
+async function openCellCodePreview(notebookUri: string, cellId: string): Promise<void> {
+  hydrateFromToolResult(
+    await app.callServerTool({
+      name: "open_cell_code_preview",
+      arguments: {
+        notebook_uri: notebookUri,
+        cell_id: cellId,
+      },
+    }),
+  );
 }
 
 function schedulePolling(): void {
@@ -541,12 +713,14 @@ function hydrateFromToolResult(result: CallToolResult): void {
   }
 
   const payload = result.structuredContent as NotebookAppViewPayload | undefined;
-  if (payload) {
-    currentView = payload;
-    banner = null;
-    schedulePolling();
-    render();
+  if (!payload) {
+    return;
   }
+
+  currentView = payload;
+  banner = null;
+  schedulePolling();
+  render();
 }
 
 function showErrorFromResult(result: CallToolResult): void {
@@ -566,22 +740,156 @@ function bindAction(action: string, handler: (element: HTMLElement) => void | Pr
   });
 }
 
+function renderShell(config: {
+  title: string;
+  subtitle?: string;
+  eyebrow?: string;
+  actions?: string;
+  body: string;
+}): string {
+  const bannerHtml = banner ? `<div class="banner banner--${banner.kind}">${escapeHtml(banner.message)}</div>` : "";
+  return `
+    <div class="shell">
+      <header class="hero">
+        <div class="hero-copy">
+          ${config.eyebrow ? `<span class="eyebrow">${escapeHtml(config.eyebrow)}</span>` : ""}
+          <h1>${config.title}</h1>
+          ${config.subtitle ? `<p class="hero-subtitle">${config.subtitle}</p>` : ""}
+        </div>
+        ${config.actions ? `<div class="button-row">${config.actions}</div>` : ""}
+      </header>
+      ${bannerHtml}
+      <main class="stack stack--lg">
+        ${config.body}
+      </main>
+    </div>
+  `;
+}
+
+function renderMetric(label: string, value: string): string {
+  return `
+    <div class="metric">
+      <span class="metric-label">${label}</span>
+      <strong class="metric-value">${value}</strong>
+    </div>
+  `;
+}
+
+function renderNotebookLocation(notebookUri: string, cellId: string): string {
+  return `<code>${escapeHtml(fileNameFromUri(notebookUri))}</code> • <code>${escapeHtml(cellId)}</code>`;
+}
+
+function renderInsightCard(config: {
+  title: string;
+  badge: string;
+  badgeClass: string;
+  cellId: string;
+  detail?: string;
+  snippet?: string;
+}): string {
+  return `
+    <article class="insight-card">
+      <div class="insight-card__header">
+        <div>
+          <h3>${escapeHtml(config.title)}</h3>
+          <p class="muted">${config.detail ? escapeHtml(config.detail) + " • " : ""}<code>${escapeHtml(config.cellId)}</code></p>
+        </div>
+        <span class="chip ${config.badgeClass}">${escapeHtml(config.badge)}</span>
+      </div>
+      ${config.snippet ? renderMiniSnippet(config.snippet, null) : ""}
+      <div class="button-row">
+        <button class="button button--ghost" data-action="triage-reveal" data-cell-id="${escapeAttribute(config.cellId)}">Go To Cell</button>
+        <button class="button" data-action="triage-open-snippet" data-cell-id="${escapeAttribute(config.cellId)}">Open Snippet</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderMiniSnippet(source: string, language: string | null): string {
+  return `
+    <div class="mini-snippet">
+      <div class="mini-snippet__label">${escapeHtml(language ?? "cell")}</div>
+      <pre>${escapeHtml(source)}</pre>
+    </div>
+  `;
+}
+
+function renderCodeFrame(source: string, language: string | null, startLine: number, label: string): string {
+  const lines = source.replace(/\n$/u, "").split("\n");
+  return `
+    <div class="code-frame">
+      <div class="code-frame__header">
+        <span>${escapeHtml(label)}</span>
+        <div class="code-frame__meta">
+          ${language ? `<span class="chip">${escapeHtml(language)}</span>` : ""}
+          <span>${escapeHtml(String(lines.length))} lines</span>
+        </div>
+      </div>
+      <table class="code-table" role="presentation">
+        <tbody>
+          ${lines
+            .map(
+              (line, index) => `
+                <tr>
+                  <td class="code-table__line">${startLine + index}</td>
+                  <td class="code-table__code"><pre>${escapeHtml(line || " ")}</pre></td>
+                </tr>`,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDiffFrame(diff: string, label: string): string {
+  const lines = diff.replace(/\n$/u, "").split("\n");
+  return `
+    <div class="code-frame">
+      <div class="code-frame__header">
+        <span>${escapeHtml(label)}</span>
+        <div class="code-frame__meta"><span>${escapeHtml(String(lines.length))} lines</span></div>
+      </div>
+      <table class="code-table code-table--diff" role="presentation">
+        <tbody>
+          ${lines
+            .map((line, index) => {
+              const className =
+                line.startsWith("+") && !line.startsWith("+++") ? "is-add" : line.startsWith("-") && !line.startsWith("---") ? "is-remove" : line.startsWith("@@") ? "is-hunk" : "";
+              return `
+                <tr class="${className}">
+                  <td class="code-table__line">${index + 1}</td>
+                  <td class="code-table__code"><pre>${escapeHtml(line || " ")}</pre></td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderJsonFrame(value: unknown, label: string): string {
+  return renderCodeFrame(JSON.stringify(value, null, 2), "json", 1, label);
+}
+
+function fileNameFromUri(uri: string): string {
+  try {
+    const parsed = new URL(uri);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    return parts.at(-1) ?? uri;
+  } catch {
+    return uri;
+  }
+}
+
 function compactWorkspace(workspaceFolders: string[]): string {
   if (workspaceFolders.length === 0) {
     return "no workspace";
   }
 
-  return workspaceFolders
-    .map((folder) => {
-      try {
-        const url = new URL(folder);
-        const parts = url.pathname.split("/").filter(Boolean);
-        return parts.at(-1) ?? folder;
-      } catch {
-        return folder;
-      }
-    })
-    .join(", ");
+  return workspaceFolders.map(fileNameFromUri).join(", ");
 }
 
 function escapeHtml(value: string): string {

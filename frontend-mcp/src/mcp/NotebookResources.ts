@@ -5,7 +5,6 @@ import {
   ResourceTemplate,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
-import { buildEditorNavigationUris } from "./cellNavigationLinks";
 import { NotebookReadOperations } from "./NotebookReadOperations";
 import { ToolRequestExtra } from "./SessionSelection";
 
@@ -204,18 +203,16 @@ export class NotebookResources {
       {
         title: "Notebook Cell (code)",
         description:
-          "Read-only snapshot of a single cell (source, metadata). Requires notebook_uri and cell_id parameters.",
+          "Read-only snapshot of a single cell (source, metadata). Requires notebook_uri and cell_id parameters. MCP identity is jupyter://cell/code.",
         mimeType: JSON_MIME_TYPE,
       },
       async (uri, _variables, extra) => {
         const notebookUri = this.requiredQueryParam(uri, "notebook_uri");
         const cellId = this.requiredQueryParam(uri, "cell_id");
-        const snapshot = await this.reads.readNotebook(
-          { notebook_uri: notebookUri, cell_ids: [cellId], include_outputs: false },
-          extra,
+        return this.jsonResource(
+          uri.toString(),
+          await this.reads.readNotebook({ notebook_uri: notebookUri, cell_ids: [cellId], include_outputs: false }, extra),
         );
-        const payload = this.withCellNavigation(snapshot, notebookUri, cellId, "code");
-        return this.jsonResource(uri.toString(), payload);
       },
     );
 
@@ -227,31 +224,18 @@ export class NotebookResources {
       {
         title: "Notebook Cell (output)",
         description:
-          "Read-only normalized outputs for one cell. Requires notebook_uri and cell_id parameters.",
+          "Read-only normalized outputs for one cell. Requires notebook_uri and cell_id parameters. MCP identity is jupyter://cell/output.",
         mimeType: JSON_MIME_TYPE,
       },
       async (uri, _variables, extra) => {
         const notebookUri = this.requiredQueryParam(uri, "notebook_uri");
         const cellId = this.requiredQueryParam(uri, "cell_id");
-        const outputs = await this.reads.readCellOutputs({ notebook_uri: notebookUri, cell_id: cellId }, extra);
-        const payload = this.withCellNavigation(outputs, notebookUri, cellId, "output");
-        return this.jsonResource(uri.toString(), payload);
+        return this.jsonResource(
+          uri.toString(),
+          await this.reads.readCellOutputs({ notebook_uri: notebookUri, cell_id: cellId }, extra),
+        );
       },
     );
-  }
-
-  private withCellNavigation(
-    payload: unknown,
-    notebookUri: string,
-    cellId: string,
-    kind: "code" | "output",
-  ): Record<string, unknown> {
-    return {
-      ...(payload as Record<string, unknown>),
-      editor_navigation_uris: {
-        ...buildEditorNavigationUris(notebookUri, cellId, kind),
-      },
-    };
   }
 
   private registerNotebookTemplate(

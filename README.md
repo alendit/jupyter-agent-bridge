@@ -60,11 +60,12 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 
 - **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context. Use `set_notebook_cell_input_visibility` when you want a separate presentation-state change such as collapsing code input before a demo.
 - **Progressive discovery**: the MCP frontend now also exposes read-only MCP resources and structured tool output. Treat those as additive conveniences for capable clients. Tools remain the primary universal interface and continue to be the right default in `AGENTS.md`.
-- **MCP Apps companion views**: capable hosts can now open app-backed review surfaces for bridge session selection, cell change review, async execution monitoring, notebook triage, and cell output preview. These views are additive helpers on top of the same bridge-backed tools; they do not replace the tool interface.
+- **MCP Apps companion views**: capable hosts can now open app-backed review surfaces for bridge session selection, cell code preview, cell change review, async execution monitoring, notebook triage, and cell output preview. These views are additive helpers on top of the same bridge-backed tools; they do not replace the tool interface.
 - **Known multi-step procedures**: use `run_notebook_workflow` when the full notebook plan is already known and does not require LLM inspection between steps. Each workflow step reuses an existing notebook tool name and the same JSON input shape that tool already accepts.
 - **Targeted reading and search**: use `search_notebook`, `find_symbols`, `go_to_definition`, `get_diagnostics`, and targeted `read_notebook` calls to keep context small and stale-safe.
 - **Safe live editing**: use `insert_cell`, `replace_cell_source`, `patch_cell_source`, `format_cell`, `move_cell`, and `delete_cell`. Most edit calls accept `expected_notebook_version`, and source edits can also carry `expected_cell_source_fingerprint` so agents can reuse cached cell metadata instead of re-listing cells before every change. Prefer `replace_cell_source` for medium or large rewrites; prefer `patch_cell_source` for small, local edits.
 - **Change review before mutation**: use `preview_cell_edit` for a non-mutating replace/patch preview, or `open_cell_edit_review` in an MCP Apps host when a human should inspect the diff before applying it.
+- **Code-first human review**: use `open_cell_code_preview` when you want a host-rendered code snippet with direct "go to cell" and output reveal actions instead of relying on chat-surface links.
 - **Execution and kernel control**: use `execute_cells` when you want a blocking result, or `execute_cells_async` with `get_execution_status` or `wait_for_execution` when you want a handle-first flow. Execution requests can also carry `expected_cell_source_fingerprint_by_id` for stale-safe execution targeting. Use `read_cell_outputs`, `get_kernel_info`, `wait_for_kernel_ready`, `interrupt_execution`, `restart_kernel`, `select_kernel`, and `select_jupyter_interpreter` to keep runtime state explicit.
 - **Variable inspection**: use `list_variables` to page through the live kernel variable explorer state instead of reading huge notebook outputs.
 - **Compact summaries and large payload handling**: use `summarize_notebook_state` when you want a machine-readable status snapshot, and use `output_file_path` on `read_notebook` or `read_cell_outputs` when the result is too large for prompt context.
@@ -134,6 +135,7 @@ The MCP tool surface is the primary interface for agents. The bridge surface is 
 | `list_bridge_sessions` | Lists active bridge sessions plus the currently pinned session id, if any. | None | Session summaries |
 | `select_bridge_session` | Pins or clears the bridge session used for later notebook calls in this MCP server process. | Optional `session_id` or `null` | Session selection result |
 | `open_bridge_session_chooser` | Opens the MCP Apps bridge-session chooser in capable hosts. | None | Session chooser app payload |
+| `open_cell_code_preview` | Opens the MCP Apps code-preview surface for one cell with live notebook navigation actions. | `notebook_uri`, `cell_id` | Code preview app payload |
 | `open_cell_edit_review` | Opens the MCP Apps change-review surface for replace or patch edits. | Same shape as `preview_cell_edit` | Change review app payload |
 | `open_execution_monitor` | Opens the MCP Apps async execution monitor for an existing `execution_id`. | `execution_id` | Execution monitor app payload |
 | `open_notebook_triage` | Opens the MCP Apps triage surface that combines notebook summary, diagnostics, search, and symbols. | `notebook_uri`, optional `query`, `range`, `cell_ids` | Notebook triage app payload |
@@ -162,7 +164,6 @@ All tools now also declare MCP `outputSchema` and return typed `structuredConten
 - Cell-scoped templates:
   - `jupyter://cell/code{?notebook_uri,cell_id}` — cell source snapshot (read); list includes every cell
   - `jupyter://cell/output{?notebook_uri,cell_id}` — normalized outputs; list includes cells that currently have outputs
-  - Cell resource JSON also includes `editor_navigation_uris` (`vscode://` and `cursor://`, same extension authority) so hosts can offer links that reveal the cell input (`code`) or focus rendered output (`output`) via `window.registerUriHandler`. `jupyter://…` remains the canonical MCP resource URI for reads; use the product-scheme URLs when the goal is in-editor navigation.
 
 These resources mirror the corresponding read-oriented tool results and delegate through the same frontend shell read paths. Mutations, execution, UI presentation, and workflow orchestration remain tools only.
 
@@ -171,12 +172,13 @@ These resources mirror the corresponding read-oriented tool results and delegate
 `frontend-mcp` also exposes one shared MCP Apps HTML resource, `ui://jupyter-agent-bridge/notebook-console.html`, which backs several additive companion tools:
 
 - `open_bridge_session_chooser`
+- `open_cell_code_preview`
 - `open_cell_edit_review`
 - `open_execution_monitor`
 - `open_notebook_triage`
 - `open_cell_output_preview`
 
-These views are orchestration shells for the same bridge-backed tools documented above. The live notebook remains the source of truth, and rich notebook output should generally be revealed in the editor rather than reimplemented in chat.
+These views are orchestration shells for the same bridge-backed tools documented above. The live notebook remains the source of truth, and editor navigation now belongs in the app surfaces rather than in read-only resource payloads.
 
 ### Bridge API
 
