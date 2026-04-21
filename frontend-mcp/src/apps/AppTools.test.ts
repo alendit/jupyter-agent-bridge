@@ -141,7 +141,7 @@ test("open_cell_code_preview returns cell snapshot and preview metadata", async 
     registerTool: (name: string, _config: Record<string, unknown>, handler: (input: unknown, extra: unknown) => Promise<{ structuredContent?: unknown; content: Array<{ text?: string }> }>) => {
       handlers.set(name, handler);
     },
-  } as never);
+  } as never, { enableApps: true });
 
   const result = await handlers.get("open_cell_code_preview")?.(
     { notebook_uri: "file:///workspace/demo.ipynb", cell_id: "cell-7" },
