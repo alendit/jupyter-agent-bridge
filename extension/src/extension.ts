@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import { BRIDGE_METHODS, BridgeSessionInfo } from "../../packages/protocol/src";
+import { BridgeRuntimeController } from "./BridgeRuntimeController";
 import { BearerTokenAuth } from "./bridge/Auth";
 import { BridgeHttpServer } from "./bridge/BridgeHttpServer";
 import { JsonRpcRouter } from "./bridge/JsonRpcRouter";
@@ -54,7 +55,7 @@ interface RuntimeState {
   cursorRegistrar: CursorMcpRegistrar;
 }
 
-let runtimeState: RuntimeState | undefined;
+let runtimeController: BridgeRuntimeController<RuntimeState> | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const outputChannel = vscode.window.createOutputChannel(PRODUCT_NAME, { log: true });
@@ -123,12 +124,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   const cellNavigationUriHandler = registerCellNavigationUriHandler(context, queryApplicationService, log);
+  const formatRunningStatus = (current: RuntimeState): string => `${PRODUCT_NAME} is running.
+Session ID: ${current.sessionId}
+Bridge URL: ${current.bridgeUrl}
+Port file: ${current.portFilePaths[0] ?? "not available"}
+JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
 
   const renderTooltip = (): vscode.MarkdownString => {
     const tooltip = new vscode.MarkdownString(undefined, true);
     tooltip.isTrusted = true;
+    const current = runtimeController?.getState();
 
-    if (!runtimeState) {
+    if (!current) {
       tooltip.appendMarkdown(`**${PRODUCT_NAME}**\n\n`);
       tooltip.appendMarkdown("- Status: stopped\n");
       tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
@@ -140,10 +147,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     tooltip.appendMarkdown(`**${PRODUCT_NAME}**\n\n`);
     tooltip.appendMarkdown("- Status: running\n");
-    tooltip.appendMarkdown(`- Session ID: \`${runtimeState.sessionId}\`\n`);
-    tooltip.appendMarkdown(`- Bridge URL: \`${runtimeState.bridgeUrl}\`\n`);
-    if (runtimeState.portFilePaths.length > 0) {
-      tooltip.appendMarkdown(`- Port file: \`${runtimeState.portFilePaths[0]}\`\n`);
+    tooltip.appendMarkdown(`- Session ID: \`${current.sessionId}\`\n`);
+    tooltip.appendMarkdown(`- Bridge URL: \`${current.bridgeUrl}\`\n`);
+    if (current.portFilePaths.length > 0) {
+      tooltip.appendMarkdown(`- Port file: \`${current.portFilePaths[0]}\`\n`);
     }
     tooltip.appendMarkdown(`- JSON-RPC method: \`${BRIDGE_METHODS.getSessionInfo}\`\n\n`);
     tooltip.appendMarkdown(
@@ -154,111 +161,93 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const updateStatusBar = (): void => {
     statusBarItem.command = SHOW_STATUS_COMMAND;
-    statusBarItem.text = runtimeState ? `$(plug) ${PRODUCT_NAME}` : `$(debug-disconnect) ${PRODUCT_NAME}`;
-    statusBarItem.color = runtimeState ? new vscode.ThemeColor("charts.blue") : undefined;
+    statusBarItem.text = runtimeController?.getState() ? `$(plug) ${PRODUCT_NAME}` : `$(debug-disconnect) ${PRODUCT_NAME}`;
+    statusBarItem.color = runtimeController?.getState() ? new vscode.ThemeColor("charts.blue") : undefined;
     statusBarItem.tooltip = renderTooltip();
     statusBarItem.show();
   };
 
-  const getStatusSummary = (): string => {
-    if (!runtimeState) {
-      return `${PRODUCT_NAME} is stopped.`;
-    }
+  const controller = new BridgeRuntimeController<RuntimeState>({
+    start: async (): Promise<RuntimeState> => {
+      const sessionId = randomUUID();
+      const authToken = randomUUID();
+      let bridgeUrl = "";
 
-    return `${PRODUCT_NAME} is running.
-Session ID: ${runtimeState.sessionId}
-Bridge URL: ${runtimeState.bridgeUrl}
-Port file: ${runtimeState.portFilePaths[0] ?? "not available"}
-JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
-  };
+      const getSessionInfo = (): BridgeSessionInfo => ({
+        session_id: sessionId,
+        workspace_id: vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? null,
+        workspace_folders: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.toString()),
+        bridge_url: bridgeUrl,
+        extension_version: EXTENSION_VERSION,
+        capabilities: {
+          execute_cells: true,
+          execute_cells_async: true,
+          get_execution_status: true,
+          wait_for_execution: true,
+          interrupt_execution: true,
+          restart_kernel: true,
+          list_variables: true,
+          wait_for_kernel_ready: true,
+          select_kernel: true,
+          select_jupyter_interpreter: true,
+          reveal_cells: true,
+          set_cell_input_visibility: true,
+          preview_cell_edit: true,
+        },
+      });
 
-  const startRuntime = async (): Promise<RuntimeState> => {
-    if (runtimeState) {
-      return runtimeState;
-    }
+      const router = new JsonRpcRouter(notebookBridgeService, getSessionInfo);
+      const auth = new BearerTokenAuth(authToken);
+      const httpServer = new BridgeHttpServer(auth, router, log);
+      bridgeUrl = await httpServer.start();
+      const bridgePort = Number.parseInt(new URL(bridgeUrl).port, 10);
 
-    const sessionId = randomUUID();
-    const authToken = randomUUID();
-    let bridgeUrl = "";
+      const rendezvousStore = new RendezvousStore(sessionId, authToken, getSessionInfo);
+      await rendezvousStore.start();
 
-    const getSessionInfo = (): BridgeSessionInfo => ({
-      session_id: sessionId,
-      workspace_id: vscode.workspace.workspaceFolders?.[0]?.uri.toString() ?? null,
-      workspace_folders: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.toString()),
-      bridge_url: bridgeUrl,
-      extension_version: EXTENSION_VERSION,
-      capabilities: {
-        execute_cells: true,
-        execute_cells_async: true,
-        get_execution_status: true,
-        wait_for_execution: true,
-        interrupt_execution: true,
-        restart_kernel: true,
-        list_variables: true,
-        wait_for_kernel_ready: true,
-        select_kernel: true,
-        select_jupyter_interpreter: true,
-        reveal_cells: true,
-        set_cell_input_visibility: true,
-        preview_cell_edit: true,
-      },
-    });
+      const projectPortFileStore = new ProjectPortFileStore();
+      const portFilePaths = await projectPortFileStore.write(bridgePort);
+      const cursorRegistrar = new CursorMcpRegistrar(
+        context.extensionPath,
+        () => projectPortFileStore.getPreferredPortFilePath(),
+      );
+      cursorRegistrar.registerIfAvailable();
 
-    const router = new JsonRpcRouter(notebookBridgeService, getSessionInfo);
-    const auth = new BearerTokenAuth(authToken);
-    const httpServer = new BridgeHttpServer(auth, router, log);
-    bridgeUrl = await httpServer.start();
-    const bridgePort = Number.parseInt(new URL(bridgeUrl).port, 10);
+      const current = {
+        bridgeUrl,
+        authToken,
+        sessionId,
+        portFilePaths,
+        httpServer,
+        projectPortFileStore,
+        rendezvousStore,
+        cursorRegistrar,
+      };
 
-    const rendezvousStore = new RendezvousStore(sessionId, authToken, getSessionInfo);
-    await rendezvousStore.start();
-
-    const projectPortFileStore = new ProjectPortFileStore();
-    const portFilePaths = await projectPortFileStore.write(bridgePort);
-    const cursorRegistrar = new CursorMcpRegistrar(
-      context.extensionPath,
-      () => projectPortFileStore.getPreferredPortFilePath(),
-    );
-    cursorRegistrar.registerIfAvailable();
-
-    runtimeState = {
-      bridgeUrl,
-      authToken,
-      sessionId,
-      portFilePaths,
-      httpServer,
-      projectPortFileStore,
-      rendezvousStore,
-      cursorRegistrar,
-    };
-
-    log(
-      `Bridge started at ${bridgeUrl} for session ${sessionId}. Port files: ${
-        portFilePaths.length > 0 ? portFilePaths.join(", ") : "none"
-      }.`,
-    );
-    updateStatusBar();
-    return runtimeState;
-  };
-
-  const stopRuntime = async (): Promise<void> => {
-    if (!runtimeState) {
-      log("Stop requested while the bridge was already stopped.");
-      return;
-    }
-
-    const current = runtimeState;
-    runtimeState = undefined;
-    current.projectPortFileStore.dispose();
-    current.rendezvousStore.dispose();
-    current.cursorRegistrar.dispose();
-    await current.httpServer.stop();
-    log(`Bridge stopped for session ${current.sessionId}.`);
-    updateStatusBar();
-  };
+      log(
+        `Bridge started at ${bridgeUrl} for session ${sessionId}. Port files: ${
+          portFilePaths.length > 0 ? portFilePaths.join(", ") : "none"
+        }.`,
+      );
+      return current;
+    },
+    stop: async (current): Promise<void> => {
+      current.projectPortFileStore.dispose();
+      current.rendezvousStore.dispose();
+      current.cursorRegistrar.dispose();
+      await current.httpServer.stop();
+      log(`Bridge stopped for session ${current.sessionId}.`);
+    },
+    formatRunningSummary: formatRunningStatus,
+    stoppedSummary: `${PRODUCT_NAME} is stopped.`,
+    onStateChanged: () => {
+      updateStatusBar();
+    },
+  });
+  runtimeController = controller;
 
   const createMcpConfig = async (): Promise<void> => {
-    const current = runtimeState ?? (await startRuntime());
+    const current = await controller.ensureStarted();
     const portFilePath = current.projectPortFileStore.getPreferredPortFilePath();
     const workspaceFolderPath = current.projectPortFileStore.getPreferredWorkspaceFolderPath();
     if (!portFilePath) {
@@ -279,7 +268,6 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     const config = buildBundledMcpServerConfig(context.extensionPath, portFilePath);
     if (!config) {
       log("Failed to create MCP config because the bundled MCP server entrypoint was not found.");
-      updateStatusBar();
       await vscode.window.showErrorMessage(
         `${PRODUCT_NAME} could not find the bundled MCP server entrypoint. Build the workspace first.`,
       );
@@ -318,7 +306,6 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       const snippet = renderClipboardMcpDefinitionSnippet(config);
       await vscode.env.clipboard.writeText(snippet);
       log(`Copied a generic MCP definition snippet for session ${current.sessionId} using ${portFilePath}.`);
-      updateStatusBar();
       await vscode.window.showInformationMessage("Copied an MCP definition snippet to the clipboard.");
       return;
     }
@@ -327,7 +314,6 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       const target = getMcpConfigTarget(selection.targetId);
       const result = await writeProjectMcpConfig(selection.targetId, workspaceFolderPath, config);
       log(`Wrote ${target.label} MCP config for session ${current.sessionId} to ${result.filePath}.`);
-      updateStatusBar();
       const action = await vscode.window.showInformationMessage(
         `Created ${target.label} MCP config at ${result.filePath}.`,
         "Open File",
@@ -343,7 +329,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
   };
 
   const startBridgeCommand = vscode.commands.registerCommand(START_BRIDGE_COMMAND, async () => {
-    const current = runtimeState ?? (await startRuntime());
+    const current = await controller.ensureStarted();
     const action = await vscode.window.showInformationMessage(
       `${PRODUCT_NAME} is running at ${current.bridgeUrl}. Session method: ${BRIDGE_METHODS.getSessionInfo}`,
       "Create MCP Config",
@@ -357,7 +343,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
     }
 
     if (action === "Show Status") {
-      await vscode.window.showInformationMessage(getStatusSummary());
+      await vscode.window.showInformationMessage(controller.getStatusSummary());
       return;
     }
 
@@ -367,20 +353,19 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
   });
 
   const stopBridgeCommand = vscode.commands.registerCommand(STOP_BRIDGE_COMMAND, async () => {
-    const wasRunning = runtimeState !== undefined;
-    await stopRuntime();
+    const wasRunning = await controller.stop();
     await vscode.window.showInformationMessage(
       wasRunning ? `${PRODUCT_NAME} stopped.` : `${PRODUCT_NAME} is already stopped.`,
     );
   });
 
   const showStatusCommand = vscode.commands.registerCommand(SHOW_STATUS_COMMAND, async () => {
-    const message = getStatusSummary();
+    const message = controller.getStatusSummary();
     log(`Status requested. ${message.replace(/\n/g, " | ")}`);
     updateStatusBar();
     const action = await vscode.window.showInformationMessage(
       message,
-      runtimeState ? "Create MCP Config" : "Start Bridge",
+      controller.getState() ? "Create MCP Config" : "Start Bridge",
       "Show Output",
     );
     if (action === "Create MCP Config") {
@@ -388,7 +373,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       return;
     }
     if (action === "Start Bridge") {
-      await startRuntime();
+      await controller.ensureStarted();
       return;
     }
     if (action === "Show Output") {
@@ -413,7 +398,7 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
       }
     });
 
-  await startRuntime();
+  await controller.ensureStarted();
   updateStatusBar();
 
   context.subscriptions.push(
@@ -430,12 +415,6 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
 }
 
 export async function deactivate(): Promise<void> {
-  if (runtimeState) {
-    const current = runtimeState;
-    runtimeState = undefined;
-    current.projectPortFileStore.dispose();
-    current.rendezvousStore.dispose();
-    current.cursorRegistrar.dispose();
-    await current.httpServer.stop();
-  }
+  await runtimeController?.stop();
+  runtimeController = undefined;
 }
