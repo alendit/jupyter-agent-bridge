@@ -4,7 +4,7 @@
   "description": "Expose the live Jupyter notebook in VS Code-compatible editors as MCP tools for agents.",
   "license": "MIT",
   "publisher": "alendit",
-  "version": "0.0.4",
+  "version": "0.2.0",
   "icon": "icon.png",
   "repository": {
     "type": "git",
