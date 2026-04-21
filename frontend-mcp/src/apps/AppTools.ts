@@ -2,9 +2,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
-  BridgeSessionInfo,
   PreviewCellEditRequest,
-  ReadCellOutputsResult,
   fail,
 } from "../../../packages/protocol/src";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -15,14 +13,14 @@ import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
 import { NotebookToolResultRenderer } from "../mcp/NotebookToolResultRenderer";
 import { ToolRequestExtra } from "../mcp/SessionSelection";
 import {
-  BridgeSessionSummary,
-  CellEditReviewViewPayload,
-  CellOutputPreviewViewPayload,
-  ExecutionMonitorViewPayload,
+  AppPayloadBuilder,
+  CELL_CODE_PREVIEW_INPUT_SCHEMA,
+  CELL_OUTPUT_PREVIEW_INPUT_SCHEMA,
+  NOTEBOOK_SCOPE_INPUT_SCHEMA,
+} from "./AppPayloadBuilder";
+import {
   NOTEBOOK_APP_RESOURCE_URI,
   NotebookAppViewPayload,
-  NotebookTriageViewPayload,
-  SessionChooserViewPayload,
 } from "./AppTypes";
 
 const sessionSelectionInputSchema = z
@@ -34,28 +32,6 @@ const sessionSelectionInputSchema = z
 const executionMonitorInputSchema = z
   .object({
     execution_id: z.string(),
-  })
-  .passthrough();
-
-const notebookScopeInputSchema = z
-  .object({
-    notebook_uri: z.string(),
-    range: z
-      .object({
-        start: z.number().int(),
-        end: z.number().int(),
-      })
-      .optional(),
-    cell_ids: z.array(z.string()).optional(),
-    query: z.string().optional(),
-  })
-  .passthrough();
-
-const cellOutputPreviewInputSchema = z
-  .object({
-    notebook_uri: z.string(),
-    cell_id: z.string(),
-    output_index: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 
@@ -85,12 +61,15 @@ const previewCellEditInputSchema = z.discriminatedUnion("operation", [
 
 export class AppTools {
   private readonly renderer = new NotebookToolResultRenderer();
+  private readonly payloadBuilder: AppPayloadBuilder;
 
   public constructor(
     private readonly getClient: (extra: ToolRequestExtra) => Promise<NotebookBridgeClient>,
     private readonly discovery: BridgeDiscovery,
     private readonly log?: (message: string) => void,
-  ) {}
+  ) {
+    this.payloadBuilder = new AppPayloadBuilder(discovery);
+  }
 
   public async register(server: McpServer, options?: { enableApps?: boolean }): Promise<void> {
     server.registerTool(
@@ -185,7 +164,7 @@ export class AppTools {
       {
         title: "Export Cell Output Snapshot",
         description: "Write the current normalized outputs for one cell to an ephemeral temp file and return the path.",
-        inputSchema: cellOutputPreviewInputSchema,
+        inputSchema: CELL_OUTPUT_PREVIEW_INPUT_SCHEMA,
         outputSchema: z
           .object({
             output_file_path: z.string(),
@@ -198,7 +177,7 @@ export class AppTools {
       },
       async (input, extra) =>
         this.runTool("export_cell_output_snapshot", async () =>
-          this.exportCellOutputSnapshot(cellOutputPreviewInputSchema.parse(input), extra),
+          this.exportCellOutputSnapshot(AppPayloadBuilder.parseCellOutputPreviewInput(input), extra),
         ),
     );
 
@@ -227,7 +206,7 @@ export class AppTools {
       async () =>
         this.toAppToolResult(
           "Interactive bridge session chooser opened.",
-          await this.buildSessionChooserPayload(),
+          await this.payloadBuilder.buildSessionChooserPayload(),
         ),
     );
 
@@ -243,7 +222,10 @@ export class AppTools {
       async (input, extra) =>
         this.toAppToolResult(
           "Interactive cell edit review opened.",
-          await this.buildCellEditReviewPayload(previewCellEditInputSchema.parse(input) as PreviewCellEditRequest, extra),
+          await this.payloadBuilder.buildCellEditReviewPayload(
+            previewCellEditInputSchema.parse(input) as PreviewCellEditRequest,
+            this.requirePreviewClient(await this.getClient(extra)),
+          ),
         ),
     );
 
@@ -259,7 +241,10 @@ export class AppTools {
       async (input, extra) =>
         this.toAppToolResult(
           "Interactive execution monitor opened.",
-          await this.buildExecutionMonitorPayload(executionMonitorInputSchema.parse(input).execution_id, extra),
+          await this.payloadBuilder.buildExecutionMonitorPayload(
+            executionMonitorInputSchema.parse(input).execution_id,
+            await this.getClient(extra),
+          ),
         ),
     );
 
@@ -270,12 +255,34 @@ export class AppTools {
       {
         title: "Open Notebook Triage",
         description: "Open an MCP App that combines diagnostics, search, symbols, and navigation for one notebook.",
-        inputSchema: notebookScopeInputSchema,
+        inputSchema: NOTEBOOK_SCOPE_INPUT_SCHEMA,
       },
       async (input, extra) =>
         this.toAppToolResult(
           "Interactive notebook triage opened.",
-          await this.buildNotebookTriagePayload(notebookScopeInputSchema.parse(input), extra),
+          await this.payloadBuilder.buildNotebookTriagePayload(
+            AppPayloadBuilder.parseNotebookScopeInput(input),
+            await this.getClient(extra),
+          ),
+        ),
+    );
+
+    this.registerAppLauncher(
+      server,
+      registerAppToolUnsafe,
+      "open_cell_code_preview",
+      {
+        title: "Open Cell Code Preview",
+        description: "Open an MCP App to inspect one cell's source and jump to the live notebook location.",
+        inputSchema: CELL_CODE_PREVIEW_INPUT_SCHEMA,
+      },
+      async (input, extra) =>
+        this.toAppToolResult(
+          "Interactive cell code preview opened.",
+          await this.payloadBuilder.buildCellCodePreviewPayload(
+            AppPayloadBuilder.parseCellCodePreviewInput(input),
+            await this.getClient(extra),
+          ),
         ),
     );
 
@@ -286,12 +293,15 @@ export class AppTools {
       {
         title: "Open Cell Output Preview",
         description: "Open an MCP App to inspect normalized outputs for one notebook cell and jump to the live notebook output.",
-        inputSchema: cellOutputPreviewInputSchema,
+        inputSchema: CELL_OUTPUT_PREVIEW_INPUT_SCHEMA,
       },
       async (input, extra) =>
         this.toAppToolResult(
           "Interactive cell output preview opened.",
-          await this.buildCellOutputPreviewPayload(cellOutputPreviewInputSchema.parse(input), extra),
+          await this.payloadBuilder.buildCellOutputPreviewPayload(
+            AppPayloadBuilder.parseCellOutputPreviewInput(input),
+            await this.getClient(extra),
+          ),
         ),
     );
   }
@@ -326,7 +336,7 @@ export class AppTools {
 
   private async listBridgeSessions() {
     return {
-      sessions: (await this.discovery.listSessions()).map((session) => this.toSessionSummary(session)),
+      sessions: (await this.discovery.listSessions()).map((session) => this.payloadBuilder.toSessionSummary(session)),
       pinned_session_id: this.discovery.getPinnedSessionId(),
     };
   }
@@ -353,113 +363,17 @@ export class AppTools {
     this.discovery.setPinnedSession(sessionId);
     return {
       pinned_session_id: sessionId,
-      selected_session: this.toSessionSummary(selected),
-    };
-  }
-
-  private async buildSessionChooserPayload(): Promise<SessionChooserViewPayload> {
-    const sessions = await this.discovery.listSessions();
-    return {
-      view: "session_chooser",
-      sessions: sessions.map((session) => this.toSessionSummary(session)),
-      pinned_session_id: this.discovery.getPinnedSessionId(),
-    };
-  }
-
-  private async buildCellEditReviewPayload(
-    request: PreviewCellEditRequest,
-    extra: ToolRequestExtra,
-  ): Promise<CellEditReviewViewPayload> {
-    const preview = await this.requirePreviewClient(await this.getClient(extra)).previewCellEdit(request);
-    return {
-      view: "cell_edit_review",
-      request,
-      preview,
-    };
-  }
-
-  private async buildExecutionMonitorPayload(
-    executionId: string,
-    extra: ToolRequestExtra,
-  ): Promise<ExecutionMonitorViewPayload> {
-    return {
-      view: "execution_monitor",
-      execution: await (await this.getClient(extra)).getExecutionStatus({ execution_id: executionId }),
-    };
-  }
-
-  private async buildNotebookTriagePayload(
-    input: z.infer<typeof notebookScopeInputSchema>,
-    extra: ToolRequestExtra,
-  ): Promise<NotebookTriageViewPayload> {
-    const client = await this.getClient(extra);
-    const cellsRequest = {
-      notebook_uri: input.notebook_uri,
-      range: input.range,
-      cell_ids: input.cell_ids,
-    };
-    const diagnosticsRequest = {
-      notebook_uri: input.notebook_uri,
-      range: input.range,
-      cell_ids: input.cell_ids,
-      max_results: 100,
-    };
-
-    return {
-      view: "notebook_triage",
-      notebook_uri: input.notebook_uri,
-      query: input.query,
-      summary: await client.summarizeNotebookState(input.notebook_uri),
-      cells: await client.listNotebookCells(cellsRequest),
-      diagnostics: await client.getDiagnostics(diagnosticsRequest),
-      search:
-        input.query === undefined
-          ? undefined
-          : await client.searchNotebook({
-              ...cellsRequest,
-              query: input.query,
-              max_results: 100,
-            }),
-      symbols:
-        input.query === undefined
-          ? undefined
-          : await client.findSymbols({
-              ...cellsRequest,
-              query: input.query,
-              max_results: 100,
-            }),
-    };
-  }
-
-  private async buildCellOutputPreviewPayload(
-    input: z.infer<typeof cellOutputPreviewInputSchema>,
-    extra: ToolRequestExtra,
-  ): Promise<CellOutputPreviewViewPayload> {
-    const result = await (await this.getClient(extra)).readCellOutputs({
-      notebook_uri: input.notebook_uri,
-      cell_id: input.cell_id,
-    });
-    this.assertOutputIndex(result, input.output_index);
-    return {
-      view: "cell_output_preview",
-      notebook_uri: input.notebook_uri,
-      cell_id: input.cell_id,
-      output_index: input.output_index,
-      result,
+      selected_session: this.payloadBuilder.toSessionSummary(selected),
     };
   }
 
   private async exportCellOutputSnapshot(
-    input: z.infer<typeof cellOutputPreviewInputSchema>,
+    input: ReturnType<typeof AppPayloadBuilder.parseCellOutputPreviewInput>,
     extra: ToolRequestExtra,
   ) {
-    const result = await (await this.getClient(extra)).readCellOutputs({
-      notebook_uri: input.notebook_uri,
-      cell_id: input.cell_id,
-    });
-    this.assertOutputIndex(result, input.output_index);
-
-    const payload = input.output_index === undefined ? result : result.outputs[input.output_index];
+    const preview = await this.payloadBuilder.buildCellOutputPreviewPayload(input, await this.getClient(extra));
+    const payload =
+      input.output_index === undefined ? preview.result : preview.result.outputs[input.output_index];
     const directory = path.join(os.tmpdir(), "jupyter-agent-bridge", "snapshots");
     await fs.mkdir(directory, { recursive: true });
     const filePath = path.join(directory, `${sanitizePathPart(input.cell_id)}-${Date.now()}.json`);
@@ -472,40 +386,6 @@ export class AppTools {
       notebook_uri: input.notebook_uri,
       cell_id: input.cell_id,
       output_index: input.output_index,
-    };
-  }
-
-  private assertOutputIndex(result: ReadCellOutputsResult, outputIndex?: number): void {
-    if (outputIndex === undefined) {
-      return;
-    }
-
-    if (outputIndex < 0 || outputIndex >= result.outputs.length) {
-      fail({
-        code: "InvalidRequest",
-        message: `output_index ${outputIndex} is out of bounds for cell ${result.cell_id}.`,
-        recoverable: true,
-      });
-    }
-  }
-
-  private toSessionSummary(session: BridgeSessionInfo | BridgeSessionSummary | {
-    session_id: string;
-    workspace_id: string | null;
-    workspace_folders: string[];
-    window_title?: string;
-    bridge_url: string;
-    created_at?: string;
-    last_seen_at?: string;
-  }): BridgeSessionSummary {
-    return {
-      session_id: session.session_id,
-      workspace_id: session.workspace_id,
-      workspace_folders: session.workspace_folders,
-      window_title: "window_title" in session && typeof session.window_title === "string" ? session.window_title : session.session_id,
-      bridge_url: session.bridge_url,
-      created_at: "created_at" in session && typeof session.created_at === "string" ? session.created_at : "",
-      last_seen_at: "last_seen_at" in session && typeof session.last_seen_at === "string" ? session.last_seen_at : "",
     };
   }
 

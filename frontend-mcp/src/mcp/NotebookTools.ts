@@ -1,14 +1,12 @@
 import { asBridgeError } from "../../../packages/protocol/src";
-import { orderWorkflowSteps, runWorkflow } from "../../../packages/notebook-domain/src";
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { CallToolResult, ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
+import { ExecutionProgressReporter } from "./ExecutionProgressReporter";
 import { ToolRequestExtra } from "./SessionSelection";
 import {
   buildToolDescription,
   describeNotebookTool,
-  NotebookWorkflowStepToolName,
   NOTEBOOK_TOOL_INPUT_SCHEMAS,
   NOTEBOOK_TOOL_OUTPUT_SCHEMAS,
   ReadCellOutputsToolRequest,
@@ -25,21 +23,13 @@ import {
 } from "./NotebookToolInputParser";
 import { NotebookReadOperations } from "./NotebookReadOperations";
 import { NotebookToolResultRenderer } from "./NotebookToolResultRenderer";
-
-const EXECUTION_STATUS_PROGRESS: Record<string, number> = {
-  queued: 10,
-  running: 50,
-  completed: 100,
-  failed: 100,
-  timed_out: 100,
-};
-
-const WAIT_FOR_EXECUTION_POLL_INTERVAL_MS = 250;
+import { NotebookWorkflowExecutor } from "./NotebookWorkflowExecutor";
 
 export class NotebookTools {
   private readonly parser = new NotebookToolInputParser();
   private readonly renderer = new NotebookToolResultRenderer();
   private readonly reads: NotebookReadOperations;
+  private readonly workflowExecutor = new NotebookWorkflowExecutor();
 
   public constructor(
     private readonly getClient: (extra: ToolRequestExtra) => Promise<NotebookBridgeClient>,
@@ -192,11 +182,13 @@ export class NotebookTools {
 
     register("wait_for_execution", async (input, extra) => {
       const request = this.parseWaitForExecutionRequest(input);
-      if (extra._meta?.progressToken === undefined) {
-        return (await this.getClient(extra)).waitForExecution(request);
+      const client = await this.getClient(extra);
+      const progressReporter = new ExecutionProgressReporter(extra);
+      if (!progressReporter.isEnabled()) {
+        return client.waitForExecution(request);
       }
 
-      return this.waitForExecutionWithProgress(request, extra);
+      return progressReporter.waitForExecution(client, request);
     });
 
     register("interrupt_execution", async (input, extra) =>
@@ -376,85 +368,11 @@ export class NotebookTools {
   }
 
   private async executeNotebookWorkflow(request: NotebookWorkflowRequest, extra: ToolRequestExtra): Promise<unknown> {
-    const client = await this.getClient(extra);
-    const ordered = orderWorkflowSteps(request.steps);
-    const workflowResult = await runWorkflow(
-      ordered,
-      request.on_error,
-      (tool, input) => this.executeWorkflowStep(client, tool as NotebookWorkflowStepToolName, input),
-      asBridgeError,
+    return this.workflowExecutor.execute(
+      await this.getClient(extra),
+      request,
+      (toolName, result, outputFilePath) => this.routeResultToFileIfRequested(toolName, result, outputFilePath),
     );
-
-    return {
-      notebook_uri: request.notebook_uri,
-      on_error: request.on_error,
-      ...workflowResult,
-    };
-  }
-
-  private async executeWorkflowStep(
-    client: NotebookBridgeClient,
-    toolName: NotebookWorkflowStepToolName,
-    input: unknown,
-  ): Promise<unknown> {
-    switch (toolName) {
-      case "get_notebook_outline":
-        return client.getNotebookOutline((input as { notebook_uri: string }).notebook_uri);
-      case "list_notebook_cells":
-        return client.listNotebookCells(input as never);
-      case "list_variables":
-        return client.listVariables(input as never);
-      case "search_notebook":
-        return client.searchNotebook(input as never);
-      case "find_symbols":
-        return client.findSymbols(input as never);
-      case "get_diagnostics":
-        return client.getDiagnostics(input as never);
-      case "go_to_definition":
-        return client.goToDefinition(input as never);
-      case "read_notebook": {
-        const request = input as ReadNotebookToolRequest;
-        const result = await client.readNotebook(request);
-        return this.routeResultToFileIfRequested("read_notebook", result, request.output_file_path);
-      }
-      case "insert_cell":
-        return client.insertCell(input as never);
-      case "replace_cell_source":
-        return client.replaceCellSource(input as never);
-      case "patch_cell_source":
-        return client.patchCellSource(input as never);
-      case "format_cell":
-        return client.formatCell(input as never);
-      case "delete_cell":
-        return client.deleteCell(input as never);
-      case "move_cell":
-        return client.moveCell(input as never);
-      case "execute_cells":
-        return client.executeCells(input as never);
-      case "interrupt_execution":
-        return client.interruptExecution(input as never);
-      case "restart_kernel":
-        return client.restartKernel(input as never);
-      case "wait_for_kernel_ready":
-        return client.waitForKernelReady(input as never);
-      case "read_cell_outputs": {
-        const request = input as ReadCellOutputsToolRequest;
-        const result = await client.readCellOutputs(request);
-        return this.routeResultToFileIfRequested("read_cell_outputs", result, request.output_file_path);
-      }
-      case "reveal_notebook_cells":
-        return client.revealCells(input as never);
-      case "set_notebook_cell_input_visibility":
-        return client.setCellInputVisibility(input as never);
-      case "get_kernel_info":
-        return client.getKernelInfo((input as { notebook_uri: string }).notebook_uri);
-      case "select_kernel":
-        return client.selectKernel(input as never);
-      case "select_jupyter_interpreter":
-        return client.selectJupyterInterpreter(input as never);
-      case "summarize_notebook_state":
-        return client.summarizeNotebookState((input as { notebook_uri: string }).notebook_uri);
-    }
   }
 
   private async routeResultToFileIfRequested(
@@ -577,72 +495,6 @@ export class NotebookTools {
     }
 
     return parts.join("");
-  }
-
-  private async waitForExecutionWithProgress(
-    request: { execution_id: string; timeout_ms?: number },
-    extra: ToolRequestExtra,
-  ): Promise<unknown> {
-    const client = await this.getClient(extra);
-    const timeoutMs = request.timeout_ms ?? 30_000;
-    const deadline = Date.now() + timeoutMs;
-    let lastStatus: string | null = null;
-
-    while (true) {
-      const status = await client.getExecutionStatus({
-        execution_id: request.execution_id,
-      });
-      if (status.status !== lastStatus) {
-        await this.sendExecutionProgress(extra, status.status, status.message);
-        lastStatus = status.status;
-      }
-
-      if (this.isTerminalExecutionStatus(status.status)) {
-        return {
-          ...status,
-          wait_timed_out: false,
-        };
-      }
-
-      const remainingMs = deadline - Date.now();
-      if (remainingMs <= 0) {
-        return {
-          ...status,
-          wait_timed_out: true,
-        };
-      }
-
-      await this.sleep(Math.min(WAIT_FOR_EXECUTION_POLL_INTERVAL_MS, remainingMs));
-    }
-  }
-
-  private async sendExecutionProgress(
-    extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
-    status: string,
-    message: string,
-  ): Promise<void> {
-    const progressToken = extra._meta?.progressToken;
-    if (progressToken === undefined) {
-      return;
-    }
-
-    await extra.sendNotification({
-      method: "notifications/progress",
-      params: {
-        progressToken,
-        progress: EXECUTION_STATUS_PROGRESS[status] ?? 0,
-        total: 100,
-        message,
-      },
-    });
-  }
-
-  private isTerminalExecutionStatus(status: string): boolean {
-    return status === "completed" || status === "failed" || status === "timed_out";
-  }
-
-  private async sleep(durationMs: number): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, durationMs));
   }
 
   private shortString(value: unknown, maxLength = 120): string | null {

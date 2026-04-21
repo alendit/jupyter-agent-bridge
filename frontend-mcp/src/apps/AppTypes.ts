@@ -1,7 +1,9 @@
 import {
+  CellSnapshot,
   ExecutionStatusResult,
   FindSymbolsResult,
   ListNotebookCellsResult,
+  NotebookCellPreview,
   NotebookDiagnosticsResult,
   PreviewCellEditRequest,
   PreviewCellEditResult,
@@ -58,9 +60,17 @@ export interface CellOutputPreviewViewPayload {
   result: ReadCellOutputsResult;
 }
 
+export interface CellCodePreviewViewPayload {
+  view: "cell_code_preview";
+  notebook_uri: string;
+  preview: NotebookCellPreview;
+  cell: CellSnapshot;
+}
+
 export type NotebookAppViewPayload =
   | SessionChooserViewPayload
   | CellEditReviewViewPayload
   | ExecutionMonitorViewPayload
   | NotebookTriageViewPayload
-  | CellOutputPreviewViewPayload;
+  | CellOutputPreviewViewPayload
+  | CellCodePreviewViewPayload;

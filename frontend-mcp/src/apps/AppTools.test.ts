@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
 import { RendezvousRecord } from "../../../packages/protocol/src";
+import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
 import { BridgeDiscovery } from "../bridge/BridgeDiscovery";
 import { AppTools } from "./AppTools";
 import { NOTEBOOK_APP_RESOURCE_URI } from "./AppTypes";
@@ -66,6 +67,7 @@ test("AppTools registers helper tools and app launcher metadata", async () => {
   // App launchers only register when @modelcontextprotocol/ext-apps is available.
   // If present, verify the metadata; otherwise confirm graceful skip.
   if (configs.has("open_bridge_session_chooser")) {
+    assert.ok(handlers.has("open_cell_code_preview"));
     assert.equal(
       (configs.get("open_bridge_session_chooser")?._meta as { ui?: { resourceUri?: string } })?.ui?.resourceUri,
       NOTEBOOK_APP_RESOURCE_URI,
@@ -77,4 +79,84 @@ test("AppTools registers helper tools and app launcher metadata", async () => {
 
   await handlers.get("select_bridge_session")?.({ session_id: "session-1" }, {});
   assert.equal(discovery.getPinnedSessionId(), "session-1");
+});
+
+test("open_cell_code_preview returns cell snapshot and preview metadata", async () => {
+  const discovery = new BridgeDiscovery("/workspace/demo", undefined, undefined);
+  const client: Pick<NotebookBridgeClient, "readNotebook" | "listNotebookCells"> = {
+    readNotebook: async () => ({
+      notebook: {
+        notebook_uri: "file:///workspace/demo.ipynb",
+        notebook_type: "jupyter-notebook",
+        notebook_version: 7,
+        dirty: false,
+        active_editor: true,
+        visible_editor_count: 1,
+        kernel: null,
+      },
+      cells: [
+        {
+          cell_id: "cell-7",
+          index: 6,
+          kind: "code",
+          language: "python",
+          notebook_line_start: 23,
+          notebook_line_end: 30,
+          source: "def migrate():\n    return True",
+          source_fingerprint: "fp-1",
+          metadata: {},
+          execution: null,
+        },
+      ],
+    }),
+    listNotebookCells: async () => ({
+      notebook_uri: "file:///workspace/demo.ipynb",
+      notebook_version: 7,
+      cells: [
+        {
+          cell_id: "cell-7",
+          index: 6,
+          kind: "code",
+          language: "python",
+          notebook_line_start: 23,
+          notebook_line_end: 30,
+          source_preview: "def migrate():",
+          source_line_count: 2,
+          source_fingerprint: "fp-1",
+          execution_status: null,
+          execution_order: null,
+          started_at: null,
+          ended_at: null,
+          has_outputs: false,
+          output_kinds: [],
+          section_path: ["Migration"],
+        },
+      ],
+    }),
+  };
+
+  const tools = new AppTools(async () => client as NotebookBridgeClient, discovery);
+  const handlers = new Map<string, (input: unknown, extra: unknown) => Promise<{ structuredContent?: unknown; content: Array<{ text?: string }> }>>();
+  await tools.register({
+    registerTool: (name: string, _config: Record<string, unknown>, handler: (input: unknown, extra: unknown) => Promise<{ structuredContent?: unknown; content: Array<{ text?: string }> }>) => {
+      handlers.set(name, handler);
+    },
+  } as never);
+
+  const result = await handlers.get("open_cell_code_preview")?.(
+    { notebook_uri: "file:///workspace/demo.ipynb", cell_id: "cell-7" },
+    {},
+  );
+  const payload = result?.structuredContent as {
+    view: string;
+    notebook_uri: string;
+    cell: { cell_id: string; source: string };
+    preview: { section_path: string[] };
+  };
+
+  assert.equal(payload.view, "cell_code_preview");
+  assert.equal(payload.notebook_uri, "file:///workspace/demo.ipynb");
+  assert.equal(payload.cell.cell_id, "cell-7");
+  assert.match(payload.cell.source, /def migrate/);
+  assert.deepEqual(payload.preview.section_path, ["Migration"]);
 });
