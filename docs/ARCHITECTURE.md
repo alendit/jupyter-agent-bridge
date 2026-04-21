@@ -2,9 +2,6 @@
 
 Jupyter Agentic Bridge exposes the live Jupyter notebook open in a VS Code-compatible editor to external agents through MCP, while keeping the editor notebook model as the only source of truth.
 
-This document replaces the old build spec and captures the long-term fundamentals that should remain stable as the project evolves.
-It is written with progressive disclosure: overview first, then a deeper pass over responsibilities and runtime behavior, then the lower-level details that matter for maintenance and compatibility.
-
 ## Product Shape
 
 The system has four parts:
