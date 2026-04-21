@@ -58,6 +58,7 @@ For notebook work, prefer the jupyter-agent-bridge MCP tools before reading or e
 
 ## Advanced Usage
 
+- **Profiles**: `core` is now the default notebook-first surface and includes the full notebook tool catalog, including edit, execution, navigation, kernel, and workflow tools. Set `JUPYTER_AGENT_BRIDGE_PROFILE=full` only when you also want progressive-discovery extras such as read-only MCP resources and MCP Apps companion views.
 - **Notebook discovery and navigation**: use `list_open_notebooks`, `open_notebook`, `get_notebook_outline`, `list_notebook_cells`, and `reveal_notebook_cells` to orient the agent without pulling full notebook contents into context. Use `set_notebook_cell_input_visibility` when you want a separate presentation-state change such as collapsing code input before a demo.
 - **Progressive discovery**: the MCP frontend now also exposes read-only MCP resources and structured tool output. Treat those as additive conveniences for capable clients. Tools remain the primary universal interface and continue to be the right default in `AGENTS.md`.
 - **MCP Apps companion views**: capable hosts can now open app-backed review surfaces for bridge session selection, cell code preview, cell change review, async execution monitoring, notebook triage, and cell output preview. These views are additive helpers on top of the same bridge-backed tools; they do not replace the tool interface.
@@ -166,6 +167,17 @@ All tools now also declare MCP `outputSchema` and return typed `structuredConten
   - `jupyter://cell/output{?notebook_uri,cell_id}` — normalized outputs; list includes cells that currently have outputs
 
 These resources mirror the corresponding read-oriented tool results and delegate through the same frontend shell read paths. Mutations, execution, UI presentation, and workflow orchestration remain tools only.
+
+### MCP Prompts
+
+`frontend-mcp` also registers reusable prompts for common notebook procedures:
+
+- `triage_notebook`
+- `safe_edit_cell`
+- `execute_and_inspect`
+- `recover_kernel`
+
+These prompts stay tool-first. They guide the host toward the existing notebook tools rather than introducing a second workflow surface.
 
 ### MCP Apps
 

@@ -1,5 +1,5 @@
 import { asBridgeError } from "../../../packages/protocol/src";
-import { orderWorkflowSteps, runWorkflow, WorkflowStepResult } from "../../../packages/notebook-domain/src";
+import { orderWorkflowSteps, runWorkflow, WorkflowStepResult } from "@jupyter-agent-bridge/notebook-domain";
 import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
 import { NotebookWorkflowRequest } from "./NotebookToolInputParser";
 import { NotebookWorkflowStepToolName, ReadCellOutputsToolRequest, ReadNotebookToolRequest } from "./NotebookToolCatalog";

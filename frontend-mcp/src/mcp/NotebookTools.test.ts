@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { NotebookTools } from "./NotebookTools";
 import { FIXED_RESOURCE_URIS, NOTEBOOK_RESOURCE_TEMPLATES, NotebookResources } from "./NotebookResources";
-import { CORE_TOOLS, TOOL_NAMES } from "./NotebookToolCatalog";
+import { TOOL_NAMES } from "./NotebookToolCatalog";
 
 test("toToolResult emits native MCP image content and omits base64 from text payloads", async () => {
   const tools = new NotebookTools(async () => {
@@ -126,7 +126,7 @@ test("register exposes outputSchema for every notebook tool in full profile", ()
   }
 });
 
-test("register only exposes core tools by default", () => {
+test("register exposes the full notebook tool catalog by default", () => {
   const prev = process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
   delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
   try {
@@ -141,9 +141,9 @@ test("register only exposes core tools by default", () => {
       },
     } as never);
 
-    assert.equal(configs.size, CORE_TOOLS.length);
-    for (const name of CORE_TOOLS) {
-      assert.ok(configs.has(name), `core tool ${name} should be registered`);
+    assert.equal(configs.size, TOOL_NAMES.length);
+    for (const name of TOOL_NAMES) {
+      assert.ok(configs.has(name), `default profile tool ${name} should be registered`);
     }
   } finally {
     if (prev === undefined) delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;

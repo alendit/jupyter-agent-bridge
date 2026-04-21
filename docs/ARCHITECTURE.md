@@ -335,8 +335,8 @@ The MCP tool catalog is defined in [`frontend-mcp/src/mcp/NotebookToolCatalog.ts
 
 Tools are split into two profiles controlled by the `JUPYTER_AGENT_BRIDGE_PROFILE` environment variable:
 
-- **core** (default): 12 tools covering the read → edit → execute → inspect cycle. This is the default surface presented to all clients.
-- **full**: all tools, including advanced operations such as async execution, kernel control, UI presentation, and workflow orchestration.
+- **core** (default): the full notebook tool catalog. Read, edit, execute, inspect, kernel, navigation, and workflow tools all stay available in the default profile.
+- **full**: `core` plus progressive-discovery extras such as read-only MCP resources and MCP Apps companion views.
 
 The profile is resolved once at startup by `resolveToolProfile()`. Profile membership is defined by the `CORE_TOOLS` and `ADVANCED_TOOLS` arrays in the tool catalog.
 
@@ -353,7 +353,7 @@ The MCP server registers user-invocable prompts for common multi-step workflows:
 - `execute_and_inspect`: execute cells with stop-on-error, inspect outputs, report results
 - `recover_kernel`: diagnose stuck kernel, interrupt, restart if needed, confirm recovery
 
-Prompts are defined in [`frontend-mcp/src/mcp/NotebookPrompts.ts`](../frontend-mcp/src/mcp/NotebookPrompts.ts).
+Prompts are defined in [`frontend-mcp/src/mcp/NotebookPrompts.ts`](../frontend-mcp/src/mcp/NotebookPrompts.ts). They are always registered; they are not gated behind the `full` profile.
 
 #### Discovery Layers
 

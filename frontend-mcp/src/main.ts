@@ -23,16 +23,16 @@ async function main(): Promise<void> {
 
   const getClient = createBridgeClientResolver(discovery, server, (message) => logger.info(message));
   const tools = new NotebookTools(getClient, (message) => logger.info(message));
-  const resources = new NotebookResources(getClient);
+  const appTools = new AppTools(getClient, discovery, (message) => logger.info(message));
   const prompts = new NotebookPrompts();
   tools.register(server);
-  resources.register(server);
+  await appTools.register(server, { enableApps: profile === "full" });
   prompts.register(server);
 
   if (profile === "full") {
-    const appTools = new AppTools(getClient, discovery, (message) => logger.info(message));
+    const resources = new NotebookResources(getClient);
     const appResources = new AppResourceRegistry();
-    await appTools.register(server, { enableApps: true });
+    resources.register(server);
     await appResources.register(server);
   }
 

@@ -81,6 +81,27 @@ test("AppTools registers helper tools and app launcher metadata", async () => {
   assert.equal(discovery.getPinnedSessionId(), "session-1");
 });
 
+test("AppTools registers helper tools even when app launchers are disabled", async () => {
+  const discovery = new BridgeDiscovery("/workspace/demo", undefined, undefined);
+  const tools = new AppTools(async () => {
+    throw new Error("client should not be called in this test");
+  }, discovery);
+
+  const handlers = new Map<string, (input: unknown, extra: unknown) => Promise<{ structuredContent?: unknown; content: Array<{ text?: string }> }>>();
+  await tools.register({
+    registerTool: (name: string, _config: Record<string, unknown>, handler: (input: unknown, extra: unknown) => Promise<{ structuredContent?: unknown; content: Array<{ text?: string }> }>) => {
+      handlers.set(name, handler);
+    },
+  } as never, { enableApps: false });
+
+  assert.ok(handlers.has("list_bridge_sessions"));
+  assert.ok(handlers.has("select_bridge_session"));
+  assert.ok(handlers.has("preview_cell_edit"));
+  assert.ok(handlers.has("export_cell_output_snapshot"));
+  assert.ok(!handlers.has("open_bridge_session_chooser"));
+  assert.ok(!handlers.has("open_cell_code_preview"));
+});
+
 test("open_cell_code_preview returns cell snapshot and preview metadata", async () => {
   const discovery = new BridgeDiscovery("/workspace/demo", undefined, undefined);
   const client: Pick<NotebookBridgeClient, "readNotebook" | "listNotebookCells"> = {

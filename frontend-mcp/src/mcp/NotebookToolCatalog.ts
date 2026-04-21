@@ -45,47 +45,15 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 // Tool profiles
 // ---------------------------------------------------------------------------
 
-/** Core tools: the default surface for all MCP hosts. ~12 tools covering
- *  the full read → edit → execute → inspect cycle. */
-export const CORE_TOOLS: readonly ToolName[] = [
-  "list_open_notebooks",
-  "get_notebook_outline",
-  "list_notebook_cells",
-  "read_notebook",
-  "read_cell_outputs",
-  "search_notebook",
-  "get_diagnostics",
-  "insert_cell",
-  "replace_cell_source",
-  "patch_cell_source",
-  "execute_cells",
-  "summarize_notebook_state",
-] as const;
+/** Core tools: the default surface for all MCP hosts. The full notebook tool
+ *  catalog stays available by default; only progressive-discovery extras are
+ *  gated by the full profile elsewhere in the frontend shell. */
+export const CORE_TOOLS: readonly ToolName[] = TOOL_NAMES;
 
-/** Advanced tools: opt-in via JUPYTER_AGENT_BRIDGE_PROFILE=full or registered
- *  alongside Core when the host supports dynamic tool filtering. */
-export const ADVANCED_TOOLS: readonly ToolName[] = [
-  "describe_tool",
-  "open_notebook",
-  "list_variables",
-  "find_symbols",
-  "go_to_definition",
-  "format_cell",
-  "delete_cell",
-  "move_cell",
-  "execute_cells_async",
-  "get_execution_status",
-  "wait_for_execution",
-  "interrupt_execution",
-  "restart_kernel",
-  "wait_for_kernel_ready",
-  "get_kernel_info",
-  "select_kernel",
-  "select_jupyter_interpreter",
-  "reveal_notebook_cells",
-  "set_notebook_cell_input_visibility",
-  "run_notebook_workflow",
-] as const;
+/** Advanced tools are no longer split out of the notebook tool catalog. The
+ *  full profile now gates only progressive-discovery surfaces such as MCP
+ *  resources and companion apps. */
+export const ADVANCED_TOOLS: readonly ToolName[] = [] as const;
 
 export type ToolProfile = "core" | "full";
 
