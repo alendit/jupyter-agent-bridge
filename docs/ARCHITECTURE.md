@@ -320,6 +320,7 @@ Notebook-native stdout, stderr, and structured error payloads are normalized and
 - `execute_cells` must correlate returned status and outputs with the targeted notebook cells.
 - `execute_cells` remains the synchronous execution surface.
 - Async execution uses execution handles exposed through `execute_cells_async`, `get_execution_status`, and `wait_for_execution`.
+- Cell-mutating and execution tools expose a simple `reveal_cell` toggle for default cell-following behavior; richer viewport placement and output focus stay on `reveal_notebook_cells` so the edit/execute surfaces keep a boolean-only presentation contract.
 - `wait_for_execution.timeout_ms` is a wait bound only. It returns the latest execution snapshot without cancelling the underlying kernel work.
 - Interrupting or restarting the kernel remains explicit through `interrupt_execution` and `restart_kernel`.
 - Async execution handles are process-local, retain terminal snapshots for 15 minutes, and do not outlive the bridge runtime.

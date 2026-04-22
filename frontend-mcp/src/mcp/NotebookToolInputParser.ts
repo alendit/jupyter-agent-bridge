@@ -256,7 +256,8 @@ export class NotebookToolInputParser {
   public normalizeInsertCellRequest(input: unknown): InsertCellRequest {
     const toolName = "insert_cell";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "expected_notebook_version", "position", "cell", "reveal"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "expected_notebook_version", "position", "cell", "reveal_cell"]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -278,8 +279,9 @@ export class NotebookToolInputParser {
       "expected_notebook_version",
       "expected_cell_source_fingerprint",
       "source",
-      "reveal",
+      "reveal_cell",
     ]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -309,8 +311,9 @@ export class NotebookToolInputParser {
       "format",
       "expected_notebook_version",
       "expected_cell_source_fingerprint",
-      "reveal",
+      "reveal_cell",
     ]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     const format =
       params.format === undefined
@@ -349,8 +352,9 @@ export class NotebookToolInputParser {
       "cell_id",
       "expected_notebook_version",
       "expected_cell_source_fingerprint",
-      "reveal",
+      "reveal_cell",
     ]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -372,7 +376,8 @@ export class NotebookToolInputParser {
   public parseDeleteCellRequest(input: unknown): DeleteCellRequest {
     const toolName = "delete_cell";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "reveal"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "reveal_cell"]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -387,7 +392,8 @@ export class NotebookToolInputParser {
   public parseMoveCellRequest(input: unknown): MoveCellRequest {
     const toolName = "move_cell";
     const params = this.requireObject(input, toolName);
-    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "target_index", "reveal"]);
+    this.assertKnownKeys(toolName, params, ["notebook_uri", "cell_id", "expected_notebook_version", "target_index", "reveal_cell"]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -410,8 +416,9 @@ export class NotebookToolInputParser {
       "expected_cell_source_fingerprint_by_id",
       "timeout_ms",
       "stop_on_error",
-      "reveal",
+      "reveal_cell",
     ]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -448,8 +455,9 @@ export class NotebookToolInputParser {
       "expected_cell_source_fingerprint_by_id",
       "timeout_ms",
       "stop_on_error",
-      "reveal",
+      "reveal_cell",
     ]);
+    this.validateOptionalRevealCell(params.reveal_cell, toolName);
 
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
@@ -960,6 +968,25 @@ export class NotebookToolInputParser {
     }
 
     throw new Error(`${label} must be a non-empty string.`);
+  }
+
+  private validateOptionalRevealCell(value: unknown, toolName: ToolName): void {
+    if (value === undefined) {
+      return;
+    }
+
+    if (typeof value === "boolean") {
+      return;
+    }
+
+    if (typeof value === "string") {
+      this.failValidation(
+        toolName,
+        `reveal_cell must be true or false; values like "${value}" are not supported. Use true or false without quotes. For explicit viewport positioning or output focus, use reveal_notebook_cells.`,
+      );
+    }
+
+    this.failValidation(toolName, "reveal_cell must be a boolean.");
   }
 
   private requiredBoolean(value: unknown, label: string): boolean {

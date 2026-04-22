@@ -1592,6 +1592,39 @@ test("parseExecuteCellsRequest reports a helpful boolean hint for stop_on_error 
   );
 });
 
+test("parseExecuteCellsRequest reports a helpful reveal_cell hint for string values", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parseExecuteCellsRequest: (value: unknown) => unknown;
+        }
+      ).parseExecuteCellsRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        cell_ids: ["cell-1"],
+        reveal_cell: "first",
+      }),
+    /reveal_cell must be true or false; values like "first" are not supported\./,
+  );
+});
+
+test("describeTool exposes reveal_cell on execute_cells and not the old reveal key", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const description = (tools as unknown as { describeTool: (toolName?: string) => Record<string, unknown> }).describeTool(
+    "execute_cells",
+  );
+
+  assert.match(String(description.schema), /"reveal_cell"\?:true/);
+  assert.doesNotMatch(String(description.schema), /"reveal"\?:/);
+});
+
 test("describeTool advertises strict JSON type rules", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");

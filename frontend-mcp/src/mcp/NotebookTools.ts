@@ -113,66 +113,72 @@ export class NotebookTools {
     });
 
     register("insert_cell", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
-      const result = await client.insertCell(this.normalizeInsertCellRequest(input));
-      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, reveal);
+      const request = this.normalizeInsertCellRequest(input);
+      const revealCell = this.extractRevealCell(input);
+      const result = await client.insertCell(request);
+      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, revealCell);
       return result;
     });
 
     register("replace_cell_source", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
-      const result = await client.replaceCellSource(this.parseReplaceCellSourceRequest(input));
-      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, reveal);
+      const request = this.parseReplaceCellSourceRequest(input);
+      const revealCell = this.extractRevealCell(input);
+      const result = await client.replaceCellSource(request);
+      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, revealCell);
       return result;
     });
 
     register("patch_cell_source", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
-      const result = await client.patchCellSource(this.parsePatchCellSourceRequest(input));
-      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, reveal);
+      const request = this.parsePatchCellSourceRequest(input);
+      const revealCell = this.extractRevealCell(input);
+      const result = await client.patchCellSource(request);
+      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, revealCell);
       return result;
     });
 
     register("format_cell", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
-      const result = await client.formatCell(this.parseFormatCellRequest(input));
-      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, reveal);
+      const request = this.parseFormatCellRequest(input);
+      const revealCell = this.extractRevealCell(input);
+      const result = await client.formatCell(request);
+      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, revealCell);
       return result;
     });
 
     register("delete_cell", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
-      const result = await client.deleteCell(this.parseDeleteCellRequest(input));
-      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, reveal);
+      const request = this.parseDeleteCellRequest(input);
+      const revealCell = this.extractRevealCell(input);
+      const result = await client.deleteCell(request);
+      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, revealCell);
       return result;
     });
 
     register("move_cell", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
-      const result = await client.moveCell(this.parseMoveCellRequest(input));
-      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, reveal);
+      const request = this.parseMoveCellRequest(input);
+      const revealCell = this.extractRevealCell(input);
+      const result = await client.moveCell(request);
+      await this.revealAfterMutation(client, result.notebook.notebook_uri, result.changed_cell_ids, revealCell);
       return result;
     });
 
     register("execute_cells", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
       const request = this.parseExecuteCellsRequest(input);
-      await this.revealBeforeExecution(client, request.notebook_uri, request.cell_ids, reveal);
+      const revealCell = this.extractRevealCell(input);
+      await this.revealBeforeExecution(client, request.notebook_uri, request.cell_ids, revealCell);
       return client.executeCells(request);
     });
 
     register("execute_cells_async", async (input, extra) => {
-      const reveal = this.extractReveal(input);
       const client = await this.getClient(extra);
       const request = this.parseExecuteCellsAsyncRequest(input);
-      await this.revealBeforeExecution(client, request.notebook_uri, request.cell_ids, reveal);
+      const revealCell = this.extractRevealCell(input);
+      await this.revealBeforeExecution(client, request.notebook_uri, request.cell_ids, revealCell);
       return client.executeCellsAsync(request);
     });
 
@@ -391,13 +397,13 @@ export class NotebookTools {
     return this.renderer.toErrorToolResult(error);
   }
 
-  private extractReveal(input: unknown): boolean {
+  private extractRevealCell(input: unknown): boolean {
     if (input && typeof input === "object" && !Array.isArray(input)) {
       const record = input as Record<string, unknown>;
-      if (record.reveal === undefined) {
+      if (record.reveal_cell === undefined) {
         return true;
       }
-      return record.reveal !== false;
+      return record.reveal_cell !== false;
     }
     return true;
   }

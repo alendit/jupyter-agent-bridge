@@ -175,6 +175,12 @@ const notebookUriSchema = z
 const notebookVersionSchema = z.number().int().optional();
 const optionalStringSchema = z.string().optional();
 const optionalBooleanSchema = z.boolean().optional();
+const optionalRevealCellSchema = z
+  .boolean()
+  .optional()
+  .describe(
+    "Optional, defaults to true. Scroll the affected cell into view after the edit or execution. Use false to suppress automatic scrolling. For explicit viewport positioning or output focus, use reveal_notebook_cells.",
+  );
 const optionalNumberSchema = z.number().optional();
 const optionalPositiveIntSchema = z.number().int().positive().optional();
 const optionalNonNegativeIntSchema = z.number().int().nonnegative().optional();
@@ -312,7 +318,7 @@ const insertCellInputSchema = z
       })
       .passthrough()
       .optional(),
-    reveal: optionalBooleanSchema,
+    reveal_cell: optionalRevealCellSchema,
   })
   .passthrough();
 
@@ -323,7 +329,7 @@ const replaceCellSourceInputSchema = z
     expected_notebook_version: notebookVersionSchema,
     expected_cell_source_fingerprint: optionalStringSchema,
     source: z.string(),
-    reveal: optionalBooleanSchema,
+    reveal_cell: optionalRevealCellSchema,
   })
   .passthrough();
 
@@ -332,7 +338,7 @@ const patchCellSourceSchemaBase = {
   cell_id: z.string(),
   expected_notebook_version: notebookVersionSchema,
   expected_cell_source_fingerprint: optionalStringSchema,
-  reveal: optionalBooleanSchema,
+  reveal_cell: optionalRevealCellSchema,
 };
 
 const patchCellSourceInputSchema = z.union([
@@ -378,7 +384,7 @@ const formatCellInputSchema = z
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
     expected_cell_source_fingerprint: optionalStringSchema,
-    reveal: optionalBooleanSchema,
+    reveal_cell: optionalRevealCellSchema,
   })
   .passthrough();
 
@@ -387,7 +393,7 @@ const deleteCellInputSchema = z
     notebook_uri: notebookUriSchema,
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
-    reveal: optionalBooleanSchema,
+    reveal_cell: optionalRevealCellSchema,
   })
   .passthrough();
 
@@ -397,7 +403,7 @@ const moveCellInputSchema = z
     cell_id: optionalStringSchema,
     expected_notebook_version: notebookVersionSchema,
     target_index: optionalNumberSchema,
-    reveal: optionalBooleanSchema,
+    reveal_cell: optionalRevealCellSchema,
   })
   .passthrough();
 
@@ -409,7 +415,7 @@ const executeCellsInputSchema = z
     expected_cell_source_fingerprint_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
-    reveal: optionalBooleanSchema,
+    reveal_cell: optionalRevealCellSchema,
   })
   .passthrough();
 
@@ -421,7 +427,7 @@ const executeCellsAsyncInputSchema = z
     expected_cell_source_fingerprint_by_id: z.record(z.string()).optional(),
     timeout_ms: optionalNumberSchema,
     stop_on_error: optionalBooleanSchema,
-    reveal: optionalBooleanSchema,
+    reveal_cell: optionalRevealCellSchema,
   })
   .passthrough();
 
@@ -861,10 +867,10 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
     summary:
       "Insert a new cell at a specified position. Cell source uses normal JSON string semantics and is stored verbatim after decoding, so multiline content should be sent with actual newline characters. Mutates notebook.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","expected_notebook_version"?:7,"position":{"mode":"before_index","index":0}|{"mode":"before_cell_id","cell_id":"cell-1"}|{"mode":"after_cell_id","cell_id":"cell-1"}|{"mode":"at_end"},"cell":{"kind":"markdown"|"code","source":"...","language"?:string|null,"metadata"?:object}}',
+      '{"notebook_uri":"file:///.../demo.ipynb","expected_notebook_version"?:7,"position":{"mode":"before_index","index":0}|{"mode":"before_cell_id","cell_id":"cell-1"}|{"mode":"after_cell_id","cell_id":"cell-1"}|{"mode":"at_end"},"cell":{"kind":"markdown"|"code","source":"...","language"?:string|null,"metadata"?:object},"reveal_cell"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","position":{"mode":"at_end"},"cell":{"kind":"code","language":"python","source":"print(1)"}}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","position":{"mode":"after_cell_id","cell_id":"cell-1"},"cell":{"kind":"markdown","source":"## Notes"}}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","position":{"mode":"after_cell_id","cell_id":"cell-1"},"cell":{"kind":"markdown","source":"## Notes"},"reveal_cell":false}',
     ],
   },
   replace_cell_source: {
@@ -872,7 +878,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
     summary:
       "Replace a cell's full source. JSON strings are decoded once and stored verbatim; send actual newline characters for multiline content, and use \\n only when you intend a literal backslash-n. Pass source_fingerprint for stale-safety. Mutates notebook.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","source":"..."}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","source":"...","reveal_cell"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)","expected_cell_source_fingerprint":"<fingerprint>"}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"line one\\nline two"}',
@@ -884,7 +890,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
     summary:
       "Apply a diff patch to one cell without resending full source. unified_diff and codex_apply_patch require string hunks; search_replace_json requires an array of {old, new, replace_all?} edits. Mutates notebook.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"..."|[{"old":"...","new":"...","replace_all"?:false}],"format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"..."|[{"old":"...","new":"...","replace_all"?:false}],"format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","reveal_cell"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"unified_diff","patch":"@@\\n-print(x)\\n+print(x + 1)","expected_cell_source_fingerprint":"<fingerprint>"}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"search_replace_json","patch":[{"old":"epochs=10","new":"epochs=20"}],"expected_cell_source_fingerprint":"<fingerprint>"}',
@@ -894,7 +900,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
     title: "Format Cell",
     summary: "Run the editor formatter on one cell. Mutates notebook.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","reveal_cell"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","expected_cell_source_fingerprint":"<fingerprint>"}',
     ],
@@ -902,13 +908,14 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   delete_cell: {
     title: "Delete Cell",
     summary: "Delete one cell. Mutates notebook.",
-    schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7}',
-    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1"}'],
+    schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"reveal_cell"?:true}',
+    examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","reveal_cell":false}'],
   },
   move_cell: {
     title: "Move Cell",
     summary: "Move one cell to a target index. Mutates notebook.",
-    schema: '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","target_index":0,"expected_notebook_version"?:7}',
+    schema:
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","target_index":0,"expected_notebook_version"?:7,"reveal_cell"?:true}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","target_index":0}'],
   },
   execute_cells: {
@@ -916,7 +923,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
     summary:
       "Execute code cells synchronously and wait for completion or an execution timeout. Use execute_cells_async for long-running work. Mutates kernel state.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true,"reveal_cell"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_fingerprint_by_id":{"cell-1":"<fingerprint-1>","cell-2":"<fingerprint-2>"},"timeout_ms":45000,"stop_on_error":true}',
@@ -927,7 +934,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
     summary:
       "Queue cell execution and return immediately with an execution handle. Poll with get_execution_status or wait_for_execution while the kernel keeps running in the background.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true,"reveal_cell"?:true}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1"]}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_ids":["cell-1","cell-2"],"expected_cell_source_fingerprint_by_id":{"cell-1":"<fingerprint-1>","cell-2":"<fingerprint-2>"},"timeout_ms":45000,"stop_on_error":true}',
@@ -1070,7 +1077,7 @@ export const NOTEBOOK_RULES = [
   "Notebook data may change between turns because the user can edit cells.",
   "Use notebook versions and source_fingerprint values to avoid stale edits or executions.",
   "Treat cell_id as stable identity and source_fingerprint as mutable cell state.",
-  "Cell-mutating and execution tools (insert_cell, replace_cell_source, patch_cell_source, format_cell, delete_cell, move_cell, execute_cells, execute_cells_async) accept an optional reveal boolean (default true) that scrolls the editor to the affected cell so the user can follow along. Pass reveal=false to suppress.",
+  "Cell-mutating and execution tools (insert_cell, replace_cell_source, patch_cell_source, format_cell, delete_cell, move_cell, execute_cells, execute_cells_async) accept an optional reveal_cell boolean (default true) that scrolls the editor to the affected cell so the user can follow along. Pass reveal_cell=false to suppress.",
 ];
 
 export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
