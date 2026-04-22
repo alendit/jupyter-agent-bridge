@@ -68,7 +68,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const outputNormalizationService = new OutputNormalizationService();
   const kernelInspectionService = new KernelInspectionService(registry, hostKernelObservationService);
   const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
-  const mutationService = new NotebookMutationService();
+  const mutationService = new NotebookMutationService((notebookUri) => registry.getVersion(notebookUri));
   const documentService = new NotebookDocumentService(registry, mutationService);
   const searchService = new NotebookSearchService(registry, readService);
   const variableService = new NotebookVariableService(registry);

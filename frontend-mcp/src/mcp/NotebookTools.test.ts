@@ -5,7 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { NotebookTools } from "./NotebookTools";
 import { FIXED_RESOURCE_URIS, NOTEBOOK_RESOURCE_TEMPLATES, NotebookResources } from "./NotebookResources";
-import { TOOL_NAMES } from "./NotebookToolCatalog";
+import { TOOL_NAMES, buildToolDescription } from "./NotebookToolCatalog";
 
 test("toToolResult emits native MCP image content and omits base64 from text payloads", async () => {
   const tools = new NotebookTools(async () => {
@@ -1754,6 +1754,52 @@ test("parsePatchCellSourceRequest accepts source fingerprint guarded patch edits
   assert.equal(request.expected_cell_source_fingerprint, "abc123");
 });
 
+test("parsePatchCellSourceRequest accepts typed search_replace_json arrays and normalizes them to JSON", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const request = (
+    tools as unknown as {
+      parsePatchCellSourceRequest: (value: unknown) => {
+        notebook_uri: string;
+        cell_id: string;
+        patch: string;
+        format?: string;
+      };
+    }
+  ).parsePatchCellSourceRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-3",
+    format: "search_replace_json",
+    patch: [{ old: "epochs=10", new: "epochs=20", replace_all: true }],
+  });
+
+  assert.equal(request.format, "search_replace_json");
+  assert.equal(request.patch, '[{"old":"epochs=10","new":"epochs=20","replace_all":true}]');
+});
+
+test("parsePatchCellSourceRequest rejects string patches for explicit search_replace_json format", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  assert.throws(
+    () =>
+      (
+        tools as unknown as {
+          parsePatchCellSourceRequest: (value: unknown) => unknown;
+        }
+      ).parsePatchCellSourceRequest({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        cell_id: "cell-3",
+        format: "search_replace_json",
+        patch: '[{"old":"epochs=10","new":"epochs=20"}]',
+      }),
+    /search_replace_json patch must be an array/i,
+  );
+});
+
 test("parseReplaceCellSourceRequest accepts source fingerprint guarded replacements", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
@@ -1778,6 +1824,44 @@ test("parseReplaceCellSourceRequest accepts source fingerprint guarded replaceme
   assert.equal(request.cell_id, "cell-2");
   assert.equal(request.source, "print(2)");
   assert.equal(request.expected_cell_source_fingerprint, "sha-2");
+});
+
+test("parseReplaceCellSourceRequest preserves decoded JSON strings verbatim", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+
+  const multiline = (
+    tools as unknown as {
+      parseReplaceCellSourceRequest: (value: unknown) => {
+        source: string;
+      };
+    }
+  ).parseReplaceCellSourceRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-2",
+    source: "line one\nline two",
+  });
+
+  const literalEscapes = (
+    tools as unknown as {
+      parseReplaceCellSourceRequest: (value: unknown) => {
+        source: string;
+      };
+    }
+  ).parseReplaceCellSourceRequest({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_id: "cell-2",
+    source: String.raw`line one\nline two`,
+  });
+
+  assert.equal(multiline.source, "line one\nline two");
+  assert.equal(literalEscapes.source, String.raw`line one\nline two`);
+});
+
+test("tool descriptions document wait timeout semantics and async recovery flow", () => {
+  assert.match(buildToolDescription("execute_cells_async"), /execution handle/i);
+  assert.match(buildToolDescription("wait_for_execution"), /does not cancel the underlying execution/i);
 });
 
 test("parseFormatCellRequest accepts stale-safe formatter requests", () => {

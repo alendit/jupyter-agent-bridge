@@ -31,6 +31,7 @@ import {
   OpenNotebookResult,
   PatchCellSourceRequest,
   PatchCellSourceResult,
+  ReplaceCellSourceResult,
   ReadCellOutputsRequest,
   ReadCellOutputsResult,
   ReadNotebookRequest,
@@ -107,7 +108,7 @@ export class NotebookBridgeService {
     return this.editService.insertCell(request);
   }
 
-  public async replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult> {
+  public async replaceCellSource(request: ReplaceCellSourceRequest): Promise<ReplaceCellSourceResult> {
     return this.editService.replaceCellSource(request);
   }
 

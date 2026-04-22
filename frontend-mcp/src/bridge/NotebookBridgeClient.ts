@@ -30,6 +30,7 @@ import {
   OpenNotebookResult,
   PatchCellSourceRequest,
   PatchCellSourceResult,
+  ReplaceCellSourceResult,
   ReadCellOutputsRequest,
   ReadCellOutputsResult,
   ReadNotebookRequest,
@@ -67,7 +68,7 @@ export interface NotebookBridgeClient {
   goToDefinition(request: GoToDefinitionRequest): Promise<GoToDefinitionResult>;
   readNotebook(request: ReadNotebookRequest): Promise<ReadNotebookResult>;
   insertCell(request: InsertCellRequest): Promise<MutationResult>;
-  replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult>;
+  replaceCellSource(request: ReplaceCellSourceRequest): Promise<ReplaceCellSourceResult>;
   patchCellSource(request: PatchCellSourceRequest): Promise<PatchCellSourceResult>;
   previewCellEdit?(request: PreviewCellEditRequest): Promise<PreviewCellEditResult>;
   formatCell(request: FormatCellRequest): Promise<FormatCellResult>;

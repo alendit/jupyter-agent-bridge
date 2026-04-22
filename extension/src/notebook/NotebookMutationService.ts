@@ -13,6 +13,7 @@ import {
   toNotebookCellData,
   withStoredCellId,
 } from "./cells";
+import { buildCellLookupDetail } from "./cellLookupDetail";
 
 export interface MutationOutcome {
   operation: "insert_cell" | "replace_cell_source" | "delete_cell" | "move_cell";
@@ -22,6 +23,10 @@ export interface MutationOutcome {
 }
 
 export class NotebookMutationService {
+  public constructor(
+    private readonly getNotebookVersion: (notebookUri: string) => number = () => 0,
+  ) {}
+
   public async ensureStableCellIds(document: vscode.NotebookDocument): Promise<vscode.NotebookDocument> {
     const edits: vscode.NotebookEdit[] = [];
 
@@ -181,6 +186,15 @@ export class NotebookMutationService {
         code: "CellNotFound",
         message: `Cell not found: ${cellId}`,
         recoverable: true,
+        detail: buildCellLookupDetail(
+          document.uri.toString(),
+          this.getNotebookVersion(document.uri.toString()),
+          document
+            .getCells()
+            .map((candidate) => getStoredCellId(candidate))
+            .filter((candidate): candidate is string => Boolean(candidate)),
+          cellId,
+        ),
       });
     }
 

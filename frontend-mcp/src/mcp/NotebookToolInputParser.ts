@@ -21,6 +21,7 @@ import {
   WaitForExecutionRequest,
   WaitForKernelReadyRequest,
 } from "../../../packages/protocol/src";
+import { normalizeCellSourceInput, normalizePatchToolInput } from "./NotebookEditContract";
 import {
   ReadCellOutputsToolRequest,
   ReadNotebookToolRequest,
@@ -294,7 +295,7 @@ export class NotebookToolInputParser {
               params.expected_cell_source_fingerprint,
               `${toolName}.expected_cell_source_fingerprint`,
             ),
-      source: this.requiredString(params.source, `${toolName}.source`),
+      source: normalizeCellSourceInput(this.requiredString(params.source, `${toolName}.source`)),
     };
   }
 
@@ -311,19 +312,21 @@ export class NotebookToolInputParser {
       "reveal",
     ]);
 
+    const format =
+      params.format === undefined
+        ? undefined
+        : this.parseEnum(params.format, `${toolName}.format`, [
+            "auto",
+            "unified_diff",
+            "codex_apply_patch",
+            "search_replace_json",
+          ]);
+
     return {
       notebook_uri: this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
       cell_id: this.requiredString(params.cell_id, `${toolName}.cell_id`),
-      patch: this.requiredString(params.patch, `${toolName}.patch`),
-      format:
-        params.format === undefined
-          ? undefined
-          : this.parseEnum(params.format, `${toolName}.format`, [
-              "auto",
-              "unified_diff",
-              "codex_apply_patch",
-              "search_replace_json",
-            ]),
+      patch: this.parsePatchInput(params.patch, format, `${toolName}.patch`),
+      format,
       expected_notebook_version:
         params.expected_notebook_version === undefined
           ? undefined
@@ -691,7 +694,7 @@ export class NotebookToolInputParser {
 
     const parsedCell: NotebookCellInput = {
       kind,
-      source: this.requiredString(cell.source, `${toolName}.cell.source`),
+      source: normalizeCellSourceInput(this.requiredString(cell.source, `${toolName}.cell.source`)),
     };
 
     if (languageValue !== undefined) {
@@ -748,6 +751,30 @@ export class NotebookToolInputParser {
           : `Unknown position.mode "${mode}". Expected "before_index", "before_cell_id", "after_cell_id", or "at_end".`;
         this.failValidation(toolName, message);
       }
+    }
+  }
+
+  private parsePatchInput(
+    value: unknown,
+    format: PatchCellSourceRequest["format"],
+    fieldName: string,
+  ): string {
+    if (Array.isArray(value)) {
+      try {
+        return normalizePatchToolInput(value as never, format);
+      } catch (error) {
+        this.failValidation("patch_cell_source", error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    if (typeof value !== "string" || value.length === 0) {
+      this.failValidation("patch_cell_source", `${fieldName} must be a non-empty string.`);
+    }
+
+    try {
+      return normalizePatchToolInput(value, format);
+    } catch (error) {
+      this.failValidation("patch_cell_source", error instanceof Error ? error.message : String(error));
     }
   }
 

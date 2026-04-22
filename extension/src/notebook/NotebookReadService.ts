@@ -27,6 +27,7 @@ import { OutputNormalizationService } from "./OutputNormalizationService";
 import { KernelInspectionService } from "./KernelInspectionService";
 import { toCellExecutionSummary } from "./executionSummary";
 import { selectNotebookCells } from "./cellSelection";
+import { buildCellLookupDetail } from "./cellLookupDetail";
 
 export class NotebookReadService {
   public constructor(
@@ -190,6 +191,15 @@ export class NotebookReadService {
         code: "CellNotFound",
         message: `Cell not found: ${cellId}`,
         recoverable: false,
+        detail: buildCellLookupDetail(
+          document.uri.toString(),
+          this.registry.getVersion(document.uri.toString()),
+          document
+            .getCells()
+            .map((candidate) => getStoredCellId(candidate))
+            .filter((candidate): candidate is string => Boolean(candidate)),
+          cellId,
+        ),
       });
     }
 

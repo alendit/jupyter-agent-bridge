@@ -3,6 +3,7 @@ import {
   ReadNotebookRequest,
 } from "../../../packages/protocol/src";
 import { z } from "zod";
+import { SEARCH_REPLACE_PATCH_ARRAY_SCHEMA } from "./NotebookEditContract";
 
 export const TOOL_NAMES = [
   "list_open_notebooks",
@@ -318,25 +319,58 @@ const insertCellInputSchema = z
 const replaceCellSourceInputSchema = z
   .object({
     notebook_uri: notebookUriSchema,
-    cell_id: optionalStringSchema,
+    cell_id: z.string(),
     expected_notebook_version: notebookVersionSchema,
     expected_cell_source_fingerprint: optionalStringSchema,
-    source: optionalStringSchema,
+    source: z.string(),
     reveal: optionalBooleanSchema,
   })
   .passthrough();
 
-const patchCellSourceInputSchema = z
-  .object({
-    notebook_uri: notebookUriSchema,
-    cell_id: optionalStringSchema,
-    patch: optionalStringSchema,
-    format: optionalStringSchema,
-    expected_notebook_version: notebookVersionSchema,
-    expected_cell_source_fingerprint: optionalStringSchema,
-    reveal: optionalBooleanSchema,
-  })
-  .passthrough();
+const patchCellSourceSchemaBase = {
+  notebook_uri: notebookUriSchema,
+  cell_id: z.string(),
+  expected_notebook_version: notebookVersionSchema,
+  expected_cell_source_fingerprint: optionalStringSchema,
+  reveal: optionalBooleanSchema,
+};
+
+const patchCellSourceInputSchema = z.union([
+  z
+    .object({
+      ...patchCellSourceSchemaBase,
+      format: z.literal("search_replace_json"),
+      patch: SEARCH_REPLACE_PATCH_ARRAY_SCHEMA,
+    })
+    .passthrough(),
+  z
+    .object({
+      ...patchCellSourceSchemaBase,
+      format: z.literal("unified_diff"),
+      patch: z.string(),
+    })
+    .passthrough(),
+  z
+    .object({
+      ...patchCellSourceSchemaBase,
+      format: z.literal("codex_apply_patch"),
+      patch: z.string(),
+    })
+    .passthrough(),
+  z
+    .object({
+      ...patchCellSourceSchemaBase,
+      format: z.literal("auto"),
+      patch: z.union([z.string(), SEARCH_REPLACE_PATCH_ARRAY_SCHEMA]),
+    })
+    .passthrough(),
+  z
+    .object({
+      ...patchCellSourceSchemaBase,
+      patch: z.union([z.string(), SEARCH_REPLACE_PATCH_ARRAY_SCHEMA]),
+    })
+    .passthrough(),
+]);
 
 const formatCellInputSchema = z
   .object({
@@ -824,7 +858,8 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   insert_cell: {
     title: "Insert Cell",
-    summary: "Insert a new cell at a specified position. Mutates notebook.",
+    summary:
+      "Insert a new cell at a specified position. Cell source uses normal JSON string semantics and is stored verbatim after decoding, so multiline content should be sent with actual newline characters. Mutates notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","expected_notebook_version"?:7,"position":{"mode":"before_index","index":0}|{"mode":"before_cell_id","cell_id":"cell-1"}|{"mode":"after_cell_id","cell_id":"cell-1"}|{"mode":"at_end"},"cell":{"kind":"markdown"|"code","source":"...","language"?:string|null,"metadata"?:object}}',
     examples: [
@@ -834,21 +869,25 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   replace_cell_source: {
     title: "Replace Cell Source",
-    summary: "Replace a cell's full source. Pass source_fingerprint for stale-safety. Mutates notebook.",
+    summary:
+      "Replace a cell's full source. JSON strings are decoded once and stored verbatim; send actual newline characters for multiline content, and use \\n only when you intend a literal backslash-n. Pass source_fingerprint for stale-safety. Mutates notebook.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","source":"..."}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"print(2)","expected_cell_source_fingerprint":"<fingerprint>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"line one\\nline two"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","source":"line one\\\\nline two"}',
     ],
   },
   patch_cell_source: {
     title: "Patch Cell Source",
-    summary: "Apply a diff patch to one cell without resending full source. Supports unified_diff and search_replace_json formats. Mutates notebook.",
+    summary:
+      "Apply a diff patch to one cell without resending full source. unified_diff and codex_apply_patch require string hunks; search_replace_json requires an array of {old, new, replace_all?} edits. Mutates notebook.",
     schema:
-      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"...","format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
+      '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"..."|[{"old":"...","new":"...","replace_all"?:false}],"format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>"}',
     examples: [
       '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"unified_diff","patch":"@@\\n-print(x)\\n+print(x + 1)","expected_cell_source_fingerprint":"<fingerprint>"}',
-      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"search_replace_json","patch":"[{\\"old\\":\\"epochs=10\\",\\"new\\":\\"epochs=20\\"}]","expected_cell_source_fingerprint":"<fingerprint>"}',
+      '{"notebook_uri":"file:///workspace/demo.ipynb","cell_id":"cell-1","format":"search_replace_json","patch":[{"old":"epochs=10","new":"epochs=20"}],"expected_cell_source_fingerprint":"<fingerprint>"}',
     ],
   },
   format_cell: {
@@ -874,7 +913,8 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   execute_cells: {
     title: "Execute Cells",
-    summary: "Execute code cells and wait for results. Mutates kernel state.",
+    summary:
+      "Execute code cells synchronously and wait for completion or an execution timeout. Use execute_cells_async for long-running work. Mutates kernel state.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
     examples: [
@@ -884,7 +924,8 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   execute_cells_async: {
     title: "Execute Cells Async",
-    summary: "Queue cell execution and return immediately with an execution handle. Poll with get_execution_status or wait_for_execution.",
+    summary:
+      "Queue cell execution and return immediately with an execution handle. Poll with get_execution_status or wait_for_execution while the kernel keeps running in the background.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true}',
     examples: [
@@ -900,7 +941,8 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   wait_for_execution: {
     title: "Wait For Execution",
-    summary: "Wait for an async execution to complete or time out.",
+    summary:
+      "Wait for an async execution snapshot to reach a terminal state or until the wait timeout elapses. A wait timeout does not cancel the underlying execution.",
     schema: '{"execution_id":"<execution-id>","timeout_ms"?:30000}',
     examples: [
       '{"execution_id":"a2f9a034-8f55-4ae7-81ba-9d2a18b74951"}',
@@ -1182,6 +1224,10 @@ export const NOTEBOOK_TOOL_OUTPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
       deleted_cell_ids: z.array(z.string()),
       cells: z.array(cellSnapshotOutputSchema),
       outline_maybe_changed: z.boolean(),
+      before_source_fingerprint: z.string(),
+      after_source_fingerprint: z.string(),
+      canonical_source_preview: z.string(),
+      warnings: z.array(z.string()),
     })
     .passthrough(),
   patch_cell_source: z
@@ -1195,6 +1241,9 @@ export const NOTEBOOK_TOOL_OUTPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
       applied_patch_format: z.enum(["unified_diff", "codex_apply_patch", "search_replace_json"]),
       before_source_fingerprint: z.string(),
       after_source_fingerprint: z.string(),
+      canonical_source_preview: z.string(),
+      applied_diff_unified: z.string(),
+      warnings: z.array(z.string()),
     })
     .passthrough(),
   format_cell: z

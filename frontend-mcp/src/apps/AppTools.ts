@@ -10,6 +10,7 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { BridgeDiscovery } from "../bridge/BridgeDiscovery";
 import { NotebookBridgeClient } from "../bridge/NotebookBridgeClient";
+import { SEARCH_REPLACE_PATCH_ARRAY_SCHEMA, normalizeCellSourceInput, normalizePatchToolInput } from "../mcp/NotebookEditContract";
 import { NotebookToolResultRenderer } from "../mcp/NotebookToolResultRenderer";
 import { ToolRequestExtra } from "../mcp/SessionSelection";
 import {
@@ -51,7 +52,7 @@ const previewCellEditInputSchema = z.discriminatedUnion("operation", [
       operation: z.literal("patch_cell_source"),
       notebook_uri: z.string(),
       cell_id: z.string(),
-      patch: z.string(),
+      patch: z.union([z.string(), SEARCH_REPLACE_PATCH_ARRAY_SCHEMA]),
       format: z.enum(["auto", "unified_diff", "codex_apply_patch", "search_replace_json"]).optional(),
       expected_notebook_version: z.number().int().optional(),
       expected_cell_source_fingerprint: z.string().optional(),
@@ -146,6 +147,8 @@ export class AppTools {
             proposed_source: z.string(),
             before_source_fingerprint: z.string(),
             after_source_fingerprint: z.string(),
+            canonical_source_preview: z.string(),
+            warnings: z.array(z.string()),
             diff_unified: z.string(),
             applied_patch_format: z.enum(["unified_diff", "codex_apply_patch", "search_replace_json"]).optional(),
           })
@@ -154,7 +157,7 @@ export class AppTools {
       async (input, extra) =>
         this.runTool("preview_cell_edit", async () =>
           this.requirePreviewClient(await this.getClient(extra)).previewCellEdit(
-            previewCellEditInputSchema.parse(input) as PreviewCellEditRequest,
+            this.normalizePreviewCellEditRequest(previewCellEditInputSchema.parse(input)),
           ),
         ),
     );
@@ -223,7 +226,7 @@ export class AppTools {
         this.toAppToolResult(
           "Interactive cell edit review opened.",
           await this.payloadBuilder.buildCellEditReviewPayload(
-            previewCellEditInputSchema.parse(input) as PreviewCellEditRequest,
+            this.normalizePreviewCellEditRequest(previewCellEditInputSchema.parse(input)),
             this.requirePreviewClient(await this.getClient(extra)),
           ),
         ),
@@ -426,6 +429,22 @@ export class AppTools {
     }
 
     return client as NotebookBridgeClient & { previewCellEdit: NonNullable<NotebookBridgeClient["previewCellEdit"]> };
+  }
+
+  private normalizePreviewCellEditRequest(
+    request: z.infer<typeof previewCellEditInputSchema>,
+  ): PreviewCellEditRequest {
+    if (request.operation === "replace_cell_source") {
+      return {
+        ...request,
+        source: normalizeCellSourceInput(request.source),
+      };
+    }
+
+    return {
+      ...request,
+      patch: normalizePatchToolInput(request.patch, request.format),
+    };
   }
 }
 

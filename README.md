@@ -36,7 +36,7 @@ A typical flow looks like this:
 2. `get_notebook_outline` or `list_notebook_cells`
 3. `search_notebook`, `find_symbols`, or `read_notebook` on a small range
 4. `patch_cell_source`, `replace_cell_source`, `insert_cell`, or `move_cell`
-5. `execute_cells` or `execute_cells_async` followed by `wait_for_execution`
+5. `execute_cells` for short blocking work, or `execute_cells_async` followed by `get_execution_status` or `wait_for_execution` for long-running work
 6. `read_cell_outputs`, `get_diagnostics`, `get_execution_status`, or `summarize_notebook_state`
 
 If your agent uses repository instructions, add a short hint in `AGENTS.md` so it prefers the notebook tools over raw `.ipynb` edits. For example:
@@ -77,6 +77,12 @@ Use these tools for live notebook edits:
 - `move_cell`
 - `delete_cell`
 
+Source inputs follow normal JSON string semantics and are stored verbatim after decoding. That means:
+
+- use actual newline characters for multiline cell content
+- use `\\n` only when you want a literal backslash followed by `n`
+- `replace_cell_source`, `patch_cell_source`, and `preview_cell_edit` return source fingerprints plus a canonical source preview so callers can verify what the bridge interpreted
+
 For safer edits and human review:
 
 - `preview_cell_edit` returns a non-mutating diff preview
@@ -94,6 +100,10 @@ For execution:
 - `get_execution_status`
 - `wait_for_execution`
 - `run_notebook_workflow`
+
+Use `execute_cells` when you want the tool call itself to block until execution finishes or times out. Use `execute_cells_async` when work may take a while or when the agent should keep doing other tasks while the kernel runs.
+
+`wait_for_execution.timeout_ms` only limits how long the MCP call waits for a newer execution snapshot. It does not cancel the kernel execution. Use `interrupt_execution` when you need to stop the underlying run.
 
 For kernel state:
 

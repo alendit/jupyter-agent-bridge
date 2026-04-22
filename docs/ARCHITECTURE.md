@@ -263,6 +263,8 @@ Cell reads also expose `source_fingerprint`, which is a short fingerprint of the
 - `cell_id`: stable identity across source edits and moves
 - `source_fingerprint`: optimistic state fingerprint for stale-safe reads, edits, definition lookups, and execution requests
 
+Cell-source mutation inputs use normal JSON string semantics and are stored verbatim after decoding. The MCP frontend must not apply a second unescape pass for sequences such as `\n` or `\t`. Any compatibility handling for ambiguous host payloads belongs in the MCP shell, not in the extension notebook services.
+
 ### Notebook Versioning
 
 Each open notebook gets an in-memory monotonic `notebook_version`.
@@ -273,6 +275,7 @@ Each open notebook gets an in-memory monotonic `notebook_version`.
 - Some cell-targeted requests may also supply expected source fingerprints for optimistic stale checks without a fresh `list_cells` call.
 - Version or source-hash mismatches fail with `NotebookChanged`.
 - `NotebookChanged.detail` returns fresh `CellSnapshot` values for the mismatched target cells so an agent can retry from current state.
+- Missing `cell_id` lookups fail with `CellNotFound` and include structured notebook context such as notebook version, cell count, and a bounded sample of known IDs.
 
 ### Mutation Serialization
 
@@ -317,6 +320,8 @@ Notebook-native stdout, stderr, and structured error payloads are normalized and
 - `execute_cells` must correlate returned status and outputs with the targeted notebook cells.
 - `execute_cells` remains the synchronous execution surface.
 - Async execution uses execution handles exposed through `execute_cells_async`, `get_execution_status`, and `wait_for_execution`.
+- `wait_for_execution.timeout_ms` is a wait bound only. It returns the latest execution snapshot without cancelling the underlying kernel work.
+- Interrupting or restarting the kernel remains explicit through `interrupt_execution` and `restart_kernel`.
 - Async execution handles are process-local, retain terminal snapshots for 15 minutes, and do not outlive the bridge runtime.
 - Per-notebook serialization applies to both synchronous and async executions.
 - Per-cell execution status uses normalized terminal states such as `succeeded`, `failed`, `cancelled`, and `timed_out`.

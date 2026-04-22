@@ -11,6 +11,7 @@ import {
   PatchCellSourceRequest,
   PatchCellSourceResult,
   ReplaceCellSourceRequest,
+  ReplaceCellSourceResult,
 } from "../../../packages/protocol/src";
 import { NotebookRegistry } from "./NotebookRegistry";
 import { NotebookDocumentService } from "./NotebookDocumentService";
@@ -20,6 +21,7 @@ import { CellPatchService } from "./CellPatchService";
 import { NotebookLanguageService } from "./NotebookLanguageService";
 import { computeSourceFingerprint } from "./cells";
 import { buildUnifiedSourceDiff } from "./cellDiff";
+import { summarizeSourceContract } from "./sourceContract";
 
 export class NotebookEditApplicationService {
   public constructor(
@@ -42,11 +44,25 @@ export class NotebookEditApplicationService {
     });
   }
 
-  public async replaceCellSource(request: ReplaceCellSourceRequest): Promise<MutationResult> {
+  public async replaceCellSource(request: ReplaceCellSourceRequest): Promise<ReplaceCellSourceResult> {
     return this.withExclusiveDocument(request.notebook_uri, async (document) => {
-      this.assertEditGuards(document, request, false);
+      const prepared = this.prepareCellEditPreview(document, {
+        ...request,
+        operation: "replace_cell_source",
+      });
       const outcome = await this.mutationService.replaceCellSource(document, request);
-      return this.toMutationResult(request.notebook_uri, outcome);
+      const mutation = this.toMutationResult(request.notebook_uri, outcome);
+      return {
+        ...mutation,
+        operation: "replace_cell_source",
+        ...summarizeSourceContract({
+          beforeSource: prepared.currentSource,
+          afterSource: prepared.proposedSource,
+          beforeFingerprint: prepared.currentSourceFingerprint,
+          afterFingerprint: computeSourceFingerprint(prepared.proposedSource),
+          operation: "replace_cell_source",
+        }),
+      };
     });
   }
 
@@ -60,10 +76,15 @@ export class NotebookEditApplicationService {
         operation: request.operation,
         current_source: prepared.currentSource,
         proposed_source: prepared.proposedSource,
-        before_source_fingerprint: prepared.currentSourceFingerprint,
-        after_source_fingerprint: computeSourceFingerprint(prepared.proposedSource),
         diff_unified: buildUnifiedSourceDiff(prepared.currentSource, prepared.proposedSource),
         applied_patch_format: prepared.appliedPatchFormat,
+        ...summarizeSourceContract({
+          beforeSource: prepared.currentSource,
+          afterSource: prepared.proposedSource,
+          beforeFingerprint: prepared.currentSourceFingerprint,
+          afterFingerprint: computeSourceFingerprint(prepared.proposedSource),
+          operation: request.operation === "patch_cell_source" ? "preview_patch" : "preview_replace",
+        }),
       };
     });
   }
@@ -74,25 +95,38 @@ export class NotebookEditApplicationService {
         ...request,
         operation: "patch_cell_source",
       });
-      const outcome = await this.mutationService.replaceCellSource(document, {
-        notebook_uri: request.notebook_uri,
-        cell_id: request.cell_id,
-        source: prepared.proposedSource,
-      });
-      const mutation = this.readService.toMutationResult(
-        this.documentService.requireDocumentSync(request.notebook_uri),
-        "patch_cell_source",
-        outcome.changed_cell_ids,
-        outcome.deleted_cell_ids,
-        outcome.outline_maybe_changed,
-      );
+      const mutation =
+        prepared.currentSource === prepared.proposedSource
+          ? this.readService.toMutationResult(document, "patch_cell_source", [], [], false)
+          : (() => {
+              const outcome = this.mutationService.replaceCellSource(document, {
+                notebook_uri: request.notebook_uri,
+                cell_id: request.cell_id,
+                source: prepared.proposedSource,
+              });
+              return outcome.then((resolved) =>
+                this.readService.toMutationResult(
+                  this.documentService.requireDocumentSync(request.notebook_uri),
+                  "patch_cell_source",
+                  resolved.changed_cell_ids,
+                  resolved.deleted_cell_ids,
+                  resolved.outline_maybe_changed,
+                ),
+              );
+            })();
 
       return {
-        ...mutation,
+        ...(await mutation),
         operation: "patch_cell_source",
         applied_patch_format: prepared.appliedPatchFormat as PatchCellSourceResult["applied_patch_format"],
-        before_source_fingerprint: prepared.currentSourceFingerprint,
-        after_source_fingerprint: computeSourceFingerprint(prepared.proposedSource),
+        applied_diff_unified: buildUnifiedSourceDiff(prepared.currentSource, prepared.proposedSource),
+        ...summarizeSourceContract({
+          beforeSource: prepared.currentSource,
+          afterSource: prepared.proposedSource,
+          beforeFingerprint: prepared.currentSourceFingerprint,
+          afterFingerprint: computeSourceFingerprint(prepared.proposedSource),
+          operation: "patch_cell_source",
+        }),
       };
     });
   }
