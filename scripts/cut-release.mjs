@@ -7,6 +7,7 @@ import process from "node:process";
 import {
   isDirtyWorktree,
   parseCutReleaseArgs,
+  resolveReleaseVersion,
   usage,
 } from "./cut-release-lib.mjs";
 
@@ -18,7 +19,7 @@ function run(command, args, options = {}) {
 }
 
 function main() {
-  const { showHelp, version, pushRemote } = parseCutReleaseArgs(process.argv.slice(2));
+  const { showHelp, releaseTarget, pushRemote } = parseCutReleaseArgs(process.argv.slice(2));
 
   if (showHelp) {
     process.stdout.write(`${usage()}\n`);
@@ -31,6 +32,7 @@ function main() {
   }
 
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const version = resolveReleaseVersion(packageJson.version, releaseTarget);
   if (packageJson.version === version) {
     throw new Error(`package.json is already at version ${version}.`);
   }
@@ -59,4 +61,3 @@ try {
   process.stderr.write(`${usage()}\n`);
   process.exitCode = 1;
 }
-

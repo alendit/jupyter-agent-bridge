@@ -160,6 +160,16 @@ The extension also writes the workspace-local bridge port file at `.jupyter-agen
 
 These files are local operational state. Keep them untracked and regenerate them per machine.
 
+## Development
+
+For release cuts, the repo helper now accepts either an explicit semver or a bump keyword:
+
+- `npm run cut-release -- patch`
+- `npm run cut-release -- minor --push github`
+- `npm run cut-release -- 0.4.0`
+
+When you pass `major`, `minor`, or `patch`, the script reads the current `package.json` version, computes the next semver for that part, and then runs `npm version` with the resolved target.
+
 ## Architecture
 
 For architecture, runtime topology, and lower-level bridge details, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
