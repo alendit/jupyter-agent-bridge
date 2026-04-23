@@ -10,6 +10,8 @@ import {
   FindSymbolsResult,
   FormatCellRequest,
   FormatCellResult,
+  GetNotebookEditorStateRequest,
+  GetNotebookEditorStateResult,
   GetExecutionStatusRequest,
   GetKernelInfoResult,
   GoToDefinitionRequest,
@@ -90,4 +92,5 @@ export interface NotebookBridgeClient {
   selectKernel(request: SelectKernelRequest): Promise<KernelCommandResult>;
   selectJupyterInterpreter(request: SelectJupyterInterpreterRequest): Promise<KernelCommandResult>;
   summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult>;
+  getNotebookEditorState(request: GetNotebookEditorStateRequest): Promise<GetNotebookEditorStateResult>;
 }

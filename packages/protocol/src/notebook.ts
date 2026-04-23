@@ -359,6 +359,43 @@ export interface NotebookStateSummary {
   active_cell_id?: string;
 }
 
+export interface GetNotebookEditorStateRequest {
+  notebook_uri?: string;
+}
+
+export type NotebookEditorFocusKind = "cell" | "source" | "output" | "unknown";
+
+export interface NotebookCellRange {
+  start: number;
+  end: number;
+}
+
+export interface NotebookSourceSelection {
+  cell_id: string;
+  start_line: number;
+  start_column: number;
+  end_line: number;
+  end_column: number;
+}
+
+export interface NotebookEditorState {
+  notebook_uri: string;
+  notebook_version: number;
+  active_notebook_uri?: string;
+  active_editor: boolean;
+  visible_editor_count: number;
+  focus_kind: NotebookEditorFocusKind;
+  active_cell_id?: string;
+  active_cell_index?: number;
+  selected_cell_ids: string[];
+  selected_ranges: NotebookCellRange[];
+  visible_cell_ids: string[];
+  visible_ranges: NotebookCellRange[];
+  top_visible_cell_id?: string;
+  active_source_selection?: NotebookSourceSelection;
+  source_fingerprint_by_cell_id: Record<string, string>;
+}
+
 export interface NotebookChangedDetail {
   notebook_uri: string;
   notebook_version: number;
@@ -626,4 +663,5 @@ export type ListOpenNotebooksResult = NotebookSummary[];
 export type OpenNotebookResult = NotebookSummary;
 export type ReadNotebookResult = NotebookSnapshot;
 export type SummarizeNotebookStateResult = NotebookStateSummary;
+export type GetNotebookEditorStateResult = NotebookEditorState;
 export type WaitForKernelReadyRpcResult = WaitForKernelReadyResult;

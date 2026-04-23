@@ -4,6 +4,7 @@ import {
   ExecuteCellsRequest,
   FindSymbolsRequest,
   FormatCellRequest,
+  GetNotebookEditorStateRequest,
   GetExecutionStatusRequest,
   GoToDefinitionRequest,
   InsertCellRequest,
@@ -80,6 +81,19 @@ export class NotebookToolInputParser {
         params.view_column === undefined
           ? undefined
           : this.parseEnum(params.view_column, `${toolName}.view_column`, ["active", "beside"]),
+    };
+  }
+
+  public parseGetNotebookEditorStateRequest(input: unknown): GetNotebookEditorStateRequest {
+    const toolName = "get_notebook_editor_state";
+    const params = this.requireObject(input, toolName);
+    this.assertKnownKeys(toolName, params, ["notebook_uri"]);
+
+    return {
+      notebook_uri:
+        params.notebook_uri === undefined
+          ? undefined
+          : this.requiredString(params.notebook_uri, `${toolName}.notebook_uri`),
     };
   }
 
@@ -842,6 +856,8 @@ export class NotebookToolInputParser {
     switch (stepTool) {
       case "get_notebook_outline":
         return this.parseNotebookUriOnlyInput("get_notebook_outline", input);
+      case "get_notebook_editor_state":
+        return this.parseGetNotebookEditorStateRequest(input);
       case "list_notebook_cells":
         return this.parseListNotebookCellsRequest(input);
       case "list_variables":

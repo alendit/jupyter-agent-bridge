@@ -9,6 +9,7 @@ export const TOOL_NAMES = [
   "list_open_notebooks",
   "describe_tool",
   "open_notebook",
+  "get_notebook_editor_state",
   "get_notebook_outline",
   "list_notebook_cells",
   "list_variables",
@@ -86,6 +87,7 @@ export const TOOL_ANNOTATIONS: Record<ToolName, ToolAnnotations> = {
   list_open_notebooks:              { title: "List Open Notebooks",               readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
   describe_tool:                    { title: "Describe Tool",                     readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
   open_notebook:                    { title: "Open Notebook",                     readOnlyHint: false, idempotentHint: true,  openWorldHint: false },
+  get_notebook_editor_state:        { title: "Get Notebook Editor State",         readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
   get_notebook_outline:             { title: "Get Notebook Outline",              readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
   list_notebook_cells:              { title: "List Notebook Cells",               readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
   list_variables:                   { title: "List Variables",                    readOnlyHint: true,  idempotentHint: true,  openWorldHint: false },
@@ -123,6 +125,7 @@ export const TOOL_ANNOTATIONS: Record<ToolName, ToolAnnotations> = {
 
 export const NOTEBOOK_WORKFLOW_STEP_TOOLS = [
   "get_notebook_outline",
+  "get_notebook_editor_state",
   "list_notebook_cells",
   "list_variables",
   "search_notebook",
@@ -553,6 +556,43 @@ const notebookSummaryOutputSchema = z
   })
   .passthrough();
 
+const notebookCellRangeOutputSchema = z
+  .object({
+    start: z.number().int(),
+    end: z.number().int(),
+  })
+  .passthrough();
+
+const notebookSourceSelectionOutputSchema = z
+  .object({
+    cell_id: z.string(),
+    start_line: z.number().int(),
+    start_column: z.number().int(),
+    end_line: z.number().int(),
+    end_column: z.number().int(),
+  })
+  .passthrough();
+
+const notebookEditorStateOutputSchema = z
+  .object({
+    notebook_uri: z.string(),
+    notebook_version: z.number().int(),
+    active_notebook_uri: z.string().optional(),
+    active_editor: z.boolean(),
+    visible_editor_count: z.number().int(),
+    focus_kind: z.enum(["cell", "source", "output", "unknown"]),
+    active_cell_id: z.string().optional(),
+    active_cell_index: z.number().int().optional(),
+    selected_cell_ids: z.array(z.string()),
+    selected_ranges: z.array(notebookCellRangeOutputSchema),
+    visible_cell_ids: z.array(z.string()),
+    visible_ranges: z.array(notebookCellRangeOutputSchema),
+    top_visible_cell_id: z.string().optional(),
+    active_source_selection: notebookSourceSelectionOutputSchema.optional(),
+    source_fingerprint_by_cell_id: z.record(z.string()),
+  })
+  .passthrough();
+
 const cellExecutionSummaryOutputSchema = z
   .object({
     status: z.enum(["idle", "queued", "running", "succeeded", "failed", "cancelled", "timed_out"]),
@@ -787,6 +827,13 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
       '{"notebook_uri":"file:///workspace/demo.ipynb"}',
       '{"notebook_uri":"file:///workspace/demo.ipynb","view_column":"beside"}',
     ],
+  },
+  get_notebook_editor_state: {
+    title: "Get Notebook Editor State",
+    summary:
+      "Use before acting on the user's current notebook focus, selection, or viewport. Returns active cell, selected cells, visible ranges, focus kind, and source fingerprints for targeted follow-up edits.",
+    schema: '{"notebook_uri"?: "file:///.../demo.ipynb"}',
+    examples: ["{}", '{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   get_notebook_outline: {
     title: "Get Notebook Outline",
@@ -1085,6 +1132,7 @@ export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
   list_open_notebooks: permissiveObjectSchema,
   describe_tool: z.object({ tool_name: toolNameSchema }).passthrough(),
   open_notebook: openNotebookInputSchema,
+  get_notebook_editor_state: singleNotebookInputSchema,
   get_notebook_outline: singleNotebookInputSchema,
   list_notebook_cells: listNotebookCellsInputSchema,
   list_variables: listVariablesInputSchema,
@@ -1135,6 +1183,7 @@ export const NOTEBOOK_TOOL_OUTPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {
     })
     .passthrough(),
   open_notebook: notebookSummaryOutputSchema,
+  get_notebook_editor_state: notebookEditorStateOutputSchema,
   get_notebook_outline: z
     .object({
       notebook_uri: z.string(),

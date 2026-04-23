@@ -102,6 +102,8 @@ export class JsonRpcRouter {
         return this.notebookBridgeService.selectJupyterInterpreter(object(params) as never);
       case BRIDGE_METHODS.summarizeState:
         return this.notebookBridgeService.summarizeNotebookState(requiredString(params, "notebook_uri"));
+      case BRIDGE_METHODS.getEditorState:
+        return this.notebookBridgeService.getNotebookEditorState(object(params) as never);
       default:
         return Promise.reject({
           code: "InvalidRequest",

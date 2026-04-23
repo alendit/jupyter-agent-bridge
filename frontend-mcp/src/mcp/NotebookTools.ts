@@ -78,6 +78,10 @@ export class NotebookTools {
       (await this.getClient(extra)).openNotebook(this.parseOpenNotebookRequest(input)),
     );
 
+    register("get_notebook_editor_state", async (input, extra) =>
+      this.reads.getNotebookEditorState(this.parseGetNotebookEditorStateRequest(input), extra),
+    );
+
     register("get_notebook_outline", async (input, extra) =>
       this.reads.getNotebookOutline(this.parseNotebookUriOnlyInput("get_notebook_outline", input).notebook_uri, extra),
     );
@@ -256,6 +260,10 @@ export class NotebookTools {
 
   private parseEmptyInput(toolName: ToolName, input: unknown): void {
     return this.parser.parseEmptyInput(toolName, input);
+  }
+
+  private parseGetNotebookEditorStateRequest(input: unknown) {
+    return this.parser.parseGetNotebookEditorStateRequest(input);
   }
 
   private parseDescribeToolInput(input: unknown): { tool_name?: ToolName } {

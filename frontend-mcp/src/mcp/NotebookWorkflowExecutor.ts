@@ -48,6 +48,8 @@ export class NotebookWorkflowExecutor {
     switch (toolName) {
       case "get_notebook_outline":
         return client.getNotebookOutline((input as { notebook_uri: string }).notebook_uri);
+      case "get_notebook_editor_state":
+        return client.getNotebookEditorState(input as never);
       case "list_notebook_cells":
         return client.listNotebookCells(input as never);
       case "list_variables":

@@ -347,9 +347,13 @@ The extension currently exposes these user-facing commands:
 
 The bridge method names are defined centrally in [`packages/protocol/src/rpc.ts`](../packages/protocol/src/rpc.ts). The full user-facing API inventory lives in [`README.md`](../README.md).
 
+Editor-state reads are part of the bridge query surface. `notebook.get_editor_state` reports volatile UI state such as active notebook URI, active cell, selected ranges, visible ranges, and best-effort source focus. This belongs in the extension/bridge shell because it depends on VS Code notebook editor state; notebook-domain policy must continue to stay independent of editor focus and viewport APIs.
+
 ### MCP Surface
 
 The MCP tool catalog is defined in [`frontend-mcp/src/mcp/NotebookToolCatalog.ts`](../frontend-mcp/src/mcp/NotebookToolCatalog.ts). `README.md` documents the current tool list and intended use.
+
+`get_notebook_editor_state` is the MCP-facing affordance for user-targeted requests such as "this cell" or "the selected cells". It is intentionally separate from `summarize_notebook_state`, which remains a notebook health and kernel summary.
 
 #### Tool Profiles
 

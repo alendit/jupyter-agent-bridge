@@ -41,11 +41,12 @@ The normal workflow is incremental. Let the agent discover the notebook, narrow 
 A typical flow looks like this:
 
 1. `list_open_notebooks`
-2. `get_notebook_outline` or `list_notebook_cells`
-3. `search_notebook`, `find_symbols`, or `read_notebook` on a small range
-4. `patch_cell_source`, `replace_cell_source`, `insert_cell`, or `move_cell`
-5. `execute_cells` for short blocking work, or `execute_cells_async` followed by `get_execution_status` or `wait_for_execution` for long-running work
-6. `read_cell_outputs`, `get_diagnostics`, `get_execution_status`, or `summarize_notebook_state`
+2. `get_notebook_editor_state` when the request refers to the user's current focus, selection, or viewport
+3. `get_notebook_outline` or `list_notebook_cells`
+4. `search_notebook`, `find_symbols`, or `read_notebook` on a small range
+5. `patch_cell_source`, `replace_cell_source`, `insert_cell`, or `move_cell`
+6. `execute_cells` for short blocking work, or `execute_cells_async` followed by `get_execution_status` or `wait_for_execution` for long-running work
+7. `read_cell_outputs`, `get_diagnostics`, `get_execution_status`, or `summarize_notebook_state`
 
 If your agent uses repository instructions, add a short hint in `AGENTS.md` so it prefers the notebook tools over raw `.ipynb` edits. For example:
 
@@ -66,6 +67,7 @@ Use these tools to orient the agent without pulling the whole notebook into cont
 
 - `list_open_notebooks`
 - `open_notebook`
+- `get_notebook_editor_state`
 - `get_notebook_outline`
 - `list_notebook_cells`
 - `search_notebook`
@@ -73,6 +75,8 @@ Use these tools to orient the agent without pulling the whole notebook into cont
 - `go_to_definition`
 - `reveal_notebook_cells`
 - `set_notebook_cell_input_visibility`
+
+Use `get_notebook_editor_state` before acting on phrases like "this cell", "the selected cells", "what I'm looking at", or "continue from here". It reports the active notebook URI, active cell, selected cell ranges, visible cell ranges, source selection when available, and source fingerprints for targeted stale-safe follow-up actions.
 
 ### Editing And Review
 

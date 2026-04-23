@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import {
   FindSymbolsRequest,
   FindSymbolsResult,
+  GetNotebookEditorStateRequest,
+  GetNotebookEditorStateResult,
   GetKernelInfoResult,
   GoToDefinitionRequest,
   GoToDefinitionResult,
@@ -184,6 +186,23 @@ export class NotebookQueryApplicationService {
     const document = await this.documentService.requireReadyDocument(notebookUri);
     await this.hostKernelObservationService.refresh(document);
     return this.readService.summarizeNotebookState(document);
+  }
+
+  public async getNotebookEditorState(
+    request: GetNotebookEditorStateRequest,
+  ): Promise<GetNotebookEditorStateResult> {
+    const document = request.notebook_uri
+      ? await this.documentService.requireReadyDocument(request.notebook_uri)
+      : this.registry.getActiveNotebookDocument();
+    if (!document) {
+      fail({
+        code: "NotebookNotFound",
+        message: "No active notebook editor is available. Provide notebook_uri to inspect a specific notebook.",
+        recoverable: true,
+      });
+    }
+
+    return this.registry.getNotebookEditorState(document);
   }
 }
 

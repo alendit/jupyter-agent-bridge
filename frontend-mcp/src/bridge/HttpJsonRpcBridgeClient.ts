@@ -13,6 +13,8 @@ import {
   FindSymbolsResult,
   FormatCellRequest,
   FormatCellResult,
+  GetNotebookEditorStateRequest,
+  GetNotebookEditorStateResult,
   GetExecutionStatusRequest,
   GetKernelInfoResult,
   GoToDefinitionRequest,
@@ -219,6 +221,12 @@ export class HttpJsonRpcBridgeClient implements NotebookBridgeClient {
 
   public summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult> {
     return this.call(BRIDGE_METHODS.summarizeState, { notebook_uri: notebookUri });
+  }
+
+  public getNotebookEditorState(
+    request: GetNotebookEditorStateRequest,
+  ): Promise<GetNotebookEditorStateResult> {
+    return this.call(BRIDGE_METHODS.getEditorState, request);
   }
 
   private async call<T>(method: string, params?: unknown): Promise<T> {

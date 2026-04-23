@@ -126,6 +126,54 @@ test("register exposes outputSchema for every notebook tool in full profile", ()
   }
 });
 
+test("get_notebook_editor_state advertises focus use and delegates to the bridge client", async () => {
+  assert.match(
+    buildToolDescription("get_notebook_editor_state"),
+    /Use before acting on the user's current notebook focus/,
+  );
+
+  let request: unknown;
+  const tools = new NotebookTools(async () =>
+    ({
+      getNotebookEditorState: async (input: unknown) => {
+        request = input;
+        return {
+          notebook_uri: "file:///workspace/demo.ipynb",
+          notebook_version: 7,
+          active_editor: true,
+          visible_editor_count: 1,
+          focus_kind: "source",
+          selected_cell_ids: ["cell-2"],
+          selected_ranges: [{ start: 1, end: 2 }],
+          visible_cell_ids: ["cell-2"],
+          visible_ranges: [{ start: 1, end: 2 }],
+          source_fingerprint_by_cell_id: {
+            "cell-2": "b4b4ed369fb2",
+          },
+        };
+      },
+    }) as never,
+  );
+
+  const handlers = new Map<string, (input: unknown, extra: Record<string, unknown>) => Promise<unknown>>();
+  tools.register({
+    registerTool: (name: string, _config: Record<string, unknown>, handler: unknown) => {
+      handlers.set(name, handler as (input: unknown, extra: Record<string, unknown>) => Promise<unknown>);
+    },
+  } as never);
+
+  const result = await handlers.get("get_notebook_editor_state")?.(
+    { notebook_uri: "file:///workspace/demo.ipynb" },
+    {},
+  );
+
+  assert.deepEqual(request, { notebook_uri: "file:///workspace/demo.ipynb" });
+  assert.equal(
+    (result as { structuredContent?: { active_editor?: boolean } }).structuredContent?.active_editor,
+    true,
+  );
+});
+
 test("register exposes the full notebook tool catalog by default", () => {
   const prev = process.env.JUPYTER_AGENT_BRIDGE_PROFILE;
   delete process.env.JUPYTER_AGENT_BRIDGE_PROFILE;

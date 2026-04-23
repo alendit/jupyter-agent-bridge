@@ -7,6 +7,8 @@ import {
   ExecutionStatusResult,
   FindSymbolsRequest,
   FindSymbolsResult,
+  GetNotebookEditorStateRequest,
+  GetNotebookEditorStateResult,
   FormatCellRequest,
   FormatCellResult,
   GetExecutionStatusRequest,
@@ -188,5 +190,11 @@ export class NotebookBridgeService {
 
   public async summarizeNotebookState(notebookUri: string): Promise<SummarizeNotebookStateResult> {
     return this.queryService.summarizeNotebookState(notebookUri);
+  }
+
+  public async getNotebookEditorState(
+    request: GetNotebookEditorStateRequest,
+  ): Promise<GetNotebookEditorStateResult> {
+    return this.queryService.getNotebookEditorState(request);
   }
 }

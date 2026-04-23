@@ -1,5 +1,6 @@
 import {
   FindSymbolsRequest,
+  GetNotebookEditorStateRequest,
   ListNotebookCellsRequest,
   ListNotebookVariablesRequest,
   NotebookDiagnosticsRequest,
@@ -59,5 +60,9 @@ export class NotebookReadOperations {
 
   public async summarizeNotebookState(notebookUri: string, extra: ToolRequestExtra) {
     return (await this.getClient(extra)).summarizeNotebookState(notebookUri);
+  }
+
+  public async getNotebookEditorState(request: GetNotebookEditorStateRequest, extra: ToolRequestExtra) {
+    return (await this.getClient(extra)).getNotebookEditorState(request);
   }
 }

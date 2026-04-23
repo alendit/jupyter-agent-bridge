@@ -31,6 +31,7 @@ export const BRIDGE_METHODS = {
   selectKernel: "notebook.select_kernel",
   selectJupyterInterpreter: "notebook.select_jupyter_interpreter",
   summarizeState: "notebook.summarize_state",
+  getEditorState: "notebook.get_editor_state",
 } as const;
 
 export interface SessionCapabilities {
