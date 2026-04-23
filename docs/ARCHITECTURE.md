@@ -113,6 +113,7 @@ The extension is the only component allowed to touch live notebook state. Its re
 - ensure stable cell IDs exist
 - project live editor state into immutable snapshots for the domain package
 - read notebook snapshots, previews, outlines, diagnostics, symbols, and outputs
+- normalize editor-native output items into transport-safe output records, including extracting embedded image MIME payloads from rich vendor bundles when the live notebook output already carries them
 - apply notebook mutations through VS Code notebook edit APIs
 - execute cells and observe completion
 - inspect and control kernel state through public editor/Jupyter command surfaces
@@ -157,6 +158,8 @@ The shared notebook domain package owns the notebook rules that should behave th
 - how raw variable-explorer payloads become stable paged summaries
 
 UI-oriented presentation behavior stays in the extension shell. That includes commands such as revealing cells in the viewport, collapsing cell input, focusing rendered output for demonstration flows, and handling product-scheme URI opens that map to those editor-native actions.
+
+Output adaptation that depends on editor-native notebook item encoding also stays in the extension shell. If a VS Code notebook output item exposes vendor-specific structure such as Plotly JSON with embedded `image/png` or `image/svg+xml` payloads, the extension may project those embedded image payloads into normal transport `image` outputs while preserving the original rich bundle entry. This is still notebook-state projection, not MCP presentation logic.
 
 This keeps Cursor-specific, VS Code-specific, and transport-specific differences in the shell instead of leaking them into notebook policy.
 
@@ -312,6 +315,8 @@ Normalization keeps MIME types, ordering, and truncation metadata. The current t
 If truncation occurs, the output item carries `truncated`, `original_bytes`, and `returned_bytes`.
 
 Notebook-native stdout, stderr, and structured error payloads are normalized and returned by default. `include_rich_output_text` only gates raw rendered HTML/JS/widget payloads and similar rich vendor bundles. When a rich vendor bundle already contains embedded image MIME payloads, the extension shell may surface those embedded images as normal `image` outputs in addition to the original rich bundle entry.
+
+This extraction belongs in the extension rather than `frontend-mcp` because the decision depends on how the live editor exposes `NotebookCellOutputItem` data, MIME-specific payload encoding, and per-item byte limits before transport. The MCP frontend should only translate already-normalized image outputs into MCP image content; it must not re-interpret vendor bundle internals independently of the editor bridge.
 
 ### Execution Rules
 
