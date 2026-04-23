@@ -1894,9 +1894,12 @@ test("parseReplaceCellSourceRequest preserves decoded JSON strings verbatim", ()
   assert.equal(literalEscapes.source, String.raw`line one\nline two`);
 });
 
-test("tool descriptions document wait timeout semantics and async recovery flow", () => {
-  assert.match(buildToolDescription("execute_cells_async"), /execution handle/i);
-  assert.match(buildToolDescription("wait_for_execution"), /does not cancel the underlying execution/i);
+test("tool descriptions promote the highest-value execution and patch guidance", () => {
+  assert.match(buildToolDescription("execute_cells"), /rendered images inline/i);
+  assert.match(buildToolDescription("execute_cells_async"), /execution_id/i);
+  assert.match(buildToolDescription("wait_for_execution"), /reuse the same execution_id to poll again/i);
+  assert.match(buildToolDescription("patch_cell_source"), /expected_cell_source_fingerprint/i);
+  assert.match(buildToolDescription("patch_cell_source"), /describe_tool\("patch_cell_source"\)/i);
 });
 
 test("parseFormatCellRequest accepts stale-safe formatter requests", () => {

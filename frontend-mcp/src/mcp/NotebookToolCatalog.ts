@@ -888,7 +888,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   patch_cell_source: {
     title: "Patch Cell Source",
     summary:
-      "Apply a diff patch to one cell without resending full source. unified_diff and codex_apply_patch require string hunks; search_replace_json requires an array of {old, new, replace_all?} edits. Mutates notebook.",
+      'Apply a diff patch to one cell without resending full source. unified_diff and codex_apply_patch require string hunks; search_replace_json requires an array of {old, new, replace_all?} edits. Use expected_cell_source_fingerprint for stale-safe patching. See describe_tool("patch_cell_source") for exact per-format examples. Mutates notebook.',
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_id":"cell-1","patch":"..."|[{"old":"...","new":"...","replace_all"?:false}],"format"?: "auto"|"unified_diff"|"codex_apply_patch"|"search_replace_json","expected_notebook_version"?:7,"expected_cell_source_fingerprint"?: "<fingerprint>","reveal_cell"?:true}',
     examples: [
@@ -921,7 +921,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   execute_cells: {
     title: "Execute Cells",
     summary:
-      "Execute code cells synchronously and wait for completion or an execution timeout. Use execute_cells_async for long-running work. Mutates kernel state.",
+      "Execute code cells synchronously and wait for completion or an execution timeout. Returns rendered images inline when available, so use this to visually verify plots and other outputs before reporting back. Use execute_cells_async for long-running work. Mutates kernel state.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true,"reveal_cell"?:true}',
     examples: [
@@ -932,7 +932,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   execute_cells_async: {
     title: "Execute Cells Async",
     summary:
-      "Queue cell execution and return immediately with an execution handle. Poll with get_execution_status or wait_for_execution while the kernel keeps running in the background.",
+      "Queue cell execution and return immediately with an execution_id. Poll with get_execution_status or wait_for_execution while the kernel keeps running in the background.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","cell_ids":["cell-1"],"expected_notebook_version"?:7,"expected_cell_source_fingerprint_by_id"?:{"cell-1":"<fingerprint>"},"timeout_ms"?:30000,"stop_on_error"?:true,"reveal_cell"?:true}',
     examples: [
@@ -949,7 +949,7 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   wait_for_execution: {
     title: "Wait For Execution",
     summary:
-      "Wait for an async execution snapshot to reach a terminal state or until the wait timeout elapses. A wait timeout does not cancel the underlying execution.",
+      "Wait for an async execution snapshot to reach a terminal state or until the wait timeout elapses. timeout_ms limits this wait call only; it does not cancel the underlying execution. Reuse the same execution_id to poll again.",
     schema: '{"execution_id":"<execution-id>","timeout_ms"?:30000}',
     examples: [
       '{"execution_id":"a2f9a034-8f55-4ae7-81ba-9d2a18b74951"}',
