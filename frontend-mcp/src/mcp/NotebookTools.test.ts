@@ -1648,6 +1648,8 @@ test("describeTool includes notebook rules and the preview tool", () => {
   assert.match(JSON.stringify(description.tools), /list_notebook_cells/);
   assert.match(JSON.stringify(description.tools), /wait_for_kernel_ready/);
   assert.match(JSON.stringify(description.tools), /reveal_notebook_cells/);
+  assert.match(JSON.stringify(description.notebook_rules), /vscode\+png/);
+  assert.match(JSON.stringify(description.notebook_rules), /plotly_mimetype\+png/);
 });
 
 test("parseSearchNotebookRequest accepts targeted search options", () => {

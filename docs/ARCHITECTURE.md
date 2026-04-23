@@ -311,7 +311,7 @@ Normalization keeps MIME types, ordering, and truncation metadata. The current t
 
 If truncation occurs, the output item carries `truncated`, `original_bytes`, and `returned_bytes`.
 
-Notebook-native stdout, stderr, and structured error payloads are normalized and returned by default. `include_rich_output_text` only gates raw rendered HTML/JS/widget payloads and similar rich vendor bundles.
+Notebook-native stdout, stderr, and structured error payloads are normalized and returned by default. `include_rich_output_text` only gates raw rendered HTML/JS/widget payloads and similar rich vendor bundles. When a rich vendor bundle already contains embedded image MIME payloads, the extension shell may surface those embedded images as normal `image` outputs in addition to the original rich bundle entry.
 
 ### Execution Rules
 

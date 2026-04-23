@@ -1063,6 +1063,7 @@ export const NOTEBOOK_RULES = [
   "Use read_cell_outputs for one cell instead of full outputs.",
   "Plain notebook stdout, stderr, and error payloads are returned by default.",
   "Rich rendered HTML/JS/widget outputs are omitted by default.",
+  'For Plotly figures in VS Code notebooks, prefer `import plotly.io; plotly.io.renderers.default = "vscode+png"` (equivalently `plotly_mimetype+png`) and install `kaleido` in the notebook environment if Plotly needs static image rendering support. That lets the notebook emit an `image/png` snapshot the MCP can return in an agent-readable format.',
   "Only request include_rich_output_text when raw rendered payload is necessary.",
   "Use output_file_path to route heavy results to disk instead of context.",
   "Page variables with query, offset, and max_results.",
