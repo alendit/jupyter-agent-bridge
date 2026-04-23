@@ -11,14 +11,25 @@ export class NotebookCommandAdapter {
     document: vscode.NotebookDocument,
     options?: { preserveFocus?: boolean },
   ): Promise<vscode.NotebookEditor> {
+    const uri = document.uri.toString();
     const active = vscode.window.activeNotebookEditor;
-    if (active && active.notebook.uri.toString() === document.uri.toString()) {
+    if (active && active.notebook.uri.toString() === uri) {
       return active;
     }
 
+    const visible = vscode.window.visibleNotebookEditors.find(
+      (editor) => editor.notebook.uri.toString() === uri,
+    );
+
+    const preserveFocus = options?.preserveFocus ?? true;
+    if (visible && preserveFocus) {
+      return visible;
+    }
+
     return vscode.window.showNotebookDocument(document, {
-      preserveFocus: options?.preserveFocus ?? true,
+      preserveFocus,
       preview: false,
+      viewColumn: visible?.viewColumn,
     });
   }
 
