@@ -36,6 +36,7 @@ import { NotebookRuntimeApplicationService } from "./notebook/NotebookRuntimeApp
 import { NotebookSearchService } from "./notebook/NotebookSearchService";
 import { NotebookVariableService } from "./notebook/NotebookVariableService";
 import { OutputNormalizationService } from "./notebook/OutputNormalizationService";
+import { getBridgeStatusBarPresentation } from "./statusBarPresentation";
 
 const EXTENSION_VERSION = "0.1.0";
 const PRODUCT_NAME = "Jupyter Agentic Bridge";
@@ -160,9 +161,10 @@ JSON-RPC method: ${BRIDGE_METHODS.getSessionInfo}`;
   };
 
   const updateStatusBar = (): void => {
+    const presentation = getBridgeStatusBarPresentation(runtimeController?.getState() !== undefined);
     statusBarItem.command = SHOW_STATUS_COMMAND;
-    statusBarItem.text = runtimeController?.getState() ? `$(plug) ${PRODUCT_NAME}` : `$(debug-disconnect) ${PRODUCT_NAME}`;
-    statusBarItem.color = runtimeController?.getState() ? new vscode.ThemeColor("charts.blue") : undefined;
+    statusBarItem.text = presentation.text;
+    statusBarItem.color = presentation.colorThemeKey ? new vscode.ThemeColor(presentation.colorThemeKey) : undefined;
     statusBarItem.tooltip = renderTooltip();
     statusBarItem.show();
   };
