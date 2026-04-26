@@ -48,6 +48,8 @@ A typical flow looks like this:
 6. `execute_cells` for short blocking work, or `execute_cells_async` followed by `get_execution_status` or `wait_for_execution` for long-running work
 7. `read_cell_outputs`, `get_diagnostics`, `get_execution_status`, or `summarize_notebook_state`
 
+Use `list_notebook_cells` for lightweight navigation previews and fingerprints. Use `read_notebook` with `cell_ids` or `range` when you need full source for editing, review, or patch planning; prefer that over raw `.ipynb` reads for notebook cell contents.
+
 If your agent uses repository instructions, add a short hint in `AGENTS.md` so it prefers the notebook tools over raw `.ipynb` edits. For example:
 
 ```md

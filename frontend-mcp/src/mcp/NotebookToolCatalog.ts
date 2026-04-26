@@ -901,7 +901,8 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   read_notebook: {
     title: "Read Notebook",
-    summary: "Read cell source and optionally outputs. Use range or cell_ids for targeted reads. Use output_file_path to keep large results out of context.",
+    summary:
+      "Read full cell source and optionally outputs. Use cell_ids or range for targeted reads after list_notebook_cells; prefer this over raw .ipynb reads for cell contents. Use output_file_path for large outputs.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","include_outputs"?:boolean,"include_rich_output_text"?:boolean,"output_file_path"?:"/tmp/notebook.json","range"?:{"start":0,"end":5},"cell_ids"?:["cell-1","cell-2"]}',
     examples: [
