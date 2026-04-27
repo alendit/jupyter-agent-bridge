@@ -7,7 +7,7 @@ import { NotebookTools } from "./NotebookTools";
 import { FIXED_RESOURCE_URIS, NOTEBOOK_RESOURCE_TEMPLATES, NotebookResources } from "./NotebookResources";
 import { TOOL_NAMES, buildToolDescription } from "./NotebookToolCatalog";
 
-test("toToolResult emits native MCP image content and omits base64 from text payloads", async () => {
+test("toToolResult emits native MCP image content and omits base64 from JSON payloads", async () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
   });
@@ -55,7 +55,6 @@ test("toToolResult emits native MCP image content and omits base64 from text pay
     }
   ).toToolResult(result);
 
-  assert.deepEqual((toolResult as { structuredContent: unknown }).structuredContent, result);
   assert.equal(toolResult.content.length, 3);
   assert.deepEqual(toolResult.content[1], {
     type: "image",
@@ -75,6 +74,7 @@ test("toToolResult emits native MCP image content and omits base64 from text pay
   assert.equal(parsed.results[0]?.outputs[1]?.mcp_image_index, 1);
   assert.equal(parsed.results[1]?.outputs[0]?.base64, "[omitted: see MCP image content 2]");
   assert.equal(parsed.results[1]?.outputs[0]?.mcp_image_index, 2);
+  assert.deepEqual((toolResult as { structuredContent: unknown }).structuredContent, parsed);
 });
 
 test("toToolResult wraps top-level array results in structuredContent for outputSchema compatibility", () => {

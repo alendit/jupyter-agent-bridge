@@ -32,7 +32,7 @@ export class NotebookToolResultRenderer {
     const textResult = this.serializeForTextContent(result, images);
 
     return {
-      structuredContent: this.toStructuredContent(result),
+      structuredContent: this.toStructuredContent(textResult),
       content: [
         {
           type: "text",

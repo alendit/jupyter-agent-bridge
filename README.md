@@ -140,7 +140,7 @@ For outputs and result inspection:
 
 When notebook or output payloads are too large for prompt context, use `output_file_path` on `read_notebook` or `read_cell_outputs`.
 
-For Plotly figures in VS Code notebooks, prefer `import plotly.io; plotly.io.renderers.default = "vscode+png"` (equivalently `plotly_mimetype+png`) and install `kaleido` in the notebook environment if Plotly needs static image rendering support. That lets the notebook emit an `image/png` snapshot the MCP can return in an agent-readable format. When the Plotly vendor bundle already embeds an image representation such as `image/png` or `image/svg+xml`, `read_cell_outputs` now surfaces that representation as a normal image output as well.
+For Plotly figures in VS Code notebooks, prefer `import plotly.io; plotly.io.renderers.default = "vscode+png"` (equivalently `plotly_mimetype+png`) and install `kaleido` in the notebook environment if Plotly needs static image rendering support. That lets the notebook emit an `image/png` snapshot the MCP can return in an agent-readable format. When the Plotly vendor bundle already embeds an image representation such as `image/png` or `image/svg+xml`, `read_cell_outputs` now surfaces that representation as a normal image output as well. Text and structured JSON results keep an image index placeholder instead of duplicating the raw base64 bytes.
 
 ### Optional MCP Extras
 

@@ -141,7 +141,7 @@ The MCP server is an adapter. It must not own notebook state. Its responsibiliti
 - expose optional MCP resources for passive discovery without changing the underlying notebook model
 - expose optional MCP Apps companion views that orchestrate bridge-backed tools without becoming a second notebook frontend (capability-gated behind the full profile)
 - delegate workflow step ordering and execution policy to the shared `notebook-domain` orchestration module
-- render bridge results into MCP-friendly responses, including compatibility text/image content and typed structured output
+- render bridge results into MCP-friendly responses, including compatibility text/image content and typed structured output without duplicating image bytes in JSON fields
 - build MCP-only affordances such as resource-local editor navigation links or command bindings from bridge-backed data
 - keep MCP-specific metadata such as resource URIs, `outputSchema`, annotations, elicitation policy, and UI resource bindings in the frontend shell
 - keep MCP host integration separate from notebook behavior
@@ -316,7 +316,7 @@ If truncation occurs, the output item carries `truncated`, `original_bytes`, and
 
 Notebook-native stdout, stderr, and structured error payloads are normalized and returned by default. `include_rich_output_text` only gates raw rendered HTML/JS/widget payloads and similar rich vendor bundles. When a rich vendor bundle already contains embedded image MIME payloads, the extension shell may surface those embedded images as normal `image` outputs in addition to the original rich bundle entry.
 
-This extraction belongs in the extension rather than `frontend-mcp` because the decision depends on how the live editor exposes `NotebookCellOutputItem` data, MIME-specific payload encoding, and per-item byte limits before transport. The MCP frontend should only translate already-normalized image outputs into MCP image content; it must not re-interpret vendor bundle internals independently of the editor bridge.
+This extraction belongs in the extension rather than `frontend-mcp` because the decision depends on how the live editor exposes `NotebookCellOutputItem` data, MIME-specific payload encoding, and per-item byte limits before transport. The MCP frontend should only translate already-normalized image outputs into MCP image content; it must not re-interpret vendor bundle internals independently of the editor bridge. When it emits MCP image content, the frontend also redacts the corresponding base64 value from text and structured JSON payloads so image bytes travel through the native image content block only.
 
 ### Execution Rules
 
