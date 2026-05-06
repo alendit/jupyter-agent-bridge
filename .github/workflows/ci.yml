@@ -74,3 +74,34 @@ jobs:
         run: npx ovsx publish dist/*.vsix
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+  publish-vscode-marketplace:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-test-package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: jupyter-agent-bridge-vsix
+          path: dist
+
+      - name: Publish extension to VS Code Marketplace
+        run: npm run publish:vscode-marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}

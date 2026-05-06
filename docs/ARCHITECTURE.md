@@ -89,6 +89,15 @@ Standalone MCP adapter:
 - `src/mcp/` for tool catalog, parsing, and result rendering
 - `src/main.ts` for MCP process startup
 
+## Release Publishing
+
+The GitHub Actions release workflow treats the VSIX package as the single release artifact. On `v*` tags, CI builds, typechecks, tests, and packages the extension once, then publishes the same downloaded artifact to both galleries:
+
+- Open VSX, authenticated by the `OVSX_PAT` repository secret
+- VS Code Marketplace, authenticated by the `VSCE_PAT` repository secret
+
+The Marketplace publisher remains the root `package.json` `publisher` value, currently `alendit`. Keep the publisher ID, Open VSX namespace, and release tags aligned so the two galleries expose the same extension identity and version.
+
 ## Runtime Topology
 
 ```mermaid

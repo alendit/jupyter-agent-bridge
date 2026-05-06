@@ -4,11 +4,12 @@ Expose the live Jupyter notebook open in your editor as MCP tools, so an agent c
 
 ## Install
 
-1. Install `Jupyter Agentic Bridge` from Open VSX:
+1. Install `Jupyter Agentic Bridge` from the VS Code Marketplace or Open VSX:
 
+   [marketplace.visualstudio.com/items?itemName=alendit.jupyter-agent-bridge](https://marketplace.visualstudio.com/items?itemName=alendit.jupyter-agent-bridge)
    [open-vsx.org/extension/alendit/jupyter-agent-bridge](https://open-vsx.org/extension/alendit/jupyter-agent-bridge)
 
-   You can also search for `alendit.jupyter-agent-bridge` in an Open VSX-compatible extension gallery.
+   You can also search for `alendit.jupyter-agent-bridge` in VS Code or an Open VSX-compatible extension gallery.
 
 2. Open a `.ipynb` notebook in your editor.
 
@@ -168,6 +169,8 @@ These files are local operational state. Keep them untracked and regenerate them
 
 ## Development
 
+### Release And Publishing
+
 For release cuts, the repo helper now accepts either an explicit semver or a bump keyword:
 
 - `npm run cut-release -- patch`
@@ -175,6 +178,13 @@ For release cuts, the repo helper now accepts either an explicit semver or a bum
 - `npm run cut-release -- 0.4.0`
 
 When you pass `major`, `minor`, or `patch`, the script reads the current `package.json` version, computes the next semver for that part, and then runs `npm version` with the resolved target.
+
+Pushing a `v*` tag to GitHub runs the release workflow. The workflow builds and tests once, packages one VSIX artifact, then publishes that same artifact in parallel to:
+
+- Open VSX with the `OVSX_PAT` GitHub Actions secret
+- VS Code Marketplace with the `VSCE_PAT` GitHub Actions secret
+
+Create `VSCE_PAT` from an Azure DevOps personal access token whose organization is `All accessible organizations` and whose custom scope includes `Marketplace: Manage`.
 
 ## Architecture
 
