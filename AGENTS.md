@@ -6,6 +6,15 @@
 - Keep `README.md` and the relevant files under `docs/` up to date in the same change whenever behavior, workflows, public APIs, or project structure change.
 - Write docs with progressive disclosure: start with an overview of the whole system, then deepen section-by-section, then land on low-level details. Each pass should still help a reader understand the full system shape.
 
+## Changelog Guidelines
+- [`CHANGELOG.md`](CHANGELOG.md) is user-facing release history built from tags and meaningful git history.
+- Keep entries newest-first, with one concise bullet per meaningful user-facing change.
+- Order bullets by user impact rather than commit order.
+- Omit internal-only refactors, release plumbing, formatting-only changes, and pure version bumps unless they changed user-visible behavior.
+- Lead each bullet with why the user or agent cares, not the implementation detail.
+- Add short commit hashes to non-initial entries for traceability.
+- Keep the initial release entry as a terse original-goal statement without a commit hash.
+
 ## Project Structure & Module Organization
 The live packages are:
 

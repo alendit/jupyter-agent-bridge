@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- The extension is easier to find in gallery category filters because it now appears under Notebooks and Data Science instead of Other. (`78a39fc`)
+
+## 0.7.0
+
+- Users can install the same published extension from either the VS Code Marketplace or Open VSX, with release automation publishing one tested VSIX artifact to both galleries. (`6ee9349`)
+
 ## 0.6.0
 
 - Agents can now understand what the user is actively looking at before acting, including the active cell, selected ranges, visible ranges, focus state, and source selection. (`8ed6253`)
