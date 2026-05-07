@@ -7,6 +7,7 @@ Expose the live Jupyter notebook open in your editor as MCP tools, so an agent c
 1. Install `Jupyter Agentic Bridge` from the VS Code Marketplace or Open VSX:
 
    [marketplace.visualstudio.com/items?itemName=alendit.jupyter-agent-bridge](https://marketplace.visualstudio.com/items?itemName=alendit.jupyter-agent-bridge)
+   
    [open-vsx.org/extension/alendit/jupyter-agent-bridge](https://open-vsx.org/extension/alendit/jupyter-agent-bridge)
 
    You can also search for `alendit.jupyter-agent-bridge` in VS Code or an Open VSX-compatible extension gallery.
