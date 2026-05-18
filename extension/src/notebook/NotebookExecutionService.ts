@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { deriveExecutionProgressState } from "@jupyter-agent-bridge/notebook-domain";
+import { deriveExecutionProgressState } from "../../../packages/notebook-domain/src";
 import { ExecuteCellResult, ExecuteCellsRequest, ExecuteCellsResult } from "../../../packages/protocol/src";
 import { fail } from "../../../packages/protocol/src";
 import { getStoredCellId } from "./cells";

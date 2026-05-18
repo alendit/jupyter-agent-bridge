@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- Installed extensions now activate correctly because the packaged runtime no longer depends on workspace-only notebook-domain module resolution.
+
 ## 0.8.0
 
 - The extension is easier to find in gallery category filters because it now appears under Notebooks and Data Science instead of Other. (`78a39fc`)

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { isKernelReady } from "@jupyter-agent-bridge/notebook-domain";
+import { isKernelReady } from "../../../packages/notebook-domain/src";
 import {
   KernelCommandResult,
   SelectKernelRequest,

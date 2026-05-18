@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { PreparedSearchCell, prepareSearchQuery, searchPreparedCells } from "@jupyter-agent-bridge/notebook-domain";
+import { PreparedSearchCell, prepareSearchQuery, searchPreparedCells } from "../../../packages/notebook-domain/src";
 import { SearchNotebookRequest, SearchNotebookResult } from "../../../packages/protocol/src";
 import { computeSourceFingerprint, getStoredCellId, notebookCellKindToProtocol } from "./cells";
 import { NotebookRegistry } from "./NotebookRegistry";

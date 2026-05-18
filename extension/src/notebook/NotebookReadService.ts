@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { buildNotebookCellPreviews, buildNotebookOutline } from "@jupyter-agent-bridge/notebook-domain";
+import { buildNotebookCellPreviews, buildNotebookOutline } from "../../../packages/notebook-domain/src";
 import {
   CellExecutionSummary,
   CellSnapshot,

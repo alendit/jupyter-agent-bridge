@@ -56,7 +56,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test:root": "node --test tests/cut-release.test.cjs",
+    "test:root": "node --test tests/*.test.cjs",
     "test": "npm run test:root && npm run test --workspaces --if-present",
     "test:smoke": "node tests/integration/launch-smoke.cjs",
     "dev:host": "npm run build && code --extensionDevelopmentPath=. --new-window tests/fixtures/smoke-workspace/demo.ipynb",

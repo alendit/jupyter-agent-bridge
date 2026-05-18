@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { selectNotebookVariables } from "@jupyter-agent-bridge/notebook-domain";
+import { selectNotebookVariables } from "../../../packages/notebook-domain/src";
 import { ListNotebookVariablesRequest, ListNotebookVariablesResult } from "../../../packages/protocol/src";
 import { fail } from "../../../packages/protocol/src";
 import { NotebookRegistry } from "./NotebookRegistry";

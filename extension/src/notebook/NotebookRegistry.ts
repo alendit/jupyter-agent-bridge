@@ -6,7 +6,7 @@ import {
   markKernelExecutionCompleted,
   markKernelExecutionStarted,
   reconcileKernelRuntimeState,
-} from "@jupyter-agent-bridge/notebook-domain";
+} from "../../../packages/notebook-domain/src";
 import { KernelPendingAction, NotebookCellRange, NotebookEditorState } from "../../../packages/protocol/src";
 import { computeSourceFingerprint, getStoredCellId } from "./cells";
 import { parseNotebookKernelMetadata } from "./kernelMetadata";
