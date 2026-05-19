@@ -7,11 +7,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, "..");
 const entryPoint = path.join(frontendRoot, "ui-src", "main.ts");
+const serverEntryPoint = path.join(frontendRoot, "src", "main.ts");
 const tempOutfile = path.join(frontendRoot, "dist", "frontend-mcp-app.js");
 const htmlOutfile = path.join(frontendRoot, "dist", "frontend-mcp", "src", "apps", "jupyter-mcp-app.html");
+const serverOutfile = path.join(frontendRoot, "dist", "frontend-mcp", "src", "main.js");
 
 await fs.mkdir(path.dirname(tempOutfile), { recursive: true });
 await fs.mkdir(path.dirname(htmlOutfile), { recursive: true });
+await fs.mkdir(path.dirname(serverOutfile), { recursive: true });
 
 await build({
   entryPoints: [entryPoint],
@@ -400,3 +403,12 @@ await fs.writeFile(
 `,
   "utf8",
 );
+
+await build({
+  entryPoints: [serverEntryPoint],
+  outfile: serverOutfile,
+  bundle: true,
+  format: "cjs",
+  platform: "node",
+  target: "node18",
+});

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- Installed MCP servers now start correctly because the packaged frontend MCP runtime no longer depends on workspace-only module resolution and can find its embedded app HTML.
+
 ## 0.8.1
 
 - Installed extensions now activate correctly because the packaged runtime no longer depends on workspace-only notebook-domain module resolution.

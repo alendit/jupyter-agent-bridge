@@ -1,3 +1,4 @@
+import * as fsSync from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -33,6 +34,11 @@ export class AppResourceRegistry {
   }
 
   private resolveHtmlPath(): string {
-    return path.join(__dirname, "..", "apps", "jupyter-mcp-app.html");
+    const candidates = [
+      path.join(__dirname, "apps", "jupyter-mcp-app.html"),
+      path.join(__dirname, "..", "apps", "jupyter-mcp-app.html"),
+    ];
+
+    return candidates.find((candidate) => fsSync.existsSync(candidate)) ?? candidates[1];
   }
 }

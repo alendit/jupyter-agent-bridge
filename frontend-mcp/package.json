@@ -7,7 +7,7 @@
     "jupyter-agent-bridge-mcp": "./dist/frontend-mcp/src/main.js"
   },
   "scripts": {
-    "build": "node scripts/build-app.mjs && tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/build-app.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/frontend-mcp/src/apps/AppPayloadBuilder.test.js dist/frontend-mcp/src/apps/AppTools.test.js dist/frontend-mcp/src/mcp/ExecutionProgressReporter.test.js dist/frontend-mcp/src/mcp/NotebookTools.test.js dist/frontend-mcp/src/mcp/NotebookWorkflowExecutor.test.js dist/frontend-mcp/src/bridge/BridgeDiscovery.test.js dist/frontend-mcp/src/mcp/SessionSelection.test.js dist/frontend-mcp/src/mcp/BridgeClientResolver.test.js"
   },
