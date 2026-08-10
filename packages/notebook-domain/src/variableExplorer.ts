@@ -15,6 +15,11 @@ export interface NormalizedVariableSelection {
   truncated: boolean;
 }
 
+export interface NormalizedVariablePageRequest {
+  offset: number;
+  max_results: number;
+}
+
 export function selectNotebookVariables(
   rawVariables: unknown,
   request: ListNotebookVariablesRequest,
@@ -24,8 +29,9 @@ export function selectNotebookVariables(
     request.query && request.query.trim().length > 0
       ? normalized.filter((variable) => matchesVariableQuery(variable, request.query as string))
       : normalized;
-  const offset = clampOffset(request.offset);
-  const maxResults = clampMaxResults(request.max_results);
+  const page = normalizeVariablePageRequest(request);
+  const offset = page.offset;
+  const maxResults = page.max_results;
   const nextOffset = offset + maxResults < filtered.length ? offset + maxResults : null;
 
   return {
@@ -35,6 +41,13 @@ export function selectNotebookVariables(
     total_available: filtered.length,
     next_offset: nextOffset,
     truncated: nextOffset !== null,
+  };
+}
+
+export function normalizeVariablePageRequest(request: ListNotebookVariablesRequest): NormalizedVariablePageRequest {
+  return {
+    offset: clampOffset(request.offset),
+    max_results: clampMaxResults(request.max_results),
   };
 }
 
@@ -87,11 +100,13 @@ function matchesVariableQuery(variable: NotebookVariableSummary, query: string):
 }
 
 function clampMaxResults(value: number | undefined): number {
-  return Math.min(Math.max(value ?? DEFAULT_MAX_RESULTS, 1), MAX_RESULTS_LIMIT);
+  const integer = Number.isFinite(value) ? Math.trunc(value as number) : DEFAULT_MAX_RESULTS;
+  return Math.min(Math.max(integer, 1), MAX_RESULTS_LIMIT);
 }
 
 function clampOffset(value: number | undefined): number {
-  return Math.max(value ?? 0, 0);
+  const integer = Number.isFinite(value) ? Math.trunc(value as number) : 0;
+  return Math.max(integer, 0);
 }
 
 function firstString(...values: unknown[]): string | null {

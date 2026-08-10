@@ -1,5 +1,6 @@
 .git/**
 .vscode/**
+.claude/**
 .codex/**
 tests/**
 AGENTS.md

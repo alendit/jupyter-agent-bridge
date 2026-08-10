@@ -17,6 +17,7 @@ import {
   writeProjectMcpConfig,
 } from "./mcp/ProjectMcpConfig";
 import { HostKernelObservationService } from "./notebook/HostKernelObservationService";
+import { JupyterKernelApiService } from "./notebook/JupyterKernelApiService";
 import { KernelInspectionService } from "./notebook/KernelInspectionService";
 import { NotebookBridgeService } from "./notebook/NotebookBridgeService";
 import { CellPatchService } from "./notebook/CellPatchService";
@@ -65,14 +66,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     outputChannel.appendLine(message);
   };
   const registry = new NotebookRegistry();
-  const hostKernelObservationService = new HostKernelObservationService(log);
+  const jupyterKernelApiService = new JupyterKernelApiService(log);
+  const hostKernelObservationService = new HostKernelObservationService(jupyterKernelApiService, log);
   const outputNormalizationService = new OutputNormalizationService();
   const kernelInspectionService = new KernelInspectionService(registry, hostKernelObservationService);
   const readService = new NotebookReadService(registry, outputNormalizationService, kernelInspectionService);
   const mutationService = new NotebookMutationService((notebookUri) => registry.getVersion(notebookUri));
   const documentService = new NotebookDocumentService(registry, mutationService);
   const searchService = new NotebookSearchService(registry, readService);
-  const variableService = new NotebookVariableService(registry);
+  const variableService = new NotebookVariableService(registry, jupyterKernelApiService);
   const cellPatchService = new CellPatchService();
   const commandAdapter = new NotebookCommandAdapter(log);
   const executionService = new NotebookExecutionService(registry, readService, commandAdapter, log);

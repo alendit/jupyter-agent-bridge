@@ -57,7 +57,7 @@ Shared pure notebook policy:
 - outline extraction
 - cell preview shaping
 - search preparation and matching
-- variable normalization and paging
+- runtime-variable request normalization and paging
 - workflow orchestration: topological step ordering and DAG execution with error policy
 
 This package must stay free of `vscode`, MCP, HTTP, and bridge concerns. It operates on immutable snapshots and value objects only.
@@ -164,11 +164,13 @@ The shared notebook domain package owns the notebook rules that should behave th
 - how markdown headings become notebook outline sections
 - how lightweight previews are shaped for agent navigation
 - how notebook text search is prepared and matched
-- how raw variable-explorer payloads become stable paged summaries
+- how runtime-variable requests are normalized and paged
 
 UI-oriented presentation behavior stays in the extension shell. That includes commands such as revealing cells in the viewport, collapsing cell input, focusing rendered output for demonstration flows, and handling product-scheme URI opens that map to those editor-native actions.
 
 Output adaptation that depends on editor-native notebook item encoding also stays in the extension shell. If a VS Code notebook output item exposes vendor-specific structure such as Plotly JSON with embedded `image/png` or `image/svg+xml` payloads, the extension may project those embedded image payloads into normal transport `image` outputs while preserving the original rich bundle entry. This is still notebook-state projection, not MCP presentation logic.
+
+Runtime variable collection also stays in the extension shell because it depends on the VS Code Jupyter kernel API. The collector filters and pages names before formatting values, avoids invoking representation hooks on custom objects, bounds each field in the kernel, and enforces a 256 KiB cap again on the complete bridge result.
 
 This keeps Cursor-specific, VS Code-specific, and transport-specific differences in the shell instead of leaking them into notebook policy.
 

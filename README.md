@@ -140,6 +140,8 @@ For outputs and result inspection:
 - `list_variables`
 - `summarize_notebook_state`
 
+`list_variables` uses the VS Code Jupyter extension's supported kernel API. It runs a history-free Python inspection request against the active kernel, pages before returning data, truncates individual previews, and caps the complete JSON payload at 256 KiB. The first request may prompt for permission to access the kernel.
+
 When notebook or output payloads are too large for prompt context, use `output_file_path` on `read_notebook` or `read_cell_outputs`.
 
 For Plotly figures in VS Code notebooks, prefer `import plotly.io; plotly.io.renderers.default = "vscode+png"` (equivalently `plotly_mimetype+png`) and install `kaleido` in the notebook environment if Plotly needs static image rendering support. That lets the notebook emit an `image/png` snapshot the MCP can return in an agent-readable format. When the Plotly vendor bundle already embeds an image representation such as `image/png` or `image/svg+xml`, `read_cell_outputs` now surfaces that representation as a normal image output as well. Text and structured JSON results keep an image index placeholder instead of duplicating the raw base64 bytes.

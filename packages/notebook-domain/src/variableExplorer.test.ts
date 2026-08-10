@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { normalizeNotebookVariable, selectNotebookVariables } from "./variableExplorer";
+import { normalizeNotebookVariable, normalizeVariablePageRequest, selectNotebookVariables } from "./variableExplorer";
 
 test("normalizeNotebookVariable keeps stable explorer fields", () => {
   assert.deepEqual(
@@ -68,4 +68,25 @@ test("normalizeNotebookVariable truncates long preview values", () => {
 
   assert.equal(variable?.value_preview?.endsWith("…"), true);
   assert.equal(variable?.value_preview?.length, 240);
+});
+
+test("normalizeVariablePageRequest applies stable defaults and hard bounds", () => {
+  assert.deepEqual(normalizeVariablePageRequest({ notebook_uri: "file:///workspace/demo.ipynb" }), {
+    offset: 0,
+    max_results: 200,
+  });
+  assert.deepEqual(
+    normalizeVariablePageRequest({ notebook_uri: "file:///workspace/demo.ipynb", offset: -5.5, max_results: 5000.5 }),
+    {
+      offset: 0,
+      max_results: 1000,
+    },
+  );
+  assert.deepEqual(
+    normalizeVariablePageRequest({ notebook_uri: "file:///workspace/demo.ipynb", offset: 2.9, max_results: 4.9 }),
+    {
+      offset: 2,
+      max_results: 4,
+    },
+  );
 });
