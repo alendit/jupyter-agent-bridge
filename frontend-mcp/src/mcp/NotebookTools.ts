@@ -429,6 +429,7 @@ export class NotebookTools {
       await client.revealCells({
         notebook_uri: notebookUri,
         cell_ids: cellIds,
+        select: false,
         reveal_type: "center_if_outside_viewport",
       });
     } catch {
@@ -449,6 +450,7 @@ export class NotebookTools {
       await client.revealCells({
         notebook_uri: notebookUri,
         cell_ids: [cellIds[0]],
+        select: false,
         reveal_type: "center_if_outside_viewport",
       });
     } catch {

@@ -182,7 +182,7 @@ const optionalRevealCellSchema = z
   .boolean()
   .optional()
   .describe(
-    "Optional, defaults to true. Scroll the affected cell into view after the edit or execution. Use false to suppress automatic scrolling. For explicit viewport positioning or output focus, use reveal_notebook_cells.",
+    "Optional, defaults to true. Scroll the affected cell into view after the edit or execution without changing editor focus or cell selection. Use false to suppress automatic scrolling. For explicit viewport positioning, cell selection, or output focus, use reveal_notebook_cells.",
   );
 const optionalNumberSchema = z.number().optional();
 const optionalPositiveIntSchema = z.number().int().positive().optional();
@@ -1126,7 +1126,7 @@ export const NOTEBOOK_RULES = [
   "Notebook data may change between turns because the user can edit cells.",
   "Use notebook versions and source_fingerprint values to avoid stale edits or executions.",
   "Treat cell_id as stable identity and source_fingerprint as mutable cell state.",
-  "Cell-mutating and execution tools (insert_cell, replace_cell_source, patch_cell_source, format_cell, delete_cell, move_cell, execute_cells, execute_cells_async) accept an optional reveal_cell boolean (default true) that scrolls the editor to the affected cell so the user can follow along. Pass reveal_cell=false to suppress.",
+  "Cell-mutating and execution tools (insert_cell, replace_cell_source, patch_cell_source, format_cell, delete_cell, move_cell, execute_cells, execute_cells_async) accept an optional reveal_cell boolean (default true) that scrolls the editor to the affected cell without changing editor focus or cell selection. Pass reveal_cell=false to suppress.",
 ];
 
 export const NOTEBOOK_TOOL_INPUT_SCHEMAS: Record<ToolName, z.ZodTypeAny> = {

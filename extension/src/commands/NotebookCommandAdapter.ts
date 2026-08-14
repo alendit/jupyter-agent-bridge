@@ -37,19 +37,19 @@ export class NotebookCommandAdapter {
     document: vscode.NotebookDocument,
     ranges: readonly vscode.NotebookRange[],
   ): Promise<void> {
-    const editor = await this.ensureEditor(document, { preserveFocus: false });
-    editor.selections = [...ranges];
-    const executeRanges = editor.selections.map((selection) => ({
-      start: selection.start,
-      end: selection.end,
+    const editor = await this.ensureEditor(document);
+    const executeRanges = ranges.map((range) => ({
+      start: range.start,
+      end: range.end,
     }));
     this.log?.(
       `execute_cells.command notebook_uri=${JSON.stringify(document.uri.toString())} active_editor_uri=${JSON.stringify(vscode.window.activeNotebookEditor?.notebook.uri.toString() ?? null)} target_editor_uri=${JSON.stringify(editor.notebook.uri.toString())} visible_editor_uris=${JSON.stringify(vscode.window.visibleNotebookEditors.map((candidate) => candidate.notebook.uri.toString()))} ranges=${JSON.stringify(executeRanges)}`,
     );
 
     await vscode.commands.executeCommand("notebook.cell.execute", {
-      notebookEditor: editor,
+      document: document.uri,
       ranges: executeRanges,
+      autoReveal: false,
     });
   }
 
@@ -61,8 +61,9 @@ export class NotebookCommandAdapter {
       revealType?: vscode.NotebookEditorRevealType;
     },
   ): Promise<vscode.NotebookEditor> {
-    const editor = await this.ensureEditor(document, { preserveFocus: false });
-    if (options?.select ?? true) {
+    const select = options?.select ?? true;
+    const editor = await this.ensureEditor(document, { preserveFocus: !select });
+    if (select) {
       this.setSelections(editor, ranges);
     }
 
@@ -72,7 +73,7 @@ export class NotebookCommandAdapter {
         : new vscode.NotebookRange(ranges[0].start, ranges[ranges.length - 1].end);
     editor.revealRange(revealRange, options?.revealType ?? vscode.NotebookEditorRevealType.InCenterIfOutsideViewport);
     this.log?.(
-      `reveal_cells.command notebook_uri=${JSON.stringify(document.uri.toString())} active_editor_uri=${JSON.stringify(vscode.window.activeNotebookEditor?.notebook.uri.toString() ?? null)} target_editor_uri=${JSON.stringify(editor.notebook.uri.toString())} visible_editor_uris=${JSON.stringify(vscode.window.visibleNotebookEditors.map((candidate) => candidate.notebook.uri.toString()))} ranges=${JSON.stringify(ranges.map((range) => ({ start: range.start, end: range.end })))} select=${options?.select ?? true}`,
+      `reveal_cells.command notebook_uri=${JSON.stringify(document.uri.toString())} active_editor_uri=${JSON.stringify(vscode.window.activeNotebookEditor?.notebook.uri.toString() ?? null)} target_editor_uri=${JSON.stringify(editor.notebook.uri.toString())} visible_editor_uris=${JSON.stringify(vscode.window.visibleNotebookEditors.map((candidate) => candidate.notebook.uri.toString()))} ranges=${JSON.stringify(ranges.map((range) => ({ start: range.start, end: range.end })))} select=${select}`,
     );
     return editor;
   }
@@ -82,7 +83,7 @@ export class NotebookCommandAdapter {
     ranges: readonly vscode.NotebookRange[],
     visibility: "collapse" | "expand",
   ): Promise<void> {
-    await this.ensureEditor(document, { preserveFocus: false });
+    await this.ensureEditor(document);
     await vscode.commands.executeCommand(
       visibility === "collapse" ? COLLAPSE_CELL_INPUT_COMMAND_ID : EXPAND_CELL_INPUT_COMMAND_ID,
       this.toMultiCellCommandArgs(document, ranges),

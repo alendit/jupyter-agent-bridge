@@ -1660,6 +1660,50 @@ test("parseExecuteCellsRequest reports a helpful reveal_cell hint for string val
   );
 });
 
+test("automatic mutation and execution reveals preserve editor focus and selection", async () => {
+  const revealRequests: unknown[] = [];
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be resolved in this unit test");
+  });
+  const client = {
+    revealCells: async (request: unknown) => {
+      revealRequests.push(request);
+    },
+  };
+  const helpers = tools as unknown as {
+    revealAfterMutation: (
+      bridgeClient: typeof client,
+      notebookUri: string,
+      cellIds: string[],
+      reveal: boolean,
+    ) => Promise<void>;
+    revealBeforeExecution: (
+      bridgeClient: typeof client,
+      notebookUri: string,
+      cellIds: string[],
+      reveal: boolean,
+    ) => Promise<void>;
+  };
+
+  await helpers.revealAfterMutation(client, "file:///workspace/demo.ipynb", ["cell-1", "cell-2"], true);
+  await helpers.revealBeforeExecution(client, "file:///workspace/demo.ipynb", ["cell-2", "cell-3"], true);
+
+  assert.deepEqual(revealRequests, [
+    {
+      notebook_uri: "file:///workspace/demo.ipynb",
+      cell_ids: ["cell-1", "cell-2"],
+      select: false,
+      reveal_type: "center_if_outside_viewport",
+    },
+    {
+      notebook_uri: "file:///workspace/demo.ipynb",
+      cell_ids: ["cell-2"],
+      select: false,
+      reveal_type: "center_if_outside_viewport",
+    },
+  ]);
+});
+
 test("describeTool exposes reveal_cell on execute_cells and not the old reveal key", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");
@@ -1671,6 +1715,7 @@ test("describeTool exposes reveal_cell on execute_cells and not the old reveal k
 
   assert.match(String(description.schema), /"reveal_cell"\?:true/);
   assert.doesNotMatch(String(description.schema), /"reveal"\?:/);
+  assert.match(JSON.stringify(description.notebook_rules), /without changing editor focus or cell selection/);
 });
 
 test("describeTool advertises strict JSON type rules", () => {
