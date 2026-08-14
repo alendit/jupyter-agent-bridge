@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.0
+
+- Chat remains focused while agents edit or execute notebook cells because automatic reveals no longer activate or select the affected cells. (`d108e97`)
+
 ## 0.11.0
 
 - Runtime variable inspection now returns live Python-kernel values through the supported VS Code Jupyter kernel API instead of an internal UI command, with paging and strict preview and payload limits to keep agent responses bounded.
