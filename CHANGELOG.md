@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.1
+
+- Agent-driven edits and executions no longer scroll or focus the notebook unless `reveal_cell` is explicitly enabled, keeping chat input stable in Cursor. (`ec7fa48`)
+- Failed notebook executions now reach terminal state even when the host command remains pending, and interactive kernel commands return after bounded dispatch instead of hanging. (`3ab668d`)
+
 ## 0.12.0
 
 - Chat remains focused while agents edit or execute notebook cells because automatic reveals no longer activate or select the affected cells. (`d108e97`)
