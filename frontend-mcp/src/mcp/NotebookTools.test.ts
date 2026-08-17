@@ -1995,6 +1995,14 @@ test("tool descriptions promote the highest-value execution and patch guidance",
   assert.match(buildToolDescription("patch_cell_source"), /describe_tool\("patch_cell_source"\)/i);
 });
 
+test("kernel command descriptions distinguish dispatch from readiness", () => {
+  assert.match(buildToolDescription("interrupt_execution"), /return after command dispatch/i);
+  assert.match(buildToolDescription("restart_kernel"), /wait_for_kernel_ready/i);
+  assert.match(buildToolDescription("select_kernel"), /without waiting/i);
+  assert.match(buildToolDescription("select_jupyter_interpreter"), /return prompted/i);
+  assert.match(buildToolDescription("wait_for_kernel_ready"), /host-state refresh/i);
+});
+
 test("parseFormatCellRequest accepts stale-safe formatter requests", () => {
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be called in this unit test");

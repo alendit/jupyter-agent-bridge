@@ -47,6 +47,23 @@ test("toCellExecutionSummary marks running executions when only start time is kn
   );
 });
 
+test("toCellExecutionSummary keeps executions with a start time and execution order running", () => {
+  assert.deepEqual(
+    toCellExecutionSummary({
+      executionOrder: 7,
+      timing: {
+        startTime: 1_710_000_000_000,
+      },
+    } as never),
+    {
+      status: "running",
+      execution_order: 7,
+      started_at: "2024-03-09T16:00:00.000Z",
+      ended_at: null,
+    },
+  );
+});
+
 test("toCellExecutionSummary marks succeeded executions when terminal evidence exists", () => {
   assert.deepEqual(
     toCellExecutionSummary({

@@ -1006,19 +1006,22 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   interrupt_execution: {
     title: "Interrupt Execution",
-    summary: "Interrupt the active notebook kernel.",
+    summary:
+      "Request interruption of the active notebook kernel and return after command dispatch. Use get_kernel_info or wait_for_kernel_ready to observe the resulting state.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   restart_kernel: {
     title: "Restart Kernel",
-    summary: "Restart the notebook kernel. Clears all kernel state.",
+    summary:
+      "Request a notebook kernel restart and return after command dispatch. Clears all kernel state; use wait_for_kernel_ready before executing more cells.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },
   wait_for_kernel_ready: {
     title: "Wait For Kernel Ready",
-    summary: "Wait until the kernel is idle and ready for execution.",
+    summary:
+      "Wait until the kernel is idle and ready for execution. timeout_ms bounds both host-state refresh and polling.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","timeout_ms"?:30000,"target_generation"?:2}',
     examples: [
@@ -1075,7 +1078,8 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   select_kernel: {
     title: "Select Kernel",
-    summary: "Open the kernel picker or select a specific kernel by controller id.",
+    summary:
+      "Open the kernel picker or request a specific kernel by controller id without waiting on a picker or host command that remains active. Use wait_for_kernel_ready to confirm readiness.",
     schema:
       '{"notebook_uri":"file:///.../demo.ipynb","kernel_id"?: "controller-id","extension_id"?: "publisher.extension","skip_if_already_selected"?: true}',
     examples: [
@@ -1085,7 +1089,8 @@ export const TOOL_HELP: Record<ToolName, ToolHelp> = {
   },
   select_jupyter_interpreter: {
     title: "Select Jupyter Interpreter",
-    summary: "Open the Jupyter interpreter picker for the notebook.",
+    summary:
+      "Open the Jupyter interpreter picker and return prompted without waiting for the picker to close. Use wait_for_kernel_ready after the user completes selection.",
     schema: '{"notebook_uri":"file:///.../demo.ipynb"}',
     examples: ['{"notebook_uri":"file:///workspace/demo.ipynb"}'],
   },

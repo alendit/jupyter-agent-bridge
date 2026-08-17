@@ -121,6 +121,8 @@ For execution:
 
 Use `execute_cells` when you want the tool call itself to block until execution finishes or times out. Use `execute_cells_async` when work may take a while or when the agent should keep doing other tasks while the kernel runs.
 
+Execution completion follows the targeted cells' observed terminal state, including failed cells. It does not wait for the editor command's own promise after the notebook has already recorded that terminal result.
+
 `wait_for_execution.timeout_ms` only limits how long the MCP call waits for a newer execution snapshot. It does not cancel the kernel execution. Use `interrupt_execution` when you need to stop the underlying run.
 
 For kernel state:
@@ -131,6 +133,10 @@ For kernel state:
 - `restart_kernel`
 - `select_kernel`
 - `select_jupyter_interpreter`
+
+Kernel-control calls dispatch their VS Code command and return `requested` or `prompted` without waiting for a host command promise that may stay open while the action or picker is active. Use `get_kernel_info` or `wait_for_kernel_ready` to observe the resulting state. Direct kernel selection reports `selected` when the host command settles during dispatch and otherwise reports `requested`.
+
+`wait_for_kernel_ready.timeout_ms` bounds both kernel-state refreshes and polling. If the Jupyter host does not return a current observation before the deadline, the result is `timed_out` rather than an unbounded wait.
 
 For outputs and result inspection:
 

@@ -1,4 +1,5 @@
 export * from "./executionCompletionPolicy";
+export * from "./hostCommandPolicy";
 export * from "./kernelRuntime";
 export * from "./outline";
 export * from "./previews";

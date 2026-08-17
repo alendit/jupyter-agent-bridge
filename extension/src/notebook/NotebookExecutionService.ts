@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
-import { deriveExecutionProgressState } from "../../../packages/notebook-domain/src";
+import {
+  deriveExecutionProgressState,
+  waitForObservedExecutionCompletion,
+} from "../../../packages/notebook-domain/src";
 import { ExecuteCellResult, ExecuteCellsRequest, ExecuteCellsResult } from "../../../packages/protocol/src";
 import { fail } from "../../../packages/protocol/src";
 import { getStoredCellId } from "./cells";
@@ -41,10 +44,12 @@ export class NotebookExecutionService {
     }
 
     const baselineSignatures = new Map<string, string>();
+    const baselineExecutionSignatures = new Map<string, string>();
     for (const cell of cells) {
       const cellId = getStoredCellId(cell);
       if (cellId) {
         baselineSignatures.set(cellId, this.executionSignature(cell));
+        baselineExecutionSignatures.set(cellId, executionSummarySignature(cell.executionSummary));
       }
     }
 
@@ -59,17 +64,17 @@ export class NotebookExecutionService {
       notebookUri,
       request.cell_ids,
       baselineSignatures,
+      baselineExecutionSignatures,
       timeoutMs,
       stopOnError,
     );
 
     this.registry.markKernelExecutionStarted(notebookUri);
-    await this.commandAdapter.executeCells(
+    const editorCommand = this.commandAdapter.executeCells(
       document,
       cells.map((cell) => new vscode.NotebookRange(cell.index, cell.index + 1)),
     );
-
-    const completionState = await completion;
+    const completionState = await waitForObservedExecutionCompletion(completion, editorCommand);
     const timedOut = !completionState.completed;
     const refreshedDocument = this.registry.getDocument(notebookUri) ?? document;
     this.log?.(
@@ -134,6 +139,7 @@ export class NotebookExecutionService {
     notebookUri: string,
     cellIds: readonly string[],
     baselineSignatures: Map<string, string>,
+    baselineExecutionSignatures: Map<string, string>,
     timeoutMs: number,
     stopOnError: boolean,
   ): Promise<ExecutionWaitState> {
@@ -156,15 +162,20 @@ export class NotebookExecutionService {
           return {
             cell_id: cellId,
             changed_from_baseline: false,
+            terminal: false,
             failed: false,
           };
         }
 
-        const baseline = baselineSignatures.get(cellId);
+        const baselineExecution = baselineExecutionSignatures.get(cellId);
+        const execution = this.readService.toExecutionSummary(cell);
         return {
           cell_id: cellId,
-          changed_from_baseline: baseline !== undefined && this.executionSignature(cell) !== baseline,
-          failed: this.readService.toExecutionSummary(cell)?.status === "failed",
+          changed_from_baseline:
+            baselineExecution !== undefined &&
+            executionSummarySignature(cell.executionSummary) !== baselineExecution,
+          terminal: execution !== null && execution.status !== "running",
+          failed: execution?.status === "failed",
         };
       });
 
@@ -173,7 +184,11 @@ export class NotebookExecutionService {
         completed: progress.pending_cell_ids.length === 0,
         pendingCellIds: new Set(progress.pending_cell_ids),
         skippedCellIds: new Set(progress.skipped_cell_ids),
-        anyObservedChange: observations.some((observation) => observation.changed_from_baseline),
+        anyObservedChange: cellIds.some((cellId) => {
+          const cell = document.getCells().find((candidate) => getStoredCellId(candidate) === cellId);
+          const baseline = baselineSignatures.get(cellId);
+          return cell !== undefined && baseline !== undefined && this.executionSignature(cell) !== baseline;
+        }),
       };
     };
 

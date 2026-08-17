@@ -33,7 +33,7 @@ export function toCellExecutionSummary(summary: ExecutionSummaryLike | undefined
     };
   }
 
-  if (success === true || endedAt !== null || executionOrder !== null) {
+  if (success === true || endedAt !== null) {
     return {
       status: "succeeded",
       execution_order: executionOrder,
@@ -45,6 +45,15 @@ export function toCellExecutionSummary(summary: ExecutionSummaryLike | undefined
   if (startedAt !== null) {
     return {
       status: "running",
+      execution_order: executionOrder,
+      started_at: startedAt,
+      ended_at: endedAt,
+    };
+  }
+
+  if (executionOrder !== null) {
+    return {
+      status: "succeeded",
       execution_order: executionOrder,
       started_at: startedAt,
       ended_at: endedAt,

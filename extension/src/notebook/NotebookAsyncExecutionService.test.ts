@@ -61,6 +61,24 @@ function createResult(notebookUri = "file:///workspace/demo.ipynb"): ExecuteCell
   };
 }
 
+function createFailedResult(notebookUri = "file:///workspace/demo.ipynb"): ExecuteCellsResult {
+  return {
+    ...createResult(notebookUri),
+    results: [
+      {
+        cell_id: "cell-1",
+        execution: {
+          status: "failed",
+          execution_order: 2,
+          started_at: "2024-03-09T16:00:00.000Z",
+          ended_at: "2024-03-09T16:00:01.000Z",
+        },
+        outputs: [],
+      },
+    ],
+  };
+}
+
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve();
   await Promise.resolve();
@@ -110,6 +128,42 @@ test("executeCellsAsync tracks queued, running, and completed states", async () 
   const completed = service.getExecutionStatus({ execution_id: "00000000-0000-0000-0000-000000000001" });
   assert.equal(completed.status, "completed");
   assert.ok(completed.result);
+});
+
+test("executeCellsAsync reaches a terminal handle snapshot when a cell execution fails", async () => {
+  const document = { uri: { toString: () => "file:///workspace/demo.ipynb" } };
+  const registry = createRegistry(document);
+  const service = new NotebookAsyncExecutionService(
+    registry as never,
+    {
+      requireReadyDocument: async () => document as never,
+    } as never,
+    {
+      assertExpectedVersion: () => undefined,
+    } as never,
+    {
+      executeCells: async () => createFailedResult(),
+    } as never,
+    {
+      assertExpectedCellSources: () => undefined,
+      getKernelInfoValue: () => null,
+    } as never,
+    undefined,
+    () => Date.parse("2024-03-09T16:00:00.000Z"),
+    () => "00000000-0000-0000-0000-000000000011",
+  );
+
+  await service.executeCellsAsync({
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_ids: ["cell-1"],
+  });
+  await flushMicrotasks();
+
+  const snapshot = service.getExecutionStatus({
+    execution_id: "00000000-0000-0000-0000-000000000011",
+  });
+  assert.equal(snapshot.status, "completed");
+  assert.equal(snapshot.result?.results[0]?.execution?.status, "failed");
 });
 
 test("executeCellsAsync rejects stale cell guards before accepting work", async () => {

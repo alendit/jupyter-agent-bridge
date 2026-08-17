@@ -336,9 +336,12 @@ This extraction belongs in the extension rather than `frontend-mcp` because the 
 - `execute_cells` must correlate returned status and outputs with the targeted notebook cells.
 - `execute_cells` remains the synchronous execution surface.
 - Async execution uses execution handles exposed through `execute_cells_async`, `get_execution_status`, and `wait_for_execution`.
+- Execution orchestration observes terminal cell state independently of the editor command promise. A succeeded or failed cell result can therefore complete the blocking call or async handle even if the host command remains pending after recording that result; command rejection is still surfaced when it happens first.
 - Cell-mutating and execution tools expose a simple `reveal_cell` toggle for default cell-following behavior. Automatic reveals preserve the active editor and cell selection. Range-based execution targets the notebook by URI, disables the editor command's own auto-reveal, and does not select its target cells. Explicit selection, richer viewport placement, and output focus stay on `reveal_notebook_cells` so the edit/execute surfaces keep a boolean-only presentation contract.
 - `wait_for_execution.timeout_ms` is a wait bound only. It returns the latest execution snapshot without cancelling the underlying kernel work.
 - Interrupting or restarting the kernel remains explicit through `interrupt_execution` and `restart_kernel`.
+- Kernel-control commands use bounded dispatch semantics: immediate host-command rejection is surfaced, but picker, selection, restart, and interrupt calls return `prompted` or `requested` when the host promise remains pending. Kernel completion is observed separately through `get_kernel_info` and `wait_for_kernel_ready`.
+- Host-kernel refresh is best-effort for request-style command results. For `wait_for_kernel_ready`, every refresh is bounded by the request deadline so a stuck Jupyter API call cannot outlive `timeout_ms`.
 - Async execution handles are process-local, retain terminal snapshots for 15 minutes, and do not outlive the bridge runtime.
 - Per-notebook serialization applies to both synchronous and async executions.
 - Per-cell execution status uses normalized terminal states such as `succeeded`, `failed`, `cancelled`, and `timed_out`.

@@ -1,6 +1,7 @@
 export interface ExecutionProgressObservation {
   cell_id: string;
   changed_from_baseline: boolean;
+  terminal: boolean;
   failed: boolean;
 }
 
@@ -18,7 +19,7 @@ export function deriveExecutionProgressState(
   let firstFailureIndex: number | undefined;
 
   observations.forEach((observation, index) => {
-    if (observation.changed_from_baseline) {
+    if (observation.changed_from_baseline && observation.terminal) {
       pending.delete(observation.cell_id);
     }
 
@@ -42,4 +43,17 @@ export function deriveExecutionProgressState(
     pending_cell_ids: [...pending],
     skipped_cell_ids: [...skipped],
   };
+}
+
+export function waitForObservedExecutionCompletion<T>(
+  observedCompletion: Promise<T>,
+  editorCommand: Promise<unknown>,
+): Promise<T> {
+  // The host command can remain pending after the notebook records a terminal
+  // result. Its rejection is meaningful, but its resolution is not completion.
+  const editorCommandFailure = new Promise<never>((_resolve, reject) => {
+    void editorCommand.catch(reject);
+  });
+
+  return Promise.race([observedCompletion, editorCommandFailure]);
 }

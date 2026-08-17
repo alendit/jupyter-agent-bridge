@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
-import { isKernelReady } from "../../../packages/notebook-domain/src";
+import {
+  isKernelReady,
+  type HostCommandDispatchState,
+  waitForHostCommandDispatch,
+} from "../../../packages/notebook-domain/src";
 import {
   KernelCommandResult,
   SelectKernelRequest,
@@ -49,7 +53,12 @@ export class NotebookKernelCommandService {
             skipIfAlreadySelected: request.skip_if_already_selected ?? true,
           });
         },
-        "selected",
+        (dispatchState) => {
+          if (dispatchState === "pending") {
+            this.registry.markKernelCommandRequested(document.uri.toString(), "select_kernel");
+          }
+        },
+        (dispatchState) => (dispatchState === "settled" ? "selected" : "requested"),
         false,
         `Requested kernel selection for ${request.kernel_id}.`,
       );
@@ -64,6 +73,8 @@ export class NotebookKernelCommandService {
           notebookUri: document.uri,
           skipIfAlreadySelected: request.skip_if_already_selected ?? true,
         });
+      },
+      () => {
         this.registry.markKernelCommandRequested(document.uri.toString(), "select_kernel", {
           requires_user_interaction: true,
         });
@@ -82,6 +93,8 @@ export class NotebookKernelCommandService {
       "Failed to open the Jupyter interpreter picker.",
       async () => {
         await vscode.commands.executeCommand("jupyter.selectJupyterInterpreter");
+      },
+      () => {
         this.registry.markKernelCommandRequested(document.uri.toString(), "select_interpreter", {
           requires_user_interaction: true,
         });
@@ -100,6 +113,8 @@ export class NotebookKernelCommandService {
       "Failed to restart the active kernel.",
       async () => {
         await vscode.commands.executeCommand("jupyter.restartkernel");
+      },
+      () => {
         this.registry.markKernelCommandRequested(document.uri.toString(), "restart", {
           bump_generation: true,
         });
@@ -118,6 +133,8 @@ export class NotebookKernelCommandService {
       "Failed to interrupt the active kernel.",
       async () => {
         await vscode.commands.executeCommand("jupyter.interruptkernel");
+      },
+      () => {
         this.registry.markKernelCommandRequested(document.uri.toString(), "interrupt");
       },
       "requested",
@@ -132,6 +149,7 @@ export class NotebookKernelCommandService {
   ): Promise<WaitForKernelReadyResult> {
     const notebookUri = document.uri.toString();
     const timeoutMs = request.timeout_ms ?? 30_000;
+    const deadline = Date.now() + timeoutMs;
     const initialKernel = this.readService.getKernelInfoValue(document);
     const targetGeneration = request.target_generation ?? initialKernel.generation;
 
@@ -152,7 +170,9 @@ export class NotebookKernelCommandService {
       };
     };
 
-    await this.hostKernelObservationService.refresh(document);
+    if (!(await this.refreshBeforeDeadline(document, deadline))) {
+      return this.kernelRefreshTimedOutResult(currentResult());
+    }
     const immediate = currentResult();
     this.log?.(
       `wait_for_kernel_ready immediate notebook_uri=${JSON.stringify(notebookUri)} ready=${immediate.ready} state=${immediate.kernel?.state ?? "null"} pending_action=${immediate.kernel?.pending_action ?? "null"} requires_user_interaction=${immediate.kernel?.requires_user_interaction ?? false} kernel_id=${JSON.stringify(immediate.kernel?.kernel_id ?? null)} kernel_label=${JSON.stringify(immediate.kernel?.kernel_label ?? null)}`,
@@ -165,11 +185,12 @@ export class NotebookKernelCommandService {
       return immediate;
     }
 
-    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, Math.min(250, deadline - Date.now())));
       const refreshedDocument = this.registry.getDocument(notebookUri) ?? document;
-      await this.hostKernelObservationService.refresh(refreshedDocument);
+      if (!(await this.refreshBeforeDeadline(refreshedDocument, deadline))) {
+        break;
+      }
       const result = currentResult();
       if (result.ready || result.kernel?.requires_user_interaction || !result.kernel?.execution_supported) {
         return result;
@@ -189,13 +210,30 @@ export class NotebookKernelCommandService {
     errorCode: "KernelSelectionFailed" | "KernelUnavailable",
     errorMessage: string,
     command: () => Promise<void>,
-    status: KernelCommandResult["status"],
+    markRequested: (dispatchState: HostCommandDispatchState) => void,
+    status:
+      | KernelCommandResult["status"]
+      | ((dispatchState: HostCommandDispatchState) => KernelCommandResult["status"]),
     requiresUserInteraction: boolean,
     message: string,
   ): Promise<KernelCommandResult> {
+    let dispatchState: HostCommandDispatchState;
     try {
-      await command();
-      await this.hostKernelObservationService.refresh(document);
+      const hostCommand = command();
+      dispatchState = await waitForHostCommandDispatch(hostCommand);
+      markRequested(dispatchState);
+      if (dispatchState === "pending") {
+        void hostCommand.catch((error) => {
+          this.log?.(
+            `kernel_command.detached_failure notebook_uri=${JSON.stringify(document.uri.toString())} detail=${JSON.stringify(error instanceof Error ? error.message : String(error))}`,
+          );
+        });
+      }
+      void this.hostKernelObservationService.refresh(document).catch((error) => {
+        this.log?.(
+          `kernel_command.refresh_failure notebook_uri=${JSON.stringify(document.uri.toString())} detail=${JSON.stringify(error instanceof Error ? error.message : String(error))}`,
+        );
+      });
     } catch (error) {
       fail({
         code: errorCode,
@@ -205,15 +243,49 @@ export class NotebookKernelCommandService {
       });
     }
 
-    this.logKernelDebug(`kernel_command.${status}`, document);
+    const resultStatus = typeof status === "function" ? status(dispatchState) : status;
+    this.logKernelDebug(`kernel_command.${resultStatus}`, document);
 
     return {
       notebook_uri: document.uri.toString(),
       notebook_version: this.registry.getVersion(document.uri.toString()),
       kernel: this.readService.getKernelInfoValue(document),
-      status,
+      status: resultStatus,
       requires_user_interaction: requiresUserInteraction,
       message,
+    };
+  }
+
+  private async refreshBeforeDeadline(
+    document: vscode.NotebookDocument,
+    deadline: number,
+  ): Promise<boolean> {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return false;
+    }
+
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        this.hostKernelObservationService.refresh(document).then(() => true),
+        new Promise<false>((resolve) => {
+          timer = setTimeout(() => resolve(false), remainingMs);
+        }),
+      ]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  }
+
+  private kernelRefreshTimedOutResult(result: WaitForKernelReadyResult): WaitForKernelReadyResult {
+    return {
+      ...result,
+      ready: false,
+      timed_out: true,
+      message: `Timed out waiting for a current kernel observation. ${result.message}`,
     };
   }
 
