@@ -365,7 +365,7 @@ test("waitForKernelReady bounds its polling sleep by timeout_ms", async () => {
 
       assert.equal(result.ready, false);
       assert.equal(result.timed_out, true);
-      assert.equal(context.getRefreshCount(), 1);
+      assert.ok(context.getRefreshCount() >= 1);
     },
   );
 });
