@@ -408,12 +408,9 @@ export class NotebookTools {
   private extractRevealCell(input: unknown): boolean {
     if (input && typeof input === "object" && !Array.isArray(input)) {
       const record = input as Record<string, unknown>;
-      if (record.reveal_cell === undefined) {
-        return true;
-      }
-      return record.reveal_cell !== false;
+      return record.reveal_cell === true;
     }
-    return true;
+    return false;
   }
 
   private async revealAfterMutation(

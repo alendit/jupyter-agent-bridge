@@ -1660,7 +1660,85 @@ test("parseExecuteCellsRequest reports a helpful reveal_cell hint for string val
   );
 });
 
-test("automatic mutation and execution reveals preserve editor focus and selection", async () => {
+test("reveal_cell defaults to false and supports explicit opt-in", () => {
+  const tools = new NotebookTools(async () => {
+    throw new Error("client should not be called in this unit test");
+  });
+  const extractRevealCell = (value: unknown): boolean =>
+    (
+      tools as unknown as {
+        extractRevealCell: (input: unknown) => boolean;
+      }
+    ).extractRevealCell(value);
+
+  assert.equal(extractRevealCell(undefined), false);
+  assert.equal(extractRevealCell({}), false);
+  assert.equal(extractRevealCell({ reveal_cell: false }), false);
+  assert.equal(extractRevealCell({ reveal_cell: true }), true);
+});
+
+test("edit and execution tools reveal only when reveal_cell is true", async () => {
+  const revealRequests: unknown[] = [];
+  const handlers = new Map<string, (input: unknown, extra: Record<string, unknown>) => Promise<unknown>>();
+  const tools = new NotebookTools(async () =>
+    ({
+      insertCell: async () => ({
+        notebook: {
+          notebook_uri: "file:///workspace/demo.ipynb",
+          notebook_version: 2,
+        },
+        changed_cell_ids: ["cell-1"],
+      }),
+      executeCells: async () => ({
+        notebook_uri: "file:///workspace/demo.ipynb",
+        notebook_version: 2,
+        results: [],
+      }),
+      revealCells: async (request: unknown) => {
+        revealRequests.push(request);
+        return { ok: true };
+      },
+    }) as never,
+  );
+  tools.register({
+    registerTool: (name: string, _config: Record<string, unknown>, handler: unknown) => {
+      handlers.set(name, handler as (input: unknown, extra: Record<string, unknown>) => Promise<unknown>);
+    },
+  } as never);
+
+  const insertInput = {
+    notebook_uri: "file:///workspace/demo.ipynb",
+    position: { mode: "at_end" },
+    cell: { kind: "code", source: "print(1)" },
+  };
+  const executeInput = {
+    notebook_uri: "file:///workspace/demo.ipynb",
+    cell_ids: ["cell-1"],
+  };
+
+  await handlers.get("insert_cell")?.(insertInput, {});
+  await handlers.get("execute_cells")?.(executeInput, {});
+  assert.deepEqual(revealRequests, []);
+
+  await handlers.get("insert_cell")?.({ ...insertInput, reveal_cell: true }, {});
+  await handlers.get("execute_cells")?.({ ...executeInput, reveal_cell: true }, {});
+  assert.deepEqual(revealRequests, [
+    {
+      notebook_uri: "file:///workspace/demo.ipynb",
+      cell_ids: ["cell-1"],
+      select: false,
+      reveal_type: "center_if_outside_viewport",
+    },
+    {
+      notebook_uri: "file:///workspace/demo.ipynb",
+      cell_ids: ["cell-1"],
+      select: false,
+      reveal_type: "center_if_outside_viewport",
+    },
+  ]);
+});
+
+test("explicit mutation and execution reveals preserve editor focus and selection", async () => {
   const revealRequests: unknown[] = [];
   const tools = new NotebookTools(async () => {
     throw new Error("client should not be resolved in this unit test");
@@ -1713,8 +1791,9 @@ test("describeTool exposes reveal_cell on execute_cells and not the old reveal k
     "execute_cells",
   );
 
-  assert.match(String(description.schema), /"reveal_cell"\?:true/);
+  assert.match(String(description.schema), /"reveal_cell"\?:false/);
   assert.doesNotMatch(String(description.schema), /"reveal"\?:/);
+  assert.match(JSON.stringify(description.notebook_rules), /reveal_cell boolean \(default false\)/);
   assert.match(JSON.stringify(description.notebook_rules), /without changing editor focus or cell selection/);
 });
 

@@ -107,7 +107,7 @@ For safer edits and human review:
 
 Most edit requests can carry notebook-version and source-fingerprint guards for stale-safe mutation flows.
 
-Edit and execution tools also accept an optional `reveal_cell` boolean. It defaults to `true` and scrolls the affected cell into view so the user can follow along, without changing the active editor or cell selection. Pass `false` to suppress that automatic reveal. For explicit viewport positioning, cell selection, or output focus, use `reveal_notebook_cells`.
+Edit and execution tools also accept an optional `reveal_cell` boolean. It defaults to `false`, so automatic actions do not scroll to or focus the affected cell. Pass `true` to scroll the cell into view without changing the active editor or cell selection. For explicit viewport positioning, cell selection, or output focus, use `reveal_notebook_cells`.
 
 ### Execution, Kernel Control, And Outputs
 
